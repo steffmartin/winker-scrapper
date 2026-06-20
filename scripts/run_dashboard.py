@@ -133,6 +133,33 @@ class Api:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    def update_revisado_usuario(self, tabela, registro_id, valor):
+        """
+        Atualiza o campo 'revisado_usuario' de um registro específico de uma tabela.
+        tabela: nome da tabela SQLite (ex: 'meses', 'categorias', 'subcategorias', 'transacoes', 'anexos', 'prestacoes_contas')
+        registro_id: valor da chave primária (id) do registro
+        valor: novo valor (0 ou 1) para a coluna 'revisado_usuario'
+        """
+        tabelas_validas = ["meses", "categorias", "subcategorias", "transacoes", "anexos", "prestacoes_contas"]
+        if tabela not in tabelas_validas:
+            return {"status": "error", "message": f"Tabela inválida: {tabela}"}
+            
+        try:
+            db_path = self._get_db_path()
+            if not os.path.exists(db_path):
+                return {"status": "error", "message": "Banco de dados não encontrado."}
+                
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Utiliza parametrização segura para os valores e validação restrita da tabela
+            cursor.execute(f"UPDATE {tabela} SET revisado_usuario = ? WHERE id = ?", (int(valor), registro_id))
+            conn.commit()
+            conn.close()
+            return {"status": "success", "message": f"Registro {registro_id} da tabela {tabela} atualizado com revisado_usuario={valor}."}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     def _get_db_path(self):
         return os.path.join(project_root, "database", "winker_data.db")
 

@@ -632,7 +632,8 @@ def init_db(db_path=None):
             receita_total REAL,
             despesa_total REAL,
             consistente INTEGER DEFAULT 1,
-            motivo_inconsistencia TEXT
+            motivo_inconsistencia TEXT,
+            revisado_usuario INTEGER DEFAULT 0
         )
     """)
     
@@ -645,6 +646,7 @@ def init_db(db_path=None):
             valor REAL,
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
+            revisado_usuario INTEGER DEFAULT 0,
             FOREIGN KEY (mes_id) REFERENCES meses(id) ON DELETE CASCADE
         )
     """)
@@ -658,6 +660,7 @@ def init_db(db_path=None):
             valor REAL,
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
+            revisado_usuario INTEGER DEFAULT 0,
             FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE
         )
     """)
@@ -676,6 +679,7 @@ def init_db(db_path=None):
             anexos INTEGER DEFAULT 0,
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
+            revisado_usuario INTEGER DEFAULT 0,
             FOREIGN KEY (subcategoria_id) REFERENCES subcategorias(id) ON DELETE CASCADE
         )
     """)
@@ -688,6 +692,7 @@ def init_db(db_path=None):
             nome_original TEXT,
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
+            revisado_usuario INTEGER DEFAULT 0,
             FOREIGN KEY (transacao_id) REFERENCES transacoes(id) ON DELETE CASCADE
         )
     """)
@@ -700,6 +705,7 @@ def init_db(db_path=None):
             nome_original TEXT,
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
+            revisado_usuario INTEGER DEFAULT 0,
             FOREIGN KEY (mes_id) REFERENCES meses(id) ON DELETE CASCADE
         )
     """)
@@ -750,9 +756,9 @@ def save_prestacao_contas(chave_unica, caminho_local, nome_original, consistente
         db_cursor.execute("DELETE FROM prestacoes_contas WHERE mes_id = ?", (chave_unica,))
         
         db_cursor.execute("""
-            INSERT INTO prestacoes_contas (mes_id, caminho_local, nome_original, consistente, motivo_inconsistencia)
-            VALUES (?, ?, ?, ?, ?)
-        """, (chave_unica, caminho_local, nome_original, consistente, motivo_inconsistencia))
+            INSERT INTO prestacoes_contas (mes_id, caminho_local, nome_original, consistente, motivo_inconsistencia, revisado_usuario)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (chave_unica, caminho_local, nome_original, consistente, motivo_inconsistencia, consistente))
         db_conn.commit()
     except Exception as e:
         db_conn.rollback()
@@ -914,8 +920,8 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
             print(f"    - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
             
         db_cursor.execute(
-            "INSERT INTO meses (id, exibicao, receita_total, despesa_total, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?)",
-            (chave_unica, f"{nome_mes_abbr}/{ano_item}", rec_total_mes, des_total_mes, mes_consistente, mes_motivo)
+            "INSERT INTO meses (id, exibicao, receita_total, despesa_total, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (chave_unica, f"{nome_mes_abbr}/{ano_item}", rec_total_mes, des_total_mes, mes_consistente, mes_motivo, mes_consistente)
         )
         
         # 2. Processa categorias, subcategorias, transações e anexos
@@ -933,8 +939,8 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                 )
                     
                 db_cursor.execute(
-                    "INSERT INTO categorias (mes_id, tipo, nome, valor, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?)",
-                    (chave_unica, tipo_flag, cat['nome'], cat_val_num, cat_consistente, cat_motivo)
+                    "INSERT INTO categorias (mes_id, tipo, nome, valor, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (chave_unica, tipo_flag, cat['nome'], cat_val_num, cat_consistente, cat_motivo, cat_consistente)
                 )
                 cat_id = db_cursor.lastrowid
                 
@@ -950,8 +956,8 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                     )
                         
                     db_cursor.execute(
-                        "INSERT INTO subcategorias (categoria_id, tipo, nome, valor, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?)",
-                        (cat_id, tipo_flag, sub['nome'], sub_val_num, sub_consistente, sub_motivo)
+                        "INSERT INTO subcategorias (categoria_id, tipo, nome, valor, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (cat_id, tipo_flag, sub['nome'], sub_val_num, sub_consistente, sub_motivo, sub_consistente)
                     )
                     sub_id = db_cursor.lastrowid
                     
@@ -985,10 +991,10 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                             
                         db_cursor.execute(
                             """
-                            INSERT INTO transacoes (subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO transacoes (subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia, revisado_usuario)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """,
-                            (sub_id, tipo_flag, data_t, desc_f, parse_currency(item['valor']), apto, comp, fornecedor, anexos_esperados, trans_consistente, trans_motivo)
+                            (sub_id, tipo_flag, data_t, desc_f, parse_currency(item['valor']), apto, comp, fornecedor, anexos_esperados, trans_consistente, trans_motivo, trans_consistente)
                         )
                         transacao_id = db_cursor.lastrowid
                         
@@ -1004,8 +1010,8 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                                 )
                                     
                                 db_cursor.execute(
-                                    "INSERT INTO anexos (transacao_id, caminho_local, nome_original, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?)",
-                                    (transacao_id, "", nome_orig, anexo_consistente, anexo_motivo)
+                                    "INSERT INTO anexos (transacao_id, caminho_local, nome_original, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?)",
+                                    (transacao_id, "", nome_orig, anexo_consistente, anexo_motivo, anexo_consistente)
                                 )
                                 anexo_id = db_cursor.lastrowid
                                 
