@@ -54,7 +54,6 @@ O projeto está organizado da seguinte maneira:
 * **[`compilados/`](file:///D:/projects/winker/compilados)**: Contém os arquivos estáticos prontos para produção do frontend gerados pelo compilador do Angular.
 * **[`dashboard/`](file:///D:/projects/winker/dashboard)**: O repositório de desenvolvimento contendo o código-fonte em Angular do painel Sakai-NG.
 * **[`anexos/`](file:///D:/projects/winker/anexos)**: Diretório onde o robô de extração armazena fisicamente os anexos (recibos e comprovantes em PDF/Imagens) das transações e as prestações de contas mensais de cada período.
-* **[`proximos_passos.md`](file:///D:/projects/winker/proximos_passos.md)**: Quadro de desenvolvimento contendo os próximos objetivos do projeto.
 
 ---
 
