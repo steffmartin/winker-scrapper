@@ -1,18 +1,19 @@
 # Segurança e Credenciais
 .env
 
-# Bancos de dados locais
-*.db
+# Bancos de dados locais estruturados
+database/*.db
 
-# Cache do Python
-__pycache__/
-*.pyc
+# Caches e arquivos compilados do Python (em qualquer subdiretório)
+**/__pycache__/
+**/*.pyc
 
 # Pastas de dados e downloads
 anexos/
 
 # Cache e estado do Playwright
-.playwright-mcp/
+**/.playwright-mcp/
 
-# Backups manuais
-*_backup.py
+
+# Compilados do Frontend (builds de produção do Angular)
+compilados/

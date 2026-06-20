@@ -29,6 +29,7 @@ Abaixo estão as próximas metas do projeto, ordenadas por prioridade:
 graph TD
     B[1. Interface de Correção de Inconsistências] --> C[2. Dashboard Financeiro Local]
     D[3. Extração Automática de Prestação de Contas] --> G[4. Extração de Inadimplência via Boleto]
+    H[5. Extração de Informações do Condomínio]
 ```
 
 ### B. Interface para Correção Manual de Inconsistências
@@ -38,19 +39,20 @@ graph TD
   * Permitir que o usuário insira manualmente os dados faltantes (ex: associar um apartamento ou competência ao cashback).
   * Salvar e recalcular a consistência do registro automaticamente.
 
-### C. Dashboard de Visualização Financeira (Desktop App - Em Desenvolvimento)
+### C. Dashboard de Visualização Financeira (Desktop App - Concluído)
 * **Objetivo**: Criar uma interface gráfica interativa de nível premium para analisar as finanças do condomínio.
-* **Infraestrutura Básica (Concluído)**: Configurado o wrapper desktop via `PyWebView`. Ao iniciar o atalho, a janela do dashboard inicia integrada ao banco SQLite; ao fechar a janela, o processo de backend é finalizado de forma limpa. Atalho [Visualizar_Dashboard.lnk](file:///D:/projects/winker/Visualizar_Dashboard.lnk) criado na raiz.
-* **Tecnologias Adotadas**:
-  * **Backend**: Python (com SQLite ativo via `pywebview`)
-  * **Frontend**: HTML5 + Vanilla CSS (Aesthetics Premium) + JavaScript assíncrono.
-  * **Wrapper Desktop**: `PyWebView` (garantindo empacotamento completo em janela nativa e desligamento automático ao fechar a janela).
-* **Funcionalidades do Dashboard**:
-  * KPIs superiores (Saldo Mensal, Total de Receitas, Total de Despesas, % de Inadimplência).
-  * Gráfico de Linhas/Área de Receitas vs. Despesas ao longo dos meses.
-  * Gráfico de Rosca/Pizza detalhando a fatia de despesa por categoria (Manutenção, Terceirização, Tarifas).
-  * Tabela interativa para pesquisa de transações com filtro por mês, fornecedor ou categoria.
-  * Indicador visual destacado para os meses ou transações que estão marcados como inconsistentes no banco.
+* **Status**: 100% concluído e integrado com o banco de dados real SQLite (`winker_data.db`).
+* **Especificação e Arquitetura Implementada**:
+  * **Backend**: Python (com SQLite ativo exposto via `pywebview` assíncrono). Ao fechar a janela, o processo Python é desligado de forma limpa, evitando processos órfãos.
+  * **Frontend**: Angular v21 + PrimeNG v21 + Tailwind CSS v4 configurado com o template **Sakai-NG**.
+  * **Navegação & Roteamento**: Configurado com `HashLocationStrategy` (`withHashLocation`) para compatibilidade e segurança sob o protocolo local `file://` da janela nativa do wrapper desktop, eliminando falhas de rotas 404 ao recarregar a interface.
+  * **Build de Produção**: Totalmente compilado gerando os arquivos otimizados em `dashboard/dist/sakai-ng/browser`, com `<base href="./">` relativo no `index.html`.
+  * **Funcionalidades do Painel (Página Única)**:
+    * **KPIs Superiores**: Total de Receitas, Total de Despesas, Saldo Líquido (Margem Financeira) e quantidade/porcentagem de Inconsistências.
+    * **Resumo por Competência**: Tabela contendo todos os meses processados com status e tooltip listando os motivos de inconsistências nos meses onde houver divergência.
+    * **Seção de Lançamentos**: Tabela interativa paginada contendo 100% das transações registradas, com filtros em tempo real de busca textual, seleção de mês/competência, tipo de fluxo (Receitas/Despesas) e classificação de consistência.
+    * **Botão de Teste de Conexão**: Localizado no cabeçalho superior da interface, realiza o ping e atualiza a tag de status com base na integridade e tamanho do banco de dados real.
+  * **Atalho Rápido**: O atalho [Visualizar_Dashboard.lnk](file:///D:/projects/winker/Visualizar_Dashboard.lnk) na raiz inicia a interface em modo janela nativa sem console de terminal.
 
 ### D. Extração Automática de Prestação de Contas Mensal (Concluído)
 * **Objetivo**: Baixar de forma automatizada o documento consolidado em PDF de prestação de contas de cada mês, emitido pela administradora.
@@ -168,6 +170,26 @@ graph TD
        * **Valor total**: `Valor Total:\s*([\d.,]+)` (Ex: `11.445,95`)
   5. **Modelagem no Banco de Dados**:
      Criar uma nova tabela dedicada chamada `inadimplencias` para manter esta informação.
+
+### H. Extração de Informações do Condomínio e Corpo Diretivo (Novo)
+* **Objetivo**: Extrair dados gerais do condomínio (Código ID, Nome) e os integrantes ativos do Corpo Diretivo (Síndico, Conselheiros, etc.) para exibição no Dashboard.
+* **Especificação Técnica Detalhada (Investigação e Estrutura Concluídas)**:
+  1. **Navegação**: Acessar a página `https://app.winker.com.br/intra/condominio/sobre/index` que roda sob o frame principal.
+  2. **Código do Condomínio**: O ID de segurança do condomínio está contido em um elemento em destaque com a classe `.label-warning`.
+     * *Seletor recomendado*: `page.locator("div.info_cond_codigo_seguranca strong")` (Ex: `000a0aaa`)
+  3. **Nome do Condomínio**: Pode ser obtido de forma limpa a partir do primeiro item de breadcrumbs:
+     * *Seletor recomendado*: `page.locator("#breadcrumb a").first` (Ex: `Condominio Top`)
+  4. **Estrutura do Corpo Diretivo**:
+     Os membros estão localizados no primeiro painel (`div.panel.panel-info`):
+     * **Síndico (Principal)**: O nome e a indicação do cargo ficam no topo do painel em uma label verde.
+       * *Seletor*: `div.panel.panel-info > div.row label.label-success` (Ex: `Fulano de Tal - Sindico`, `Fulano de Tal - Sindica`)
+     * **Outros Membros (Conselheiros, etc.)**: Listados de forma iterativa dentro de uma div identificada.
+       * *Seletor de Linha*: `page.locator("#lista_corpo_diretivo .row")`
+       * *Nome do Membro*: `locator("b i")` (Ex: `Fulano de Tal`)
+       * *Cargo*: Texto limpo dentro da coluna adjacente (Ex: `Conselheiro`, `Conselheira`, `Suplente`)
+  5. **Modelagem de Dados**:
+     Indexar as informações em tabelas de configuração do sistema.
+
 ---
 
 ## 3. Instruções de Leitura

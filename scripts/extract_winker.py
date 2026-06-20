@@ -40,9 +40,10 @@ install_dependencies()
 from playwright.sync_api import sync_playwright
 from dotenv import load_dotenv
 
-# Carrega variáveis de ambiente do .env localizado na pasta do script
+# Carrega variáveis de ambiente do .env localizado na raiz do projeto
 script_dir = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(dotenv_path=os.path.join(script_dir, '.env'))
+project_root = os.path.dirname(script_dir)
+load_dotenv(dotenv_path=os.path.join(project_root, '.env'))
 
 def parse_currency(val_str):
     """
@@ -203,8 +204,7 @@ def download_anexos(loc, context):
                             
                     nome_original = nome_original_limpo + ext
                     
-                    script_dir = os.path.dirname(os.path.abspath(__file__))
-                    temp_dir = os.path.join(script_dir, "anexos", "temp")
+                    temp_dir = os.path.join(project_root, "anexos", "temp")
                     os.makedirs(temp_dir, exist_ok=True)
                     
                     temp_filename = f"temp_{int(time.time() * 1000)}_{idx}_{nome_original}"
@@ -228,10 +228,13 @@ def download_anexos(loc, context):
                     
     return downloaded_files, count
 
-def init_db(db_path="winker_data.db"):
+def init_db(db_path=None):
     """
     Inicializa o banco de dados SQLite com a estrutura hierárquica e tipos reais.
     """
+    if db_path is None:
+        db_path = os.path.join(project_root, "database", "winker_data.db")
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute("PRAGMA foreign_keys = ON")
@@ -727,8 +730,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                                         (caminho_relativo, anexo_id)
                                                     )
                                                     
-                                                    script_dir = os.path.dirname(os.path.abspath(__file__))
-                                                    mes_dir = os.path.join(script_dir, "anexos", chave_unica)
+                                                    mes_dir = os.path.join(project_root, "anexos", chave_unica)
                                                     caminho_final = os.path.join(mes_dir, nome_final)
                                                     
                                                     anexos_para_mover.append({
@@ -738,8 +740,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                             db_conn.commit()
                             
                             # Após o commit com sucesso, remove a pasta antiga e move os novos anexos
-                            script_dir = os.path.dirname(os.path.abspath(__file__))
-                            mes_dir = os.path.join(script_dir, "anexos", chave_unica)
+                            mes_dir = os.path.join(project_root, "anexos", chave_unica)
                             if os.path.exists(mes_dir):
                                 print(f"  Removendo diretório de anexos antigo: {mes_dir}")
                                 shutil.rmtree(mes_dir, ignore_errors=True)
@@ -822,8 +823,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                                 if not nome_orig_pdf:
                                                     nome_orig_pdf = f"Prestação de contas {mes_ext}.pdf"
                                                 
-                                                script_dir = os.path.dirname(os.path.abspath(__file__))
-                                                mes_dir = os.path.join(script_dir, "anexos", chave_unica)
+                                                mes_dir = os.path.join(project_root, "anexos", chave_unica)
                                                 os.makedirs(mes_dir, exist_ok=True)
                                                 caminho_final = os.path.join(mes_dir, f"{chave_unica}_prestacao_contas.pdf")
                                                 

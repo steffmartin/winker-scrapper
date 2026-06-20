@@ -1,0 +1,203 @@
+<div class="grid grid-cols-12 gap-6">
+    <!-- Cabeçalho Principal -->
+    <div class="col-span-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-0 dark:bg-surface-900 p-6 rounded-2xl border border-surface-200 dark:border-surface-800 shadow-sm">
+        <div>
+            <h1 class="text-3xl font-bold text-surface-900 dark:text-surface-0 tracking-tight">Winker Scraper Dashboard</h1>
+            <p class="text-surface-500 dark:text-surface-400 mt-1">Análise consolidada e conciliação de receitas, despesas e inconsistências</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="text-sm font-medium text-surface-600 dark:text-surface-400">Banco de Dados:</span>
+            <p-tag [value]="dbStatusText" [severity]="dbStatusSeverity"></p-tag>
+            <button pButton pRipple type="button" label="Testar Conexão" icon="pi pi-refresh" class="p-button-outlined" (click)="testConnection()"></button>
+        </div>
+    </div>
+
+    <!-- Cards de Estatísticas (KPIs) -->
+    <div class="col-span-12 lg:col-span-6 xl:col-span-3">
+        <div class="card mb-0 p-5 bg-surface-0 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl shadow-sm">
+            <div class="flex justify-between mb-3">
+                <div>
+                    <span class="block text-surface-500 dark:text-surface-400 font-medium mb-1">Total de Receitas</span>
+                    <div class="text-surface-900 dark:text-surface-0 font-bold text-2xl">{{ stats.total_receitas | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</div>
+                </div>
+                <div class="flex items-center justify-center bg-emerald-100 dark:bg-emerald-400/10 rounded-xl" style="width: 2.5rem; height: 2.5rem">
+                    <i class="pi pi-arrow-up text-emerald-500 text-xl"></i>
+                </div>
+            </div>
+            <span class="text-emerald-500 font-medium">{{ stats.total_meses }} meses </span>
+            <span class="text-surface-500 dark:text-surface-400">processados</span>
+        </div>
+    </div>
+
+    <div class="col-span-12 lg:col-span-6 xl:col-span-3">
+        <div class="card mb-0 p-5 bg-surface-0 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl shadow-sm">
+            <div class="flex justify-between mb-3">
+                <div>
+                    <span class="block text-surface-500 dark:text-surface-400 font-medium mb-1">Total de Despesas</span>
+                    <div class="text-surface-900 dark:text-surface-0 font-bold text-2xl">{{ stats.total_despesas | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}</div>
+                </div>
+                <div class="flex items-center justify-center bg-rose-100 dark:bg-rose-400/10 rounded-xl" style="width: 2.5rem; height: 2.5rem">
+                    <i class="pi pi-arrow-down text-rose-500 text-xl"></i>
+                </div>
+            </div>
+            <span class="text-rose-500 font-medium">{{ stats.total_transacoes }} </span>
+            <span class="text-surface-500 dark:text-surface-400">lançamentos extraídos</span>
+        </div>
+    </div>
+
+    <div class="col-span-12 lg:col-span-6 xl:col-span-3">
+        <div class="card mb-0 p-5 bg-surface-0 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl shadow-sm">
+            <div class="flex justify-between mb-3">
+                <div>
+                    <span class="block text-surface-500 dark:text-surface-400 font-medium mb-1">Saldo Líquido</span>
+                    <div class="text-surface-900 dark:text-surface-0 font-bold text-2xl" [ngClass]="{'text-emerald-500': (stats.total_receitas - stats.total_despesas) >= 0, 'text-rose-500': (stats.total_receitas - stats.total_despesas) < 0}">
+                        {{ (stats.total_receitas - stats.total_despesas) | currency:'BRL':'symbol':'1.2-2':'pt-BR' }}
+                    </div>
+                </div>
+                <div class="flex items-center justify-center bg-blue-100 dark:bg-blue-400/10 rounded-xl" style="width: 2.5rem; height: 2.5rem">
+                    <i class="pi pi-dollar text-blue-500 text-xl"></i>
+                </div>
+            </div>
+            <span class="font-medium" [ngClass]="{'text-emerald-500': (stats.total_receitas - stats.total_despesas) >= 0, 'text-rose-500': (stats.total_receitas - stats.total_despesas) < 0}">
+                {{ ((stats.total_receitas - stats.total_despesas) / stats.total_receitas * 100) | number:'1.1-1' }}%
+            </span>
+            <span class="text-surface-500 dark:text-surface-400"> de margem financeira</span>
+        </div>
+    </div>
+
+    <div class="col-span-12 lg:col-span-6 xl:col-span-3">
+        <div class="card mb-0 p-5 bg-surface-0 dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl shadow-sm">
+            <div class="flex justify-between mb-3">
+                <div>
+                    <span class="block text-surface-500 dark:text-surface-400 font-medium mb-1">Inconsistências</span>
+                    <div class="text-surface-900 dark:text-surface-0 font-bold text-2xl text-amber-500">
+                        {{ stats.total_inconsistencias }}
+                    </div>
+                </div>
+                <div class="flex items-center justify-center bg-amber-100 dark:bg-amber-400/10 rounded-xl" style="width: 2.5rem; height: 2.5rem">
+                    <i class="pi pi-exclamation-triangle text-amber-500 text-xl"></i>
+                </div>
+            </div>
+            <span class="text-amber-500 font-medium">
+                {{ (stats.total_inconsistencias / stats.total_transacoes * 100) | number:'1.1-1' }}%
+            </span>
+            <span class="text-surface-500 dark:text-surface-400"> taxa de divergência geral</span>
+        </div>
+    </div>
+
+    <!-- Tabela Resumo Mensal (Tabela meses) -->
+    <div class="col-span-12 xl:col-span-4 bg-surface-0 dark:bg-surface-900 p-6 rounded-2xl border border-surface-200 dark:border-surface-800 shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-bold text-surface-900 dark:text-surface-0">Resumo por Competência</h2>
+            <p-tag value="Meses" severity="info"></p-tag>
+        </div>
+        <p-table [value]="months" [rows]="6" [paginator]="true" responsiveLayout="scroll" class="p-datatable-sm">
+            <ng-template #header>
+                <tr>
+                    <th>Período</th>
+                    <th class="text-right">Receita</th>
+                    <th class="text-right">Despesa</th>
+                    <th class="text-center">Status</th>
+                </tr>
+            </ng-template>
+            <ng-template #body let-month>
+                <tr>
+                    <td class="font-medium">{{ month.exibicao }}</td>
+                    <td class="text-right text-emerald-500 font-medium">{{ month.receita_total | currency:'BRL':'':'1.2-2':'pt-BR' }}</td>
+                    <td class="text-right text-rose-500 font-medium">{{ month.despesa_total | currency:'BRL':'':'1.2-2':'pt-BR' }}</td>
+                    <td class="text-center">
+                        <i class="pi" [ngClass]="{'pi-check-circle text-emerald-500': month.consistente === 1, 'pi-exclamation-circle text-amber-500': month.consistente === 0}" [pTooltip]="month.consistente === 0 ? formatReasons(month.motivo_inconsistencia) : 'Mês conciliado'"></i>
+                    </td>
+                </tr>
+            </ng-template>
+        </p-table>
+    </div>
+
+    <!-- Tabela Detalhada de Lançamentos (Tabela transacoes com filtros avançados) -->
+    <div class="col-span-12 xl:col-span-8 bg-surface-0 dark:bg-surface-900 p-6 rounded-2xl border border-surface-200 dark:border-surface-800 shadow-sm">
+        <div class="flex flex-col gap-4 mb-5">
+            <div class="flex justify-between items-center">
+                <h2 class="text-lg font-bold text-surface-900 dark:text-surface-0">Lançamentos Conciliados</h2>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-surface-500">{{ filteredTransactions.length }} registros filtrados</span>
+                    <button pButton pRipple icon="pi pi-filter-slash" class="p-button-rounded p-button-text p-button-sm" (click)="resetFilters()" pTooltip="Limpar Filtros"></button>
+                </div>
+            </div>
+            
+            <!-- Painel de Filtros -->
+            <div class="grid grid-cols-12 gap-3 bg-surface-50 dark:bg-surface-950 p-4 rounded-xl border border-surface-100 dark:border-surface-850">
+                <div class="col-span-12 md:col-span-4">
+                    <span class="block text-xs font-semibold text-surface-500 mb-1">Pesquisar</span>
+                    <span class="p-input-icon-left w-full">
+                        <i class="pi pi-search"></i>
+                        <input type="text" pInputText placeholder="Descrição, fornecedor..." [(ngModel)]="searchQuery" (input)="applyFilters()" class="w-full p-inputtext-sm" />
+                    </span>
+                </div>
+                
+                <div class="col-span-6 md:col-span-2">
+                    <span class="block text-xs font-semibold text-surface-500 mb-1">Competência</span>
+                    <p-select [options]="filterMonthOptions" [(ngModel)]="selectedMonth" (onChange)="applyFilters()" placeholder="Todos" [style]="{'width': '100%'}"></p-select>
+                </div>
+
+                <div class="col-span-6 md:col-span-2">
+                    <span class="block text-xs font-semibold text-surface-500 mb-1">Fluxo</span>
+                    <p-select [options]="filterTypeOptions" [(ngModel)]="selectedType" (onChange)="applyFilters()" placeholder="Todos" [style]="{'width': '100%'}"></p-select>
+                </div>
+
+                <div class="col-span-6 md:col-span-2">
+                    <span class="block text-xs font-semibold text-surface-500 mb-1">Consistência</span>
+                    <p-select [options]="filterConsistencyOptions" [(ngModel)]="selectedConsistency" (onChange)="applyFilters()" placeholder="Todos" [style]="{'width': '100%'}"></p-select>
+                </div>
+            </div>
+        </div>
+
+        <p-table [value]="filteredTransactions" [rows]="8" [paginator]="true" responsiveLayout="scroll" class="p-datatable-sm" [showCurrentPageReport]="true" currentPageReportTemplate="{first} a {last} de {totalRecords}">
+            <ng-template #header>
+                <tr>
+                    <th style="width: 3rem"></th>
+                    <th>Data</th>
+                    <th>Competência</th>
+                    <th>Descrição / Fornecedor</th>
+                    <th class="text-right">Valor</th>
+                    <th class="text-center">Vínculos</th>
+                    <th class="text-center">Doc</th>
+                </tr>
+            </ng-template>
+            <ng-template #body let-tx>
+                <tr>
+                    <td class="text-center">
+                        <p-tag [value]="tx.tipo" [severity]="tx.tipo === 'R' ? 'success' : 'danger'"></p-tag>
+                    </td>
+                    <td class="whitespace-nowrap">{{ tx.data }}</td>
+                    <td>{{ tx.mes_exibicao }}</td>
+                    <td>
+                        <div class="font-medium text-surface-900 dark:text-surface-0">{{ tx.descricao }}</div>
+                        <div class="text-xs text-surface-500 mt-0.5" *ngIf="tx.fornecedor">
+                            <i class="pi pi-building text-[10px] mr-1"></i>{{ tx.fornecedor }}
+                        </div>
+                    </td>
+                    <td class="text-right font-semibold" [ngClass]="{'text-emerald-500': tx.tipo === 'R', 'text-rose-500': tx.tipo === 'D'}">
+                        {{ tx.valor | currency:'BRL':'':'1.2-2':'pt-BR' }}
+                    </td>
+                    <td class="text-center whitespace-nowrap">
+                        <div class="flex justify-center gap-1.5">
+                            <p-tag value="Apto {{ tx.apartamento }}" severity="info" *ngIf="tx.apartamento"></p-tag>
+                            <p-tag value="Comp: {{ formatComp(tx.competencia) }}" severity="secondary" *ngIf="tx.competencia"></p-tag>
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <div class="flex items-center justify-center gap-2">
+                            <i class="pi pi-file-pdf text-rose-500 text-lg" *ngIf="tx.qtde_anexos_original > 0" [pTooltip]="tx.qtde_anexos_original + ' anexo(s) cadastrado(s)'"></i>
+                            <i class="pi" [ngClass]="{'pi-check-circle text-emerald-500': tx.consistente === 1, 'pi-exclamation-circle text-amber-500': tx.consistente === 0}" [pTooltip]="tx.consistente === 0 ? formatReasons(tx.motivo_inconsistencia) : 'Lançamento consistente'"></i>
+                        </div>
+                    </td>
+                </tr>
+            </ng-template>
+            <ng-template #emptymessage>
+                <tr>
+                    <td colspan="7" class="text-center p-6 text-surface-500">Nenhum lançamento encontrado para os filtros selecionados.</td>
+                </tr>
+            </ng-template>
+        </p-table>
+    </div>
+</div>
