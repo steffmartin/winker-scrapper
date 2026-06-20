@@ -45,17 +45,20 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 load_dotenv(dotenv_path=os.path.join(project_root, '.env'))
 
+# ==========================================
+# 1. Utilitários de String, Moeda e Data
+# ==========================================
+
 def parse_currency(val_str):
     """
     Converte uma string de moeda (ex: 'R$ 1.234,56' ou '- R$ 10,00') para float.
     """
-    if not val_str: return 0.0
-    # Remove R$, espaços, pontos de milhar e troca vírgula por ponto
-    # Trata também o sinal de negativo que às vezes vem separado por espaço
+    if not val_str:
+        return 0.0
     clean_val = val_str.replace("R$", "").replace(".", "").replace(",", ".").replace(" ", "").strip()
     try:
         return float(clean_val)
-    except:
+    except ValueError:
         return 0.0
 
 def parse_receita_info(descricao):
@@ -112,6 +115,85 @@ def parse_fornecedor(descricao):
         
     return None
 
+def get_date_chunks(start_date_obj, end_date_obj):
+    """
+    Divide o período informado em chunks mensais.
+    """
+    chunks = []
+    current_start = start_date_obj
+    while current_start <= end_date_obj:
+        year = current_start.year + (current_start.month + 10) // 12
+        month = (current_start.month + 10) % 12 + 1
+        chunk_end = datetime(year, month, 1)
+        if chunk_end > end_date_obj:
+            chunk_end = end_date_obj
+        chunks.append((current_start, chunk_end))
+        next_year = chunk_end.year + (chunk_end.month) // 12
+        next_month = (chunk_end.month) % 12 + 1
+        current_start = datetime(next_year, next_month, 1)
+    return chunks
+
+# ==========================================
+# 2. Downloads HTTP e Interações Web (Playwright)
+# ==========================================
+
+def download_http_file(context, url, dest_dir, filename_prefix="", default_filename=""):
+    """
+    Baixa um arquivo via requisição HTTP GET utilizando o contexto do Playwright e salva no destino.
+    Retorna o caminho local completo do arquivo baixado e o nome original higienizado.
+    """
+    from urllib.parse import urlparse, unquote
+    
+    response = context.request.get(url)
+    if response.status != 200:
+        raise Exception(f"Erro HTTP {response.status} ao baixar arquivo de: {url}")
+        
+    body_bytes = response.body()
+    content_type = response.headers.get("content-type", "").lower()
+    
+    # Determina a extensão correta
+    ext = ""
+    parsed_path = urlparse(url).path
+    parsed_path_clean = re.split(r'[?&]', parsed_path)[0]
+    _, url_ext = os.path.splitext(parsed_path_clean)
+    if url_ext and len(url_ext) <= 5 and url_ext.startswith("."):
+        ext = url_ext.lower()
+        
+    if not ext:
+        if "application/pdf" in content_type or body_bytes.startswith(b"%PDF"):
+            ext = ".pdf"
+        elif "image/jpeg" in content_type or "image/jpg" in content_type:
+            ext = ".jpg"
+        elif "image/png" in content_type:
+            ext = ".png"
+        elif "image/gif" in content_type:
+            ext = ".gif"
+        else:
+            ext = ".pdf" # Fallback padrão
+            
+    # Higieniza o nome original
+    nome_orig = default_filename
+    if not nome_orig:
+        nome_orig = os.path.basename(unquote(parsed_path_clean))
+    if not nome_orig:
+        nome_orig = f"documento_{int(time.time())}"
+        
+    # Limpa query strings e caracteres inválidos para Windows
+    nome_orig = re.sub(r'[\\/*?:"<>|&]', "", nome_orig)
+    
+    # Garante a extensão no fim
+    nome_orig_base, _ = os.path.splitext(nome_orig)
+    nome_orig = nome_orig_base + ext
+    
+    os.makedirs(dest_dir, exist_ok=True)
+    temp_filename = f"{filename_prefix}{nome_orig}"
+    local_path = os.path.join(dest_dir, temp_filename)
+    
+    with open(local_path, "wb") as f:
+        f.write(body_bytes)
+        
+    return local_path, nome_orig
+
 def download_anexos(loc, context):
     """
     Identifica todos os botões de anexo de uma transação, realiza o download
@@ -126,6 +208,7 @@ def download_anexos(loc, context):
         return [], 0
         
     downloaded_files = []
+    temp_dir = os.path.join(project_root, "anexos", "temp")
     
     for idx in range(count):
         btn = attach_buttons.nth(idx)
@@ -135,14 +218,6 @@ def download_anexos(loc, context):
         match_name = re.search(r"\(([^)]+)\)", btn_text)
         nome_original = match_name.group(1).strip() if match_name else btn_text
         
-        # Corta query string residual (como ? ou &) do texto do botão
-        nome_original = re.split(r'[?&]', nome_original)[0]
-        
-        # Higieniza o nome de arquivo para o Windows (remove caracteres inválidos e comerciais)
-        nome_original = re.sub(r'[\\/*?:"<>|&]', "", nome_original)
-        if not nome_original:
-            nome_original = f"documento_{int(time.time())}"
-            
         new_page = None
         try:
             # Clicar e esperar abertura da nova aba (timeout de 10s)
@@ -168,53 +243,16 @@ def download_anexos(loc, context):
                     if file_param:
                         target_url = file_param
                 
-                # Efetua o download usando a mesma sessão do navegador
-                response = context.request.get(target_url)
-                if response.status == 200:
-                    # Determina a extensão correta
-                    ext = ""
-                    parsed_path = urlparse(target_url).path
-                    # Limpa qualquer query parameter residual que tenha ficado no path (ex: &H...)
-                    parsed_path_clean = re.split(r'[?&]', parsed_path)[0]
-                    _, url_ext = os.path.splitext(parsed_path_clean)
-                    if url_ext and len(url_ext) <= 5 and url_ext.startswith("."):
-                        ext = url_ext.lower()
-                    
-                    if not ext:
-                        content_type = response.headers.get("content-type", "").lower()
-                        if "application/pdf" in content_type:
-                            ext = ".pdf"
-                        elif "image/jpeg" in content_type or "image/jpg" in content_type:
-                            ext = ".jpg"
-                        elif "image/png" in content_type:
-                            ext = ".png"
-                        elif "image/gif" in content_type:
-                            ext = ".gif"
-                    
-                    if not ext:
-                        ext = ".pdf" # Default
-                        
-                    # Remove extensões quebradas ou truncadas do nome_original antes de fixar
-                    nome_original_limpo = nome_original
-                    name_base, current_ext = os.path.splitext(nome_original)
-                    if current_ext and 2 <= len(current_ext) <= 5:
-                        nome_original_limpo = name_base
-                            
-                    nome_original = nome_original_limpo + ext
-                    
-                    temp_dir = os.path.join(project_root, "anexos", "temp")
-                    os.makedirs(temp_dir, exist_ok=True)
-                    
-                    temp_filename = f"temp_{int(time.time() * 1000)}_{idx}_{nome_original}"
-                    temp_path = os.path.join(temp_dir, temp_filename)
-                    
-                    with open(temp_path, "wb") as f:
-                        f.write(response.body())
-                        
-                    downloaded_files.append({
-                        "temp_path": temp_path,
-                        "nome_original": nome_original
-                    })
+                prefix = f"temp_{int(time.time() * 1000)}_{idx}_"
+                temp_path, nome_orig_final = download_http_file(
+                    context, target_url, temp_dir, 
+                    filename_prefix=prefix, default_filename=nome_original
+                )
+                
+                downloaded_files.append({
+                    "temp_path": temp_path,
+                    "nome_original": nome_orig_final
+                })
         except Exception as e:
             print(f"Erro ao baixar anexo {nome_original}: {e}")
         finally:
@@ -225,6 +263,158 @@ def download_anexos(loc, context):
                     pass
                     
     return downloaded_files, count
+
+def set_ion_datetime(iframe, selector_index, target_month, target_year):
+    """
+    Interage com o componente ion-datetime selecionando mês e ano.
+    """
+    datetime_elements = iframe.locator("ion-datetime").all()
+    if len(datetime_elements) <= selector_index:
+        return False
+
+    print(f"Abrindo seletor de data {'inicial' if selector_index == 0 else 'final'} ({target_month}/{target_year})...")
+    datetime_elements[selector_index].click()
+    iframe.locator("ion-picker-cmp").wait_for(state="visible", timeout=10000)
+
+    def navigate_sequentially(col_class, target_value, is_month):
+        column = iframe.locator(f"ion-picker-cmp .{col_class}")
+        if not column.is_visible():
+            return False
+
+        selected_locator = column.locator("button.picker-opt-selected")
+        if not selected_locator.is_visible():
+            column.get_by_role("button", name=target_value, exact=True).click()
+            return
+
+        current_val_text = selected_locator.inner_text().strip()
+        current_val = int(current_val_text)
+        target_val = int(target_value)
+
+        if current_val == target_val:
+            return
+
+        step = -1 if target_val < current_val else 1
+        for val in range(current_val + step, target_val + step, step):
+            val_str = str(val).zfill(2) if is_month else str(val)
+            column.get_by_role("button", name=val_str, exact=True).click()
+            time.sleep(0.1) # Mantido: Navegação entre números
+
+    try:
+        navigate_sequentially("picker-opts-right", target_month, True)
+        navigate_sequentially("picker-opts-left", target_year, False)
+        iframe.get_by_role("button", name="Confirmar").click()
+        
+        # Aguarda o fechamento do picker ou a confirmação do alerta secundário
+        alert_btn = iframe.locator("button.alert-button:has-text('Confirmar')")
+        picker = iframe.locator("ion-picker-cmp")
+        start_time = time.time()
+        while time.time() - start_time < 3.0:
+            if alert_btn.is_visible():
+                alert_btn.click()
+                break
+            if not picker.is_visible():
+                break
+            time.sleep(0.05)
+        return True
+    except:
+        return False
+
+def extract_list_from_modal(iframe, context=None):
+    """
+    Extrai as categorias, subcategorias ou transações presentes no modal atual.
+    """
+    results = []
+    last_list = iframe.locator("ion-list").last
+    if last_list.count() == 0:
+        return results
+    locators = last_list.locator("button.item-block, ion-item.item-block")
+    count = locators.count()
+    for i in range(count):
+        try:
+            loc = locators.nth(i)
+            label_el = loc.locator("ion-label")
+            if label_el.count() == 0:
+                continue
+            h2_el = label_el.locator("h2")
+            if h2_el.count() > 0:
+                nome = h2_el.first.inner_text().strip()
+                p_el = label_el.locator("p")
+                if p_el.count() > 0:
+                    nome += f" ({p_el.first.inner_text().strip()})"
+            else:
+                span_el = label_el.locator("span")
+                nome = span_el.first.inner_text().strip() if span_el.count() > 0 else label_el.inner_text().strip()
+            
+            if "R$" in nome and len(nome) < 20:
+                continue
+                
+            valor_el = loc.locator("span[item-right]").first
+            valor = valor_el.inner_text().strip() if valor_el.count() > 0 else "R$ 0,00"
+            valor = " ".join(valor.split())
+            
+            anexos = []
+            anexos_count = 0
+            if context:
+                anexos, anexos_count = download_anexos(loc, context)
+                
+            if nome:
+                results.append({
+                    "nome": nome,
+                    "valor": valor,
+                    "index": i,
+                    "anexos": anexos,
+                    "anexos_count": anexos_count
+                })
+        except Exception as e:
+            import traceback
+            print(f"Erro em extract_list_from_modal no item {i}: {e}")
+            traceback.print_exc()
+            continue
+    return results
+
+def wait_for_new_list_and_items(iframe, previous_list_count, expected_non_zero=True, timeout_ms=10000):
+    """
+    Aguarda a abertura de uma nova lista de itens (ion-list) no iframe.
+    Se expected_non_zero for True, aguarda até que a nova lista tenha pelo menos um item.
+    """
+    start_time = time.time()
+    while time.time() - start_time < (timeout_ms / 1000.0):
+        lists = iframe.locator("ion-list")
+        current_count = lists.count()
+        if current_count > previous_list_count:
+            last_list = lists.last
+            if expected_non_zero:
+                items_count = last_list.locator("button.item-block, ion-item.item-block").count()
+                if items_count > 0:
+                    return True
+            else:
+                return True
+        time.sleep(0.05)
+    return False
+
+def wait_for_list_close(iframe, previous_list_count, timeout_ms=5000):
+    """
+    Aguarda o fechamento de um modal/lista monitorando a redução de elementos 'ion-list'.
+    """
+    start_time = time.time()
+    while time.time() - start_time < (timeout_ms / 1000.0):
+        current_count = iframe.locator("ion-list").count()
+        if current_count < previous_list_count:
+            return True
+        time.sleep(0.05)
+    return False
+
+def close_last_modal(iframe):
+    """
+    Fecha o último modal/lista aberto clicando no botão 'close' e aguarda seu fechamento.
+    """
+    lists_before_close = iframe.locator("ion-list").count()
+    iframe.get_by_role("button", name="close").last.click()
+    wait_for_list_close(iframe, lists_before_close)
+
+# ==========================================
+# 3. Regras de Negócio e Persistência Banco de Dados (SQLite)
+# ==========================================
 
 def init_db(db_path=None):
     """
@@ -343,163 +533,295 @@ def save_prestacao_contas(chave_unica, caminho_local, nome_original, consistente
     finally:
         db_conn.close()
 
-def set_ion_datetime(iframe, selector_index, target_month, target_year):
+def evaluate_entity_consistency(entity_type, **kwargs):
     """
-    Interage com o componente ion-datetime selecionando mês e ano.
+    Avalia as regras de negócio para consistência de diferentes entidades do sistema.
+    Tipos suportados: 'mes', 'categoria', 'subcategoria', 'transacao', 'anexo', 'prestacao_contas'.
+    Retorna uma tupla onde os dois primeiros elementos são sempre (consistente_flag, motivo_inconsistencia).
+    Para 'transacao', retorna adicionalmente (apto, competencia, fornecedor).
     """
-    datetime_elements = iframe.locator("ion-datetime").all()
-    if len(datetime_elements) <= selector_index:
-        return False
-
-    print(f"Abrindo seletor de data {'inicial' if selector_index == 0 else 'final'} ({target_month}/{target_year})...")
-    datetime_elements[selector_index].click()
-    iframe.locator("ion-picker-cmp").wait_for(state="visible", timeout=10000)
-
-    def navigate_sequentially(col_class, target_value, is_month):
-        column = iframe.locator(f"ion-picker-cmp .{col_class}")
-        if not column.is_visible():
-            return False
-
-        selected_locator = column.locator("button.picker-opt-selected")
-        if not selected_locator.is_visible():
-            column.get_by_role("button", name=target_value, exact=True).click()
-            return
-
-        current_val_text = selected_locator.inner_text().strip()
-        current_val = int(current_val_text)
-        target_val = int(target_value)
-
-        if current_val == target_val:
-            return
-
-        step = -1 if target_val < current_val else 1
-        for val in range(current_val + step, target_val + step, step):
-            val_str = str(val).zfill(2) if is_month else str(val)
-            column.get_by_role("button", name=val_str, exact=True).click()
-            time.sleep(0.1) # Mantido: Navegação entre números
-
-    try:
-        navigate_sequentially("picker-opts-right", target_month, True)
-        navigate_sequentially("picker-opts-left", target_year, False)
-        iframe.get_by_role("button", name="Confirmar").click()
+    if entity_type == 'mes':
+        rec_total = kwargs.get('rec_total_mes', 0.0)
+        soma_rec = kwargs.get('soma_cat_rec', 0.0)
+        desp_total = kwargs.get('desp_total_mes', 0.0)
+        soma_desp = kwargs.get('soma_cat_desp', 0.0)
         
-        # Aguarda o fechamento do picker ou a confirmação do alerta secundário
-        alert_btn = iframe.locator("button.alert-button:has-text('Confirmar')")
-        picker = iframe.locator("ion-picker-cmp")
-        start_time = time.time()
-        while time.time() - start_time < 3.0:
-            if alert_btn.is_visible():
-                alert_btn.click()
-                break
-            if not picker.is_visible():
-                break
-            time.sleep(0.05)
-        return True
-    except:
-        return False
-
-def get_date_chunks(start_date_obj, end_date_obj):
-    chunks = []
-    current_start = start_date_obj
-    while current_start <= end_date_obj:
-        year = current_start.year + (current_start.month + 10) // 12
-        month = (current_start.month + 10) % 12 + 1
-        chunk_end = datetime(year, month, 1)
-        if chunk_end > end_date_obj:
-            chunk_end = end_date_obj
-        chunks.append((current_start, chunk_end))
-        next_year = chunk_end.year + (chunk_end.month) // 12
-        next_month = (chunk_end.month) % 12 + 1
-        current_start = datetime(next_year, next_month, 1)
-    return chunks
-
-def extract_list_from_modal(iframe, context=None):
-    results = []
-    last_list = iframe.locator("ion-list").last
-    if last_list.count() == 0:
-        return results
-    locators = last_list.locator("button.item-block, ion-item.item-block")
-    count = locators.count()
-    for i in range(count):
-        try:
-            loc = locators.nth(i)
-            label_el = loc.locator("ion-label")
-            if label_el.count() == 0: continue
-            h2_el = label_el.locator("h2")
-            if h2_el.count() > 0:
-                nome = h2_el.first.inner_text().strip()
-                p_el = label_el.locator("p")
-                if p_el.count() > 0:
-                    nome += f" ({p_el.first.inner_text().strip()})"
-            else:
-                span_el = label_el.locator("span")
-                nome = span_el.first.inner_text().strip() if span_el.count() > 0 else label_el.inner_text().strip()
-            if "R$" in nome and len(nome) < 20:
-                continue
-            valor_el = loc.locator("span[item-right]").first
-            valor = valor_el.inner_text().strip() if valor_el.count() > 0 else "R$ 0,00"
-            valor = " ".join(valor.split())
+        mes_rec_ok = abs(rec_total - soma_rec) < 0.01
+        mes_desp_ok = abs(desp_total - soma_desp) < 0.01
+        consistente = 1 if (mes_rec_ok and mes_desp_ok) else 0
+        
+        motivo = None
+        if not consistente:
+            reasons = []
+            if not mes_rec_ok:
+                reasons.append("Divergência em receitas")
+            if not mes_desp_ok:
+                reasons.append("Divergência em despesas")
+            if not reasons:
+                reasons.append("Divergência em receitas ou despesas")
+            motivo = json.dumps(reasons, ensure_ascii=False)
             
-            anexos = []
-            anexos_count = 0
-            if context:
-                anexos, anexos_count = download_anexos(loc, context)
+        return consistente, motivo
+
+    elif entity_type == 'categoria':
+        nome = kwargs.get('cat_nome', '')
+        val_num = kwargs.get('cat_val_num', 0.0)
+        soma_sub = kwargs.get('soma_sub', 0.0)
+        
+        consistente = 1 if abs(val_num - soma_sub) < 0.01 else 0
+        motivo = None
+        if not consistente:
+            print(f"  [AVISO CONSISTÊNCIA] Categoria '{nome}': Valor informado = R$ {val_num:.2f} | Soma subcategorias = R$ {soma_sub:.2f}")
+            motivo = json.dumps(["Soma das subcategorias difere do total da categoria"], ensure_ascii=False)
+            
+        return consistente, motivo
+
+    elif entity_type == 'subcategoria':
+        nome = kwargs.get('sub_nome', '')
+        val_num = kwargs.get('sub_val_num', 0.0)
+        soma_itens = kwargs.get('soma_itens', 0.0)
+        
+        consistente = 1 if abs(val_num - soma_itens) < 0.01 else 0
+        motivo = None
+        if not consistente:
+            print(f"  [AVISO CONSISTÊNCIA] Subcategoria '{nome}': Valor informado = R$ {val_num:.2f} | Soma transações = R$ {soma_itens:.2f}")
+            motivo = json.dumps(["Soma das transações difere do total da subcategoria"], ensure_ascii=False)
+            
+        return consistente, motivo
+
+    elif entity_type == 'transacao':
+        tipo_flag = kwargs.get('tipo_flag', '')
+        desc_completa = kwargs.get('desc_completa', '')
+        desc_f = kwargs.get('desc_f', '')
+        anexos_esperados = kwargs.get('anexos_esperados', 0)
+        anexos_baixados = kwargs.get('anexos_baixados', 0)
+        despesa_anexo_valido = kwargs.get('despesa_anexo_valido', True)
+        
+        fields_ok = True
+        apto, comp = (None, None)
+        fornecedor = None
+        
+        if tipo_flag == "R":
+            apto, comp = parse_receita_info(desc_completa)
+            if not (apto and apto.strip() and comp and comp.strip()):
+                fields_ok = False
+        elif tipo_flag == "D":
+            fornecedor = parse_fornecedor(desc_f)
+            if not (fornecedor and fornecedor.strip()):
+                fields_ok = False
                 
-            if nome:
-                results.append({
-                    "nome": nome,
-                    "valor": valor,
-                    "index": i,
-                    "anexos": anexos,
-                    "anexos_count": anexos_count
-                })
-        except Exception as e:
-            import traceback
-            print(f"Erro em extract_list_from_modal no item {i}: {e}")
-            traceback.print_exc()
-            continue
-    return results
+        anexos_ok = (anexos_esperados == anexos_baixados)
+        consistente = 1 if (fields_ok and anexos_ok and despesa_anexo_valido) else 0
+        
+        motivo = None
+        if not consistente:
+            reasons = []
+            if tipo_flag == "R":
+                if not (apto and apto.strip()):
+                    reasons.append("Apartamento não identificado")
+                if not (comp and comp.strip()):
+                    reasons.append("Competência não identificada")
+            elif tipo_flag == "D":
+                if not (fornecedor and fornecedor.strip()):
+                    reasons.append("Fornecedor não identificado")
+                if not despesa_anexo_valido:
+                    reasons.append("Despesa sem comprovantes")
+            if not anexos_ok:
+                reasons.append("Quantidade de anexos divergente")
+            if not reasons:
+                reasons.append("Dados da transação inconsistentes")
+            motivo = json.dumps(reasons, ensure_ascii=False)
+            
+        return consistente, motivo, apto, comp, fornecedor
 
-def wait_for_new_list_and_items(iframe, previous_list_count, expected_non_zero=True, timeout_ms=10000):
-    """
-    Aguarda a abertura de uma nova lista de itens (ion-list) no iframe.
-    Se expected_non_zero for True, aguarda até que a nova lista tenha pelo menos um item.
-    """
-    start_time = time.time()
-    while time.time() - start_time < (timeout_ms / 1000.0):
-        lists = iframe.locator("ion-list")
-        current_count = lists.count()
-        if current_count > previous_list_count:
-            last_list = lists.last
-            if expected_non_zero:
-                items_count = last_list.locator("button.item-block, ion-item.item-block").count()
-                if items_count > 0:
-                    return True
-            else:
-                return True
-        time.sleep(0.05)
-    return False
+    elif entity_type == 'anexo':
+        nome_orig = kwargs.get('nome_original', '')
+        # Anexo consistente se contiver extensão (2 a 5 caracteres alfanuméricos)
+        consistente = 1 if re.search(r"\.[a-zA-Z0-9]{2,5}$", nome_orig) else 0
+        
+        motivo = None
+        if not consistente:
+            motivo = json.dumps(["Extensão de arquivo inválida ou ausente"], ensure_ascii=False)
+            
+        return consistente, motivo
 
-def wait_for_list_close(iframe, previous_list_count, timeout_ms=5000):
+    elif entity_type == 'prestacao_contas':
+        sucesso = kwargs.get('sucesso', False)
+        consistente = 1 if sucesso else 0
+        motivo = None if sucesso else json.dumps(["Prestação de contas indisponível"], ensure_ascii=False)
+        
+        return consistente, motivo
+
+    else:
+        raise ValueError(f"Tipo de entidade desconhecido para validação de consistência: {entity_type}")
+
+def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root):
     """
-    Aguarda o fechamento de um modal/lista monitorando a redução de elementos 'ion-list'.
+    Insere todos os dados extraídos do mês no banco de dados SQLite, executando as análises
+    de consistência e retornando a lista de anexos temporários que precisam ser movidos.
     """
-    start_time = time.time()
-    while time.time() - start_time < (timeout_ms / 1000.0):
-        current_count = iframe.locator("ion-list").count()
-        if current_count < previous_list_count:
-            return True
-        time.sleep(0.05)
-    return False
+    db_conn = init_db()
+    db_cursor = db_conn.cursor()
+    anexos_para_mover = []
+    
+    try:
+        db_cursor.execute("BEGIN")
+        # Remove registros antigos do mesmo mês para evitar duplicados
+        db_cursor.execute("DELETE FROM meses WHERE id = ?", (chave_unica,))
+        
+        # 1. Análise de consistência do mês
+        soma_cat_rec = sum(parse_currency(cat['valor']) for cat in detalhes_mes["receitas"])
+        soma_cat_desp = sum(parse_currency(cat['valor']) for cat in detalhes_mes["despesas"])
+        
+        mes_consistente, mes_motivo = evaluate_entity_consistency(
+            'mes',
+            rec_total_mes=rec_total_mes,
+            soma_cat_rec=soma_cat_rec,
+            desp_total_mes=des_total_mes,
+            soma_cat_desp=soma_cat_desp
+        )
+        
+        if not mes_consistente:
+            print(f"  [AVISO CONSISTÊNCIA] Inconsistência no Mês {nome_mes_abbr}/{ano_item}:")
+            print(f"    - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
+            print(f"    - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
+            
+        db_cursor.execute(
+            "INSERT INTO meses (id, exibicao, receita_total, despesa_total, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?)",
+            (chave_unica, f"{nome_mes_abbr}/{ano_item}", rec_total_mes, des_total_mes, mes_consistente, mes_motivo)
+        )
+        
+        # 2. Processa categorias, subcategorias, transações e anexos
+        for t_key in ["receitas", "despesas"]:
+            tipo_flag = "R" if t_key == "receitas" else "D"
+            for cat in detalhes_mes[t_key]:
+                cat_val_num = parse_currency(cat['valor'])
+                soma_sub = sum(parse_currency(sub['valor']) for sub in cat['subcategorias'])
+                
+                cat_consistente, cat_motivo = evaluate_entity_consistency(
+                    'categoria',
+                    cat_nome=cat['nome'],
+                    cat_val_num=cat_val_num,
+                    soma_sub=soma_sub
+                )
+                    
+                db_cursor.execute(
+                    "INSERT INTO categorias (mes_id, tipo, nome, valor, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?)",
+                    (chave_unica, tipo_flag, cat['nome'], cat_val_num, cat_consistente, cat_motivo)
+                )
+                cat_id = db_cursor.lastrowid
+                
+                for sub in cat['subcategorias']:
+                    sub_val_num = parse_currency(sub['valor'])
+                    soma_itens = sum(parse_currency(item['valor']) for item in sub['itens'])
+                    
+                    sub_consistente, sub_motivo = evaluate_entity_consistency(
+                        'subcategoria',
+                        sub_nome=sub['nome'],
+                        sub_val_num=sub_val_num,
+                        soma_itens=soma_itens
+                    )
+                        
+                    db_cursor.execute(
+                        "INSERT INTO subcategorias (categoria_id, tipo, nome, valor, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?)",
+                        (cat_id, tipo_flag, sub['nome'], sub_val_num, sub_consistente, sub_motivo)
+                    )
+                    sub_id = db_cursor.lastrowid
+                    
+                    for item in sub['itens']:
+                        desc_completa = item['nome']
+                        data_t = None
+                        if "(" in desc_completa and ")" in desc_completa:
+                            partes = desc_completa.rsplit(" (", 1)
+                            desc_f, data_t = partes[0], partes[1].replace(")", "")
+                        else:
+                            desc_f = desc_completa
+                            
+                        anexos_esperados = item.get("anexos_count", 0)
+                        anexos_baixados = len(item.get("anexos", []))
+                        
+                        despesa_anexo_valido = not (tipo_flag == "D" and anexos_esperados == 0)
+                        
+                        # Avalia a consistência da transação de forma isolada
+                        trans_consistente, trans_motivo, apto, comp, fornecedor = evaluate_entity_consistency(
+                            'transacao',
+                            tipo_flag=tipo_flag,
+                            desc_completa=desc_completa,
+                            desc_f=desc_f,
+                            anexos_esperados=anexos_esperados,
+                            anexos_baixados=anexos_baixados,
+                            despesa_anexo_valido=despesa_anexo_valido
+                        )
+                        
+                        if not trans_consistente:
+                            print(f"  [AVISO CONSISTÊNCIA] Transação '{desc_f}' [{tipo_flag}]: Inconsistente ({trans_motivo})")
+                            
+                        db_cursor.execute(
+                            """
+                            INSERT INTO transacoes (subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (sub_id, tipo_flag, data_t, desc_f, parse_currency(item['valor']), apto, comp, fornecedor, anexos_esperados, trans_consistente, trans_motivo)
+                        )
+                        transacao_id = db_cursor.lastrowid
+                        
+                        for anexo in item.get("anexos", []):
+                            temp_path = anexo["temp_path"]
+                            nome_orig = anexo["nome_original"]
+                            
+                            if os.path.exists(temp_path):
+                                # Análise do anexo centralizada
+                                anexo_consistente, anexo_motivo = evaluate_entity_consistency(
+                                    'anexo',
+                                    nome_original=nome_orig
+                                )
+                                    
+                                db_cursor.execute(
+                                    "INSERT INTO anexos (transacao_id, caminho_local, nome_original, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?)",
+                                    (transacao_id, "", nome_orig, anexo_consistente, anexo_motivo)
+                                )
+                                anexo_id = db_cursor.lastrowid
+                                
+                                nome_final = f"{chave_unica}_{cat_id}_{sub_id}_{transacao_id}_{anexo_id}_{nome_orig}"
+                                caminho_relativo = f"anexos/{chave_unica}/{nome_final}"
+                                
+                                db_cursor.execute(
+                                    "UPDATE anexos SET caminho_local = ? WHERE id = ?",
+                                    (caminho_relativo, anexo_id)
+                                )
+                                
+                                mes_dir = os.path.join(project_root, "anexos", chave_unica)
+                                caminho_final = os.path.join(mes_dir, nome_final)
+                                
+                                anexos_para_mover.append({
+                                    "temp_path": temp_path,
+                                    "caminho_final": caminho_final
+                                })
+        db_conn.commit()
+    except Exception as e:
+        db_conn.rollback()
+        print(f"Erro DB {chave_unica}: {e}")
+        raise e
+    finally:
+        db_conn.close()
+        
+    return anexos_para_mover
+
+# ==========================================
+# 4. Orquestrador Principal do Script
+# ==========================================
 
 def extract_winker(username, password, condo, start_date_obj, end_date_obj, headless):
+    """
+    Fluxo principal de extração web de dados do Winker via Playwright.
+    """
     print(f"Iniciando extração Winker (Condo: {condo})...")
-    all_data = {}
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
         context = browser.new_context()
         page = context.new_page()
         try:
+            # Login no portal
             login_url = f"https://app.winker.com.br/intra/default/login?wl={condo}"
             page.goto(login_url, wait_until="networkidle")
             page.fill("#LoginForm_username", username)
@@ -507,16 +829,23 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
             page.click("#loginform > div.input-group.login-entrar > input")
             page.wait_for_url("**/intra", timeout=60000)
             
+            # Navega para o Balancete
             balancete_url = "https://app.winker.com.br/intra/meuCondominio/balancete"
             page.goto(balancete_url, wait_until="networkidle")
             page.wait_for_selector("iframe[name='pageIframe']", timeout=20000)
             
             iframe = page.frame(name="pageIframe") or page.frame(url=lambda u: "financial-summary" in u)
-            if not iframe: return
+            if not iframe:
+                print("Erro: Não foi possível carregar o iframe do Balancete.")
+                return
             iframe.wait_for_load_state("domcontentloaded")
             
+            # Inicializa tabelas uma única vez no início
+            init_db()
+            
+            # Itera sobre os períodos mensais (chunks)
             chunks = get_date_chunks(start_date_obj, end_date_obj)
-            for i, (chunk_start, chunk_end) in enumerate(chunks):
+            for chunk_start, chunk_end in chunks:
                 tab_apresentacao = iframe.locator("super-tab-button:has-text('APRESENTAÇÃO')")
                 if "selected" not in (tab_apresentacao.get_attribute("class") or ""):
                     tab_apresentacao.click()
@@ -528,15 +857,19 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                 
                 processed_months_in_chunk = []
                 month_buttons = iframe.locator("button.item.item-block.item-md").all()
-                for btn_index, btn in enumerate(month_buttons):
+                for btn_index in range(len(month_buttons)):
                     current_btn = iframe.locator("button.item.item-block.item-md").nth(btn_index)
                     text = current_btn.inner_text().strip()
                     lines = text.split("\n")
                     if len(lines) >= 3:
                         nome_mes_abbr = lines[0].strip()
-                        meses_map_reverso = {"JAN": 1, "FEV": 2, "MAR": 3, "ABR": 4, "MAI": 5, "JUN": 6, "JUL": 7, "AGO": 8, "SET": 9, "OUT": 10, "NOV": 11, "DEZ": 12}
+                        meses_map_reverso = {
+                            "JAN": 1, "FEV": 2, "MAR": 3, "ABR": 4, "MAI": 5, "JUN": 6,
+                            "JUL": 7, "AGO": 8, "SET": 9, "OUT": 10, "NOV": 11, "DEZ": 12
+                        }
                         mes_num = meses_map_reverso.get(nome_mes_abbr)
-                        if not mes_num: continue
+                        if not mes_num:
+                            continue
                         ano_item = chunk_start.year if mes_num >= chunk_start.month else chunk_end.year
                         chave_unica = f"{ano_item}{mes_num:02d}"
                         
@@ -545,16 +878,18 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                         if abs(rec_total_mes) < 0.01 and abs(des_total_mes) < 0.01:
                             print(f"  Pulo {nome_mes_abbr}/{ano_item} (Vazio).")
                             continue
-
+ 
                         print(f"  Processando {nome_mes_abbr}/{ano_item}...")
                         lists_before_month = iframe.locator("ion-list").count()
                         current_btn.click()
                         wait_for_new_list_and_items(iframe, lists_before_month, expected_non_zero=(abs(rec_total_mes) > 0.01 or abs(des_total_mes) > 0.01))
                         
+                        transacoes_lidas = 0
                         detalhes_mes = {"receitas": [], "despesas": []}
                         for tipo in ["Receita", "Despesa"]:
                             val_lado = rec_total_mes if tipo == "Receita" else des_total_mes
-                            if val_lado == 0: continue
+                            if val_lado == 0:
+                                continue
                             iframe.get_by_role("button", name=tipo, exact=True).click()
                             time.sleep(0.5) # Ajustado: Troca rec/desp
                             
@@ -574,6 +909,10 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                     wait_for_new_list_and_items(iframe, lists_before_sub, expected_non_zero=(abs(sub_val_num) > 0.01))
                                     
                                     itens_finais = extract_list_from_modal(iframe, context)
+                                    transacoes_lidas += len(itens_finais)
+                                    sys.stdout.write(f"\r    {transacoes_lidas} transações lidas...")
+                                    sys.stdout.flush()
+                                    
                                     sub_data_list.append({
                                         "nome": sub['nome'],
                                         "valor": sub['valor'],
@@ -585,165 +924,22 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                         } for i in itens_finais]
                                     })
                                     
-                                    lists_before_close = iframe.locator("ion-list").count()
-                                    iframe.get_by_role("button", name="close").last.click()
-                                    wait_for_list_close(iframe, lists_before_close)
+                                    close_last_modal(iframe)
                                     
-                                detalhes_mes[tipo.lower() + "s"].append({"nome": cat['nome'], "valor": cat['valor'], "subcategorias": sub_data_list})
-                                lists_before_close = iframe.locator("ion-list").count()
-                                iframe.get_by_role("button", name="close").last.click()
-                                wait_for_list_close(iframe, lists_before_close)
+                                detalhes_mes[tipo.lower() + "s"].append({
+                                    "nome": cat['nome'], "valor": cat['valor'], "subcategorias": sub_data_list
+                                })
+                                close_last_modal(iframe)
                                 
-                        db_conn = init_db()
-                        db_cursor = db_conn.cursor()
-                        anexos_para_mover = []
+                        if transacoes_lidas > 0:
+                            print()
+                                
                         try:
-                            db_cursor.execute("BEGIN")
-                            db_cursor.execute("DELETE FROM meses WHERE id = ?", (chave_unica,))
+                            # 3. Salva no banco de dados e move anexos temporários
+                            anexos_para_mover = save_extraction_data_to_db(
+                                chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root
+                            )
                             
-                            # Realiza a análise de consistência em memória do mês
-                            soma_cat_rec = sum(parse_currency(cat['valor']) for cat in detalhes_mes["receitas"])
-                            soma_cat_desp = sum(parse_currency(cat['valor']) for cat in detalhes_mes["despesas"])
-                            
-                            mes_rec_ok = abs(rec_total_mes - soma_cat_rec) < 0.01
-                            mes_desp_ok = abs(des_total_mes - soma_cat_desp) < 0.01
-                            mes_consistente = 1 if (mes_rec_ok and mes_desp_ok) else 0
-                            
-                            mes_motivo = None
-                            if not mes_consistente:
-                                print(f"  [AVISO CONSISTÊNCIA] Inconsistência no Mês {nome_mes_abbr}/{ano_item}:")
-                                print(f"    - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
-                                print(f"    - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
-                                mes_reasons = []
-                                if not mes_rec_ok:
-                                    mes_reasons.append("Divergência em receitas")
-                                if not mes_desp_ok:
-                                    mes_reasons.append("Divergência em despesas")
-                                if not mes_reasons:
-                                    mes_reasons.append("Divergência em receitas ou despesas")
-                                mes_motivo = json.dumps(mes_reasons, ensure_ascii=False)
-                            
-                            db_cursor.execute("INSERT INTO meses (id, exibicao, receita_total, despesa_total, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?)", (chave_unica, f"{nome_mes_abbr}/{ano_item}", rec_total_mes, des_total_mes, mes_consistente, mes_motivo))
-                            
-                            for t_key in ["receitas", "despesas"]:
-                                tipo_flag = "R" if t_key == "receitas" else "D"
-                                for cat in detalhes_mes[t_key]:
-                                    cat_val_num = parse_currency(cat['valor'])
-                                    soma_sub = sum(parse_currency(sub['valor']) for sub in cat['subcategorias'])
-                                    cat_consistente = 1 if abs(cat_val_num - soma_sub) < 0.01 else 0
-                                    
-                                    cat_motivo = None
-                                    if not cat_consistente:
-                                        print(f"  [AVISO CONSISTÊNCIA] Categoria '{cat['nome']}': Valor informado = R$ {cat_val_num:.2f} | Soma subcategorias = R$ {soma_sub:.2f}")
-                                        cat_motivo = json.dumps(["Soma das subcategorias difere do total da categoria"], ensure_ascii=False)
-                                        
-                                    db_cursor.execute("INSERT INTO categorias (mes_id, tipo, nome, valor, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?)", (chave_unica, tipo_flag, cat['nome'], cat_val_num, cat_consistente, cat_motivo))
-                                    cat_id = db_cursor.lastrowid
-                                    
-                                    for sub in cat['subcategorias']:
-                                        sub_val_num = parse_currency(sub['valor'])
-                                        soma_itens = sum(parse_currency(item['valor']) for item in sub['itens'])
-                                        sub_consistente = 1 if abs(sub_val_num - soma_itens) < 0.01 else 0
-                                        
-                                        sub_motivo = None
-                                        if not sub_consistente:
-                                            print(f"  [AVISO CONSISTÊNCIA] Subcategoria '{sub['nome']}': Valor informado = R$ {sub_val_num:.2f} | Soma transações = R$ {soma_itens:.2f}")
-                                            sub_motivo = json.dumps(["Soma das transações difere do total da subcategoria"], ensure_ascii=False)
-                                            
-                                        db_cursor.execute("INSERT INTO subcategorias (categoria_id, tipo, nome, valor, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?)", (cat_id, tipo_flag, sub['nome'], sub_val_num, sub_consistente, sub_motivo))
-                                        sub_id = db_cursor.lastrowid
-                                        
-                                        for item in sub['itens']:
-                                            desc_completa = item['nome']
-                                            apto, comp = (None, None)
-                                            fornecedor = None
-                                            data_t = None
-                                            if "(" in desc_completa and ")" in desc_completa:
-                                                partes = desc_completa.rsplit(" (", 1)
-                                                desc_f, data_t = partes[0], partes[1].replace(")", "")
-                                            else: desc_f = desc_completa
-                                            
-                                            trans_consistente = 1
-                                            fields_ok = True
-                                            despesa_anexo_valido = True
-                                            if tipo_flag == "R":
-                                                apto, comp = parse_receita_info(desc_completa)
-                                                if not (apto and apto.strip() and comp and comp.strip()):
-                                                    fields_ok = False
-                                            elif tipo_flag == "D":
-                                                fornecedor = parse_fornecedor(desc_f)
-                                                if not (fornecedor and fornecedor.strip()):
-                                                    fields_ok = False
-                                                
-                                            anexos_esperados = item.get("anexos_count", 0)
-                                            if tipo_flag == "D" and anexos_esperados == 0:
-                                                despesa_anexo_valido = False
-
-                                            anexos_baixados = len(item.get("anexos", []))
-                                            anexos_ok = (anexos_esperados == anexos_baixados)
-                                            
-                                            if not (fields_ok and anexos_ok and despesa_anexo_valido):
-                                                trans_consistente = 0
-                                                
-                                            trans_motivo = None
-                                            if not trans_consistente:
-                                                reasons = []
-                                                if tipo_flag == "R":
-                                                    if not (apto and apto.strip()):
-                                                        reasons.append("Apartamento não identificado")
-                                                    if not (comp and comp.strip()):
-                                                        reasons.append("Competência não identificada")
-                                                elif tipo_flag == "D":
-                                                    if not (fornecedor and fornecedor.strip()):
-                                                        reasons.append("Fornecedor não identificado")
-                                                    if not despesa_anexo_valido:
-                                                        reasons.append("Despesa sem comprovantes")
-                                                if not anexos_ok:
-                                                    reasons.append("Quantidade de anexos divergente")
-                                                if not reasons:
-                                                    reasons.append("Dados da transação inconsistentes")
-                                                trans_motivo = json.dumps(reasons, ensure_ascii=False)
-                                                print(f"  [AVISO CONSISTÊNCIA] Transação '{desc_f}' [{tipo_flag}]: Inconsistente ({' | '.join(reasons)})")
-                                                
-                                            db_cursor.execute("INSERT INTO transacoes (subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (sub_id, tipo_flag, data_t, desc_f, parse_currency(item['valor']), apto, comp, fornecedor, anexos_esperados, trans_consistente, trans_motivo))
-                                            transacao_id = db_cursor.lastrowid
-                                            
-                                            for anexo in item.get("anexos", []):
-                                                temp_path = anexo["temp_path"]
-                                                nome_orig = anexo["nome_original"]
-                                                
-                                                if os.path.exists(temp_path):
-                                                    # Anexo consistente se contiver extensão (2 a 5 caracteres alfanuméricos)
-                                                    anexo_consistente = 1 if re.search(r"\.[a-zA-Z0-9]{2,5}$", nome_orig) else 0
-                                                    
-                                                    anexo_motivo = None
-                                                    if not anexo_consistente:
-                                                        anexo_motivo = json.dumps(["Extensão de arquivo inválida ou ausente"], ensure_ascii=False)
-                                                        
-                                                    db_cursor.execute(
-                                                        "INSERT INTO anexos (transacao_id, caminho_local, nome_original, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?)",
-                                                        (transacao_id, "", nome_orig, anexo_consistente, anexo_motivo)
-                                                    )
-                                                    anexo_id = db_cursor.lastrowid
-                                                    
-                                                    nome_final = f"{chave_unica}_{cat_id}_{sub_id}_{transacao_id}_{anexo_id}_{nome_orig}"
-                                                    caminho_relativo = f"anexos/{chave_unica}/{nome_final}"
-                                                    
-                                                    db_cursor.execute(
-                                                        "UPDATE anexos SET caminho_local = ? WHERE id = ?",
-                                                        (caminho_relativo, anexo_id)
-                                                    )
-                                                    
-                                                    mes_dir = os.path.join(project_root, "anexos", chave_unica)
-                                                    caminho_final = os.path.join(mes_dir, nome_final)
-                                                    
-                                                    anexos_para_mover.append({
-                                                        "temp_path": temp_path,
-                                                        "caminho_final": caminho_final
-                                                    })
-                            db_conn.commit()
-                            
-                            # Após o commit com sucesso, remove a pasta antiga e move os novos anexos
                             mes_dir = os.path.join(project_root, "anexos", chave_unica)
                             if os.path.exists(mes_dir):
                                 print(f"  Removendo diretório de anexos antigo: {mes_dir}")
@@ -760,28 +956,23 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                         except Exception as err_move:
                                             print(f"  Erro ao mover anexo {t_path} para {f_path}: {err_move}")
                             
-                            # Registra o mês processado no chunk
                             processed_months_in_chunk.append((mes_num, ano_item, chave_unica))
                         except Exception as e:
-                            db_conn.rollback()
-                            print(f"Erro DB {chave_unica}: {e}")
-                        finally: db_conn.close()
-                        lists_before_close = iframe.locator("ion-list").count()
-                        iframe.get_by_role("button", name="close").last.click()
-                        wait_for_list_close(iframe, lists_before_close)
+                            # A exceção foi tratada internamente em save_extraction_data_to_db
+                            pass
+                            
+                        close_last_modal(iframe)
                 
-                # Após processar todos os meses do chunk, extrai a prestação de contas mensal
+                # 4. Extração de Prestações de Contas no final do chunk
                 if processed_months_in_chunk:
                     print(f"\nIniciando extração de Prestações de Contas para o chunk...")
                     tab_pc = iframe.locator("super-tab-button:has-text('PRESTAÇÃO DE CONTAS')")
                     if tab_pc.count() > 0:
                         tab_pc.click()
                         try:
-                            # Aguarda o carregamento de um botão de visualização exclusivo desta aba
                             iframe.locator("button:has-text('VISUALIZAR')").first.wait_for(state="visible", timeout=10000)
-                        except Exception as e:
-                            # Fallback para aguardar um tempo fixo de carregamento caso a página esteja vazia
-                            time.sleep(3)
+                        except Exception:
+                            time.sleep(3) # Fallback para carregar a página
                         
                         meses_portugues = {
                             1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
@@ -801,64 +992,78 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                     action_sheet_btn = iframe.locator("button.action-sheet-button:has-text('Visualizar')")
                                     action_sheet_btn.wait_for(state="visible", timeout=10000)
                                     
-                                    with context.expect_page(timeout=15000) as new_page_info:
-                                        action_sheet_btn.click()
-                                    new_page = new_page_info.value
-                                    
-                                    target_url = ""
-                                    start_time = time.time()
-                                    while time.time() - start_time < 15.0:
-                                        target_url = new_page.url
-                                        if target_url and target_url.startswith("http") and "default/login" not in target_url:
-                                            break
-                                        time.sleep(0.1)
-                                    
-                                    if target_url and target_url.startswith("http") and "default/login" not in target_url:
-                                        print(f"    URL obtida: {target_url}")
-                                        response = context.request.get(target_url)
-                                        if response.status == 200:
-                                            content_type = response.headers.get("content-type", "").lower()
-                                            body_bytes = response.body()
-                                            
-                                            if "application/pdf" in content_type or body_bytes.startswith(b"%PDF"):
-                                                from urllib.parse import urlparse, unquote
-                                                parsed = urlparse(target_url)
-                                                nome_orig_pdf = os.path.basename(unquote(parsed.path))
-                                                if not nome_orig_pdf:
-                                                    nome_orig_pdf = f"Prestação de contas {mes_ext}.pdf"
-                                                
-                                                mes_dir = os.path.join(project_root, "anexos", chave_unica)
-                                                os.makedirs(mes_dir, exist_ok=True)
-                                                caminho_final = os.path.join(mes_dir, f"{chave_unica}_prestacao_contas.pdf")
-                                                
-                                                with open(caminho_final, "wb") as f:
-                                                    f.write(body_bytes)
-                                                
-                                                caminho_rel = f"anexos/{chave_unica}/{chave_unica}_prestacao_contas.pdf"
-                                                
-                                                save_prestacao_contas(chave_unica, caminho_rel, nome_orig_pdf, 1, None)
-                                                print(f"    Prestação de contas salva com sucesso em {caminho_rel}")
-                                            else:
-                                                raise Exception(f"Resposta não é PDF válido (Content-Type: {content_type})")
-                                        else:
-                                            raise Exception(f"Erro HTTP {response.status} ao baixar arquivo")
-                                    else:
-                                        raise Exception("Não foi possível obter URL final de download (redirecionamento falhou/timeout)")
+                                    # Intercepta a resposta da API de register-access para obter o token/link direto
+                                    created_pages = []
+                                    def catch_page(p):
+                                        created_pages.append(p)
+                                    context.on("page", catch_page)
                                     
                                     try:
-                                        new_page.close()
-                                    except:
-                                        pass
+                                        with page.expect_response("**/register-access*", timeout=15000) as response_info:
+                                            action_sheet_btn.click()
+                                        response = response_info.value
+                                    finally:
+                                        context.remove_listener("page", catch_page)
+                                        
+                                    # Fecha abas/popups extras criados por essa ação
+                                    for cp in created_pages:
+                                        try:
+                                            cp.close()
+                                        except:
+                                            pass
+                                            
+                                    res_data = response.json()
+                                    target_url = res_data.get("return", {}).get("document_link", "")
+                                    
+                                    if target_url and target_url.startswith("http") and "default/login" not in target_url:
+                                        print(f"    URL obtida da API: {target_url}")
+                                        mes_dir = os.path.join(project_root, "anexos", chave_unica)
+                                        default_pdf_name = f"Prestação de contas {mes_ext}.pdf"
+                                        
+                                        # Baixa o arquivo direto na pasta final
+                                        temp_path, nome_orig_pdf = download_http_file(
+                                            context, target_url, mes_dir,
+                                            filename_prefix="", default_filename=default_pdf_name
+                                        )
+                                        
+                                        # Renomeia para o padrão da prestação de contas do mês
+                                        caminho_final = os.path.join(mes_dir, f"{chave_unica}_prestacao_contas.pdf")
+                                        if os.path.exists(caminho_final):
+                                            os.remove(caminho_final)
+                                        os.rename(temp_path, caminho_final)
+                                        
+                                        caminho_rel = f"anexos/{chave_unica}/{chave_unica}_prestacao_contas.pdf"
+                                        
+                                        # Avalia consistência da prestação de contas de forma centralizada
+                                        pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=True)
+                                        save_prestacao_contas(chave_unica, caminho_rel, nome_orig_pdf, pc_consistente, pc_motivo)
+                                        print(f"    Prestação de contas salva com sucesso em {caminho_rel}")
+                                    else:
+                                        raise Exception("Não foi possível obter URL final de download (redirecionamento falhou/timeout)")
                                 except Exception as err:
                                     print(f"    Erro ao extrair prestação de contas de {mes_ext}: {err}")
-                                    save_prestacao_contas(chave_unica, None, None, 0, json.dumps(["Prestação de contas indisponível"], ensure_ascii=False))
+                                    pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=False)
+                                    save_prestacao_contas(
+                                        chave_unica, None, None, pc_consistente, pc_motivo
+                                    )
                             else:
                                 print(f"  Prestação de contas de {mes_ext} não encontrada ou indisponível.")
-                                save_prestacao_contas(chave_unica, None, None, 0, json.dumps(["Prestação de contas indisponível"], ensure_ascii=False))
+                                pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=False)
+                                save_prestacao_contas(
+                                    chave_unica, None, None, pc_consistente, pc_motivo
+                                )
                     else:
                         print("  Aba PRESTAÇÃO DE CONTAS não encontrada no iframe.")
-        except Exception as e: print(f"Erro: {e}")
-        finally: browser.close()
+        except Exception as e:
+            import traceback
+            print(f"Erro inesperado durante a extração: {e}")
+            traceback.print_exc()
+        finally:
+            browser.close()
+
+# ==========================================
+# 5. Entrada do Script (CLI)
+# ==========================================
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

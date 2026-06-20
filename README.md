@@ -43,12 +43,27 @@ Utilize os atalhos criados na pasta raiz:
 
 ---
 
+## 🧪 Testes Automatizados
+
+O projeto conta com um conjunto de testes unitários automatizados para garantir o funcionamento correto de toda a lógica pura de tratamento de dados e regras de consistência de negócios (conversão de moedas, extração de metadados das descrições e avaliação de consistência das entidades).
+
+Para executar os testes:
+
+```bash
+python scripts/test_extract_winker.py
+```
+
+Os testes rodam de forma 100% isolada e rápida, sem precisar interagir com a interface web ou com o banco de dados.
+
+---
+
 ## 📁 Estrutura de Pastas do Projeto
 
 O projeto está organizado da seguinte maneira:
 
 * **[`scripts/`](file:///D:/projects/winker/scripts)**: Contém o código-fonte das automações Python.
   * `extract_winker.py`: O robô Playwright de extração.
+  * `test_extract_winker.py`: Suíte de testes unitários da extração e lógica de consistência.
   * `run_dashboard.py`: O backend Python exposto à interface gráfica via `pywebview`.
 * **[`database/`](file:///D:/projects/winker/database)**: Contém o arquivo do banco de dados SQLite local (`winker_data.db`) utilizado pelo extrator e lido pelo dashboard.
 * **[`compilados/`](file:///D:/projects/winker/compilados)**: Contém os arquivos estáticos prontos para produção do frontend gerados pelo compilador do Angular.
