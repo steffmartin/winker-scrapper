@@ -265,6 +265,132 @@ class TestExtractWinker(unittest.TestCase):
             
         conn.close()
 
+    def test_get_ip_address(self):
+        from extract_winker import get_ip_address
+        ip = get_ip_address()
+        self.assertTrue(ip is None or isinstance(ip, str))
+
+    def test_get_mac_address(self):
+        from extract_winker import get_mac_address
+        mac = get_mac_address()
+        self.assertTrue(mac is None or isinstance(mac, str))
+
+    def test_save_auditoria(self):
+        from unittest.mock import MagicMock, patch
+        import sqlite3
+        
+        class MockConnectionWrapper:
+            def __init__(self, conn):
+                self._conn = conn
+            def cursor(self):
+                return self._conn.cursor()
+            def commit(self):
+                return self._conn.commit()
+            def rollback(self):
+                return self._conn.rollback()
+            def close(self):
+                pass
+                
+        conn = sqlite3.connect(":memory:")
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS auditoria (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario_uuid TEXT,
+                usuario_id INTEGER,
+                usuario_name TEXT,
+                usuario_cpf TEXT,
+                usuario_rg TEXT,
+                usuario_fone TEXT,
+                usuario_apto TEXT,
+                data_hora_captura TEXT,
+                ip TEXT,
+                mac TEXT,
+                periodo_inicio TEXT,
+                periodo_fim TEXT,
+                downloads_realizados INTEGER,
+                transacoes_lidas INTEGER,
+                tempo_duracao REAL,
+                capturou_condominio INTEGER,
+                capturou_inadimplencia INTEGER,
+                capturou_membros INTEGER
+            )
+        """)
+        conn.commit()
+        
+        wrapper = MockConnectionWrapper(conn)
+        
+        with patch('extract_winker.init_db') as mock_init_db, \
+             patch('extract_winker.get_ip_address') as mock_get_ip, \
+             patch('extract_winker.get_mac_address') as mock_get_mac:
+             
+            mock_init_db.return_value = wrapper
+            mock_get_ip.return_value = "192.168.1.10"
+            mock_get_mac.return_value = "00:11:22:33:44:55"
+            
+            from extract_winker import create_auditoria, update_auditoria
+            
+            auditoria_id = create_auditoria(periodo_inicio="2026-01", periodo_fim="2026-02")
+            self.assertEqual(auditoria_id, 1)
+            
+            cursor.execute("SELECT * FROM auditoria WHERE id = ?", (auditoria_id,))
+            initial_row = cursor.fetchone()
+            self.assertIsNotNone(initial_row)
+            self.assertEqual(initial_row[9], "192.168.1.10")
+            self.assertEqual(initial_row[10], "00:11:22:33:44:55")
+            self.assertEqual(initial_row[11], "2026-01")
+            self.assertEqual(initial_row[12], "2026-02")
+            self.assertEqual(initial_row[13], 0)
+            self.assertEqual(initial_row[14], 0)
+            self.assertEqual(initial_row[15], 0.0)
+            self.assertEqual(initial_row[16], 0)
+            self.assertEqual(initial_row[17], 0)
+            self.assertEqual(initial_row[18], 0)
+            
+            user_data = {
+                "uuid": "test-uuid-123",
+                "id_user": 999,
+                "name": "Audit User",
+                "cpf": "111.111.111-11",
+                "rg": "MG-11.111.111",
+                "phones": [{"number": "31988888888"}],
+                "units": [{"name": "302"}]
+            }
+            
+            update_auditoria(
+                auditoria_id=auditoria_id,
+                user_data=user_data,
+                downloads_realizados=5,
+                transacoes_lidas=150,
+                tempo_duracao=12.5,
+                capturou_condominio=1,
+                capturou_inadimplencia=0,
+                capturou_membros=1
+            )
+            
+            cursor.execute("SELECT * FROM auditoria WHERE id = ?", (auditoria_id,))
+            row = cursor.fetchone()
+            self.assertIsNotNone(row)
+            self.assertEqual(row[1], "test-uuid-123")
+            self.assertEqual(row[2], 999)
+            self.assertEqual(row[3], "Audit User")
+            self.assertEqual(row[4], "111.111.111-11")
+            self.assertEqual(row[5], "MG-11.111.111")
+            self.assertEqual(row[6], "31988888888")
+            self.assertEqual(row[7], "302")
+            self.assertEqual(row[9], "192.168.1.10")
+            self.assertEqual(row[10], "00:11:22:33:44:55")
+            self.assertEqual(row[11], "2026-01")
+            self.assertEqual(row[12], "2026-02")
+            self.assertEqual(row[13], 5)
+            self.assertEqual(row[14], 150)
+            self.assertEqual(row[15], 12.5)
+            self.assertEqual(row[16], 1)
+            self.assertEqual(row[17], 0)
+            self.assertEqual(row[18], 1)
+            
+        conn.close()
+
 
 if __name__ == "__main__":
     unittest.main()

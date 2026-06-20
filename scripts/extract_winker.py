@@ -8,6 +8,8 @@ import sqlite3
 import re
 import shutil
 import json
+import socket
+import uuid
 
 def install_dependencies():
     """
@@ -710,6 +712,30 @@ def init_db(db_path=None):
         )
     """)
     
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS auditoria (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario_uuid TEXT,
+            usuario_id INTEGER,
+            usuario_name TEXT,
+            usuario_cpf TEXT,
+            usuario_rg TEXT,
+            usuario_fone TEXT,
+            usuario_apto TEXT,
+            data_hora_captura TEXT,
+            ip TEXT,
+            mac TEXT,
+            periodo_inicio TEXT,
+            periodo_fim TEXT,
+            downloads_realizados INTEGER,
+            transacoes_lidas INTEGER,
+            tempo_duracao REAL,
+            capturou_condominio INTEGER,
+            capturou_inadimplencia INTEGER,
+            capturou_membros INTEGER
+        )
+    """)
+    
     conn.commit()
     return conn
 
@@ -763,6 +789,135 @@ def save_prestacao_contas(chave_unica, caminho_local, nome_original, consistente
     except Exception as e:
         db_conn.rollback()
         print(f"Erro ao salvar prestação de contas no banco para {chave_unica}: {e}")
+    finally:
+        db_conn.close()
+
+def get_ip_address():
+    import urllib.request
+    url_list = ["https://api.ipify.org", "https://ipinfo.io/ip"]
+    for url in url_list:
+        try:
+            req = urllib.request.Request(
+                url, 
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+            )
+            with urllib.request.urlopen(req, timeout=5) as response:
+                ip = response.read().decode('utf-8').strip()
+                if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", ip):
+                    return ip
+        except Exception:
+            continue
+            
+    # Caso falhe, tenta obter o IP local como fallback
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return None
+
+def get_mac_address():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        
+        if local_ip:
+            cmd = ["powershell", "-Command", f"(Get-NetIPAddress -IPAddress {local_ip} | Get-NetAdapter).MacAddress"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            mac = result.stdout.strip()
+            if mac:
+                mac_clean = mac.replace("-", ":").lower()
+                if re.match(r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$", mac_clean):
+                    return mac_clean
+    except Exception:
+        pass
+    return None
+
+def create_auditoria(periodo_inicio, periodo_fim):
+    """
+    Cria uma nova linha de auditoria no início da execução e retorna o seu ID.
+    """
+    db_conn = init_db()
+    db_cursor = db_conn.cursor()
+    
+    ip = get_ip_address()
+    mac = get_mac_address()
+    data_hora_captura = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    try:
+        db_cursor.execute("BEGIN")
+        db_cursor.execute("""
+            INSERT INTO auditoria (
+                data_hora_captura, ip, mac, periodo_inicio, periodo_fim,
+                downloads_realizados, transacoes_lidas, tempo_duracao,
+                capturou_condominio, capturou_inadimplencia, capturou_membros
+            ) VALUES (?, ?, ?, ?, ?, 0, 0, 0.0, 0, 0, 0)
+        """, (data_hora_captura, ip, mac, periodo_inicio, periodo_fim))
+        auditoria_id = db_cursor.lastrowid
+        db_conn.commit()
+        return auditoria_id
+    except Exception as e:
+        db_conn.rollback()
+        return None
+    finally:
+        db_conn.close()
+
+def update_auditoria(auditoria_id, user_data, downloads_realizados, transacoes_lidas, tempo_duracao, capturou_condominio, capturou_inadimplencia, capturou_membros):
+    """
+    Atualiza uma linha de auditoria existente com dados mais recentes da execução.
+    """
+    if auditoria_id is None:
+        return
+        
+    db_conn = init_db()
+    db_cursor = db_conn.cursor()
+    
+    usuario_uuid = user_data.get("uuid") if user_data else None
+    usuario_id = user_data.get("id_user") if user_data else None
+    usuario_name = user_data.get("name") if user_data else None
+    usuario_cpf = user_data.get("cpf") if user_data else None
+    usuario_rg = user_data.get("rg") if user_data else None
+    
+    phones = user_data.get("phones", []) if user_data else []
+    usuario_fone = phones[0].get("number") if phones else None
+    
+    units = user_data.get("units", []) if user_data else []
+    usuario_apto = units[0].get("name") if units else None
+    
+    try:
+        db_cursor.execute("BEGIN")
+        db_cursor.execute("""
+            UPDATE auditoria SET
+                usuario_uuid = ?,
+                usuario_id = ?,
+                usuario_name = ?,
+                usuario_cpf = ?,
+                usuario_rg = ?,
+                usuario_fone = ?,
+                usuario_apto = ?,
+                downloads_realizados = ?,
+                transacoes_lidas = ?,
+                tempo_duracao = ?,
+                capturou_condominio = ?,
+                capturou_inadimplencia = ?,
+                capturou_membros = ?
+            WHERE id = ?
+        """, (
+            usuario_uuid, usuario_id, usuario_name, usuario_cpf, usuario_rg, usuario_fone, usuario_apto,
+            downloads_realizados, transacoes_lidas, tempo_duracao,
+            capturou_condominio, capturou_inadimplencia, capturou_membros,
+            auditoria_id
+        ))
+        db_conn.commit()
+    except Exception as e:
+        db_conn.rollback()
     finally:
         db_conn.close()
 
@@ -1049,10 +1204,48 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
     Fluxo principal de extração web de dados do Winker via Playwright.
     """
     print(f"Iniciando extração Winker (Condo: {condo})...")
+
+    # Inicializa rastreadores para auditoria
+    start_time = time.time()
+    total_transacoes_lidas = 0
+    total_downloads_anexos = 0
+    total_downloads_prestacoes = 0
+    capturou_condominio = 0
+    capturou_inadimplencia = 0
+    capturou_membros = 0
+    auditoria_id = None
+    user_data = {}
+    
+    def update_current_audit():
+        if auditoria_id is not None:
+            duration = time.time() - start_time
+            update_auditoria(
+                auditoria_id=auditoria_id,
+                user_data=user_data,
+                downloads_realizados=total_downloads_anexos + total_downloads_prestacoes,
+                transacoes_lidas=total_transacoes_lidas,
+                tempo_duracao=duration,
+                capturou_condominio=capturou_condominio,
+                capturou_inadimplencia=capturou_inadimplencia,
+                capturou_membros=capturou_membros
+            )
+            
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
         context = browser.new_context()
         page = context.new_page()
+
+        def handle_response(response):
+            if "api.winker.com.br/v1/me" in response.url:
+                try:
+                    if response.request.method == "GET" and 200 <= response.status < 300:
+                        data = response.json()
+                        user_data.update(data)
+                except Exception as e:
+                    print(f"Erro ao capturar dados do usuário na response: {e}")
+
+        page.on("response", handle_response)
+
         try:
             # Login no portal
             login_url = f"https://app.winker.com.br/intra/default/login?wl={condo}"
@@ -1061,27 +1254,37 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
             page.fill("#LoginForm_password", password)
             page.click("#loginform > div.input-group.login-entrar > input")
             page.wait_for_url("**/intra", timeout=60000)
-            
+
             # Inicializa tabelas uma única vez no início
             init_db()
-            
+
+            # Cria registro inicial de auditoria
+            auditoria_id = create_auditoria(start_date_obj.strftime("%Y-%m"), end_date_obj.strftime("%Y-%m"))
+
             # Verifica se a data fim contempla o mês atual do sistema
             today = datetime.now()
             is_current_month = (end_date_obj.year == today.year and end_date_obj.month == today.month)
-            
+
             if is_current_month:
                 try:
                     # 1. Extração do Condomínio e Corpo Diretivo (Membros da Gestão)
                     condo_id, condo_nome, membros = extract_condominio_and_gestao(page)
-                    
+                    if condo_id:
+                        capturou_condominio = 1
+                    if membros:
+                        capturou_membros = 1
+
                     # 2. Extração parcial de Inadimplência do boleto recente
                     data_corte, unidades, valor, administradora, telefone = extract_inadimplencia_boleto(page, context)
-                    
+                    if data_corte:
+                        capturou_inadimplencia = 1
+
                     # 3. Salva no banco de dados
                     save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone, membros)
+                    update_current_audit()
                 except Exception as ex_condo:
                     print(f"Erro ao extrair/salvar dados de gestão e inadimplência: {ex_condo}")
-            
+
             # 4. Navega para o Balancete
             balancete_url = "https://app.winker.com.br/intra/meuCondominio/balancete"
             page.goto(balancete_url, wait_until="networkidle")
@@ -1092,6 +1295,9 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                 print("Erro: Não foi possível carregar o iframe do Balancete.")
                 return
             iframe.wait_for_load_state("domcontentloaded")
+            
+            # Atualiza auditoria com dados obtidos (ex: user_data)
+            update_current_audit()
             
             # Itera sobre os períodos mensais (chunks)
             chunks = get_date_chunks(start_date_obj, end_date_obj)
@@ -1160,6 +1366,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                     
                                     itens_finais = extract_list_from_modal(iframe, context)
                                     transacoes_lidas += len(itens_finais)
+                                    total_transacoes_lidas += len(itens_finais)
                                     sys.stdout.write(f"\r    {transacoes_lidas} transações lidas...")
                                     sys.stdout.flush()
                                     
@@ -1189,6 +1396,8 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                             anexos_para_mover = save_extraction_data_to_db(
                                 chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root
                             )
+                            if anexos_para_mover:
+                                total_downloads_anexos += len(anexos_para_mover)
                             
                             mes_dir = os.path.join(project_root, "anexos", chave_unica)
                             if os.path.exists(mes_dir):
@@ -1207,6 +1416,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                             print(f"  Erro ao mover anexo {t_path} para {f_path}: {err_move}")
                             
                             processed_months_in_chunk.append((mes_num, ano_item, chave_unica))
+                            update_current_audit()
                         except Exception as e:
                             # A exceção foi tratada internamente em save_extraction_data_to_db
                             pass
@@ -1288,6 +1498,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                         pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=True)
                                         save_prestacao_contas(chave_unica, caminho_rel, nome_orig_pdf, pc_consistente, pc_motivo)
                                         print(f"    Prestação de contas salva com sucesso em {caminho_rel}")
+                                        total_downloads_prestacoes += 1
                                     else:
                                         raise Exception("Não foi possível obter URL final de download (redirecionamento falhou/timeout)")
                                 except Exception as err:
@@ -1302,8 +1513,14 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                 save_prestacao_contas(
                                     chave_unica, None, None, pc_consistente, pc_motivo
                                 )
+                            
+                            # Atualiza auditoria após cada prestação de contas processada e comitada
+                            update_current_audit()
                     else:
                         print("  Aba PRESTAÇÃO DE CONTAS não encontrada no iframe.")
+            
+            # Salvar dados de auditoria
+            update_current_audit()
         except Exception as e:
             import traceback
             print(f"Erro inesperado durante a extração: {e}")
