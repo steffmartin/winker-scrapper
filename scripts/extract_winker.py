@@ -16,7 +16,7 @@ def install_dependencies():
     """
     print("Verificando dependências...")
     
-    packages = ["playwright", "python-dotenv"]
+    packages = ["playwright", "python-dotenv", "pypdf"]
     
     for package in packages:
         try:
@@ -24,6 +24,8 @@ def install_dependencies():
                 import playwright
             elif package == "python-dotenv":
                 import dotenv
+            elif package == "pypdf":
+                import pypdf
         except ImportError:
             print(f"Instalando pacote: {package}...")
             subprocess.check_call([sys.executable, "-m", "pip", "install", package, "--quiet"])
@@ -133,6 +135,40 @@ def get_date_chunks(start_date_obj, end_date_obj):
         current_start = datetime(next_year, next_month, 1)
     return chunks
 
+def extract_inadimplencia_from_pdf(pdf_path):
+    """
+    Lê o PDF do boleto mais recente e extrai os dados de inadimplência utilizando Regex.
+    Retorna uma tupla (data_corte, unidades, valor).
+    """
+    import pypdf
+    data_corte = None
+    unidades = 0
+    valor = 0.0
+    
+    try:
+        reader = pypdf.PdfReader(pdf_path)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() or ""
+            
+        # Regexes para extração de dados
+        match_data = re.search(r"Inadimplência\s+do\s+condomínio\s+em\s+(\d{2}/\d{2}/\d{4})", text, re.IGNORECASE)
+        if match_data:
+            data_corte = match_data.group(1)
+            
+        match_unidades = re.search(r"Unidades\s+inadimplentes:\s*(\d+)", text, re.IGNORECASE)
+        if match_unidades:
+            unidades = int(match_unidades.group(1))
+            
+        match_valor = re.search(r"Valor\s+Total:\s*([\d.,]+)", text, re.IGNORECASE)
+        if match_valor:
+            valor = parse_currency(match_valor.group(1))
+            
+    except Exception as e:
+        print(f"Erro ao analisar o PDF de inadimplência: {e}")
+        
+    return data_corte, unidades, valor
+
 # ==========================================
 # 2. Downloads HTTP e Interações Web (Playwright)
 # ==========================================
@@ -194,14 +230,54 @@ def download_http_file(context, url, dest_dir, filename_prefix="", default_filen
         
     return local_path, nome_orig
 
+def download_file_from_button(context, btn, dest_dir, filename_prefix="", default_filename=""):
+    """
+    Clica em um botão que abre uma nova aba contendo um PDF ou arquivo,
+    extrai a URL da nova aba e realiza o download usando download_http_file.
+    Retorna o caminho local completo do arquivo baixado e o nome original.
+    """
+    from urllib.parse import urlparse, parse_qs
+    new_page = None
+    try:
+        with context.expect_page(timeout=15000) as new_page_info:
+            btn.click()
+        new_page = new_page_info.value
+        
+        target_url = ""
+        start_time = time.time()
+        while time.time() - start_time < 10.0:
+            target_url = new_page.url
+            if target_url and target_url.startswith("http"):
+                break
+            time.sleep(0.05)
+            
+        if target_url and target_url.startswith("http"):
+            if "viewer.html" in target_url and "file=" in target_url:
+                parsed = urlparse(target_url)
+                query_params = parse_qs(parsed.query)
+                file_param = query_params.get("file", [None])[0]
+                if file_param:
+                    target_url = file_param
+                    
+            return download_http_file(
+                context, target_url, dest_dir,
+                filename_prefix=filename_prefix, default_filename=default_filename
+            )
+        else:
+            raise Exception("Não foi possível obter a URL final de download.")
+    finally:
+        if new_page:
+            try:
+                new_page.close()
+            except:
+                pass
+
 def download_anexos(loc, context):
     """
     Identifica todos os botões de anexo de uma transação, realiza o download
     de cada arquivo (PDF, imagem, etc.), garante o fechamento de todas as abas
     e retorna uma tupla (downloaded_files, count) com os arquivos baixados e o total.
     """
-    from urllib.parse import urlparse, parse_qs
-    
     attach_buttons = loc.locator("button.button-docs:has(ion-icon[name='attach'])")
     count = attach_buttons.count()
     if count == 0:
@@ -218,49 +294,19 @@ def download_anexos(loc, context):
         match_name = re.search(r"\(([^)]+)\)", btn_text)
         nome_original = match_name.group(1).strip() if match_name else btn_text
         
-        new_page = None
+        prefix = f"temp_{int(time.time() * 1000)}_{idx}_"
         try:
-            # Clicar e esperar abertura da nova aba (timeout de 10s)
-            with context.expect_page(timeout=10000) as new_page_info:
-                btn.click()
-            new_page = new_page_info.value
+            temp_path, nome_orig_final = download_file_from_button(
+                context, btn, temp_dir, 
+                filename_prefix=prefix, default_filename=nome_original
+            )
             
-            # Aguarda a URL mudar de about:blank para a URL real (timeout de 10s)
-            target_url = ""
-            start_time = time.time()
-            while time.time() - start_time < 10.0:
-                target_url = new_page.url
-                if target_url and target_url.startswith("http"):
-                    break
-                time.sleep(0.05)
-            
-            if target_url and target_url.startswith("http"):
-                # Se for o visualizador PDF.js, extrai a URL real do PDF do parâmetro 'file'
-                if "viewer.html" in target_url and "file=" in target_url:
-                    parsed = urlparse(target_url)
-                    query_params = parse_qs(parsed.query)
-                    file_param = query_params.get("file", [None])[0]
-                    if file_param:
-                        target_url = file_param
-                
-                prefix = f"temp_{int(time.time() * 1000)}_{idx}_"
-                temp_path, nome_orig_final = download_http_file(
-                    context, target_url, temp_dir, 
-                    filename_prefix=prefix, default_filename=nome_original
-                )
-                
-                downloaded_files.append({
-                    "temp_path": temp_path,
-                    "nome_original": nome_orig_final
-                })
+            downloaded_files.append({
+                "temp_path": temp_path,
+                "nome_original": nome_orig_final
+            })
         except Exception as e:
             print(f"Erro ao baixar anexo {nome_original}: {e}")
-        finally:
-            if new_page:
-                try:
-                    new_page.close()
-                except:
-                    pass
                     
     return downloaded_files, count
 
@@ -412,6 +458,140 @@ def close_last_modal(iframe):
     iframe.get_by_role("button", name="close").last.click()
     wait_for_list_close(iframe, lists_before_close)
 
+def extract_condominio_and_gestao(page):
+    """
+    Navega para a página de informações do condomínio, extrai o ID de segurança,
+    o nome do condomínio e os membros da gestão.
+    """
+    print("Iniciando extração do Condomínio e Membros da Gestão...")
+    condo_url = "https://app.winker.com.br/intra/condominio/sobre/index"
+    page.goto(condo_url, wait_until="networkidle")
+    
+    # Aguarda o elemento chave carregar
+    page.wait_for_selector("div.info_cond_codigo_seguranca strong", timeout=15000)
+    
+    # 1. Extração do ID de Segurança
+    condo_id = page.locator("div.info_cond_codigo_seguranca strong").inner_text().strip()
+    
+    # 2. Extração do Nome do Condomínio do breadcrumb
+    condo_nome = "Condomínio"
+    breadcrumb_el = page.locator("#breadcrumb a").first
+    if breadcrumb_el.count() > 0:
+        condo_nome = breadcrumb_el.inner_text().strip()
+        
+    # 3. Extração do Síndico
+    membros = []
+    sindico_label = page.locator("div.panel.panel-info label.label-success").first
+    if sindico_label.count() > 0:
+        lbl_text = sindico_label.inner_text().strip()
+        if " - " in lbl_text:
+            sindico_name = lbl_text.split(" - ")[0].strip()
+        else:
+            sindico_name = re.sub(r"-?\s*síndico(a)?", "", lbl_text, flags=re.IGNORECASE).strip()
+            sindico_name = re.sub(r"-?\s*sindico(a)?", "", sindico_name, flags=re.IGNORECASE).strip()
+        membros.append({"nome": sindico_name, "cargo": "Síndico"})
+    
+    # 4. Outros membros da gestão
+    rows = page.locator("#lista_corpo_diretivo .row").all()
+    for r in rows:
+        name_el = r.locator("b i")
+        if name_el.count() > 0:
+            nome_membro = name_el.first.inner_text().strip()
+            texto_completo = r.inner_text().strip()
+            cargo_membro = texto_completo.replace(nome_membro, "").replace("-", "").strip()
+            cargo_membro = " ".join(cargo_membro.split())
+            
+            if nome_membro:
+                membros.append({
+                    "nome": nome_membro,
+                    "cargo": cargo_membro or "Membro da Gestão"
+                })
+                
+    print(f"Condomínio extraído: {condo_nome} (ID: {condo_id})")
+    print(f"Membros extraídos: {membros}")
+    return condo_id, condo_nome, membros
+
+def extract_inadimplencia_boleto(page, context):
+    """
+    Navega para a página de boletos, faz o download do PDF do boleto mais recente,
+    extrai os dados de inadimplência e as informações da administradora.
+    Retorna uma tupla (data_corte, unidades, valor, administradora, telefone).
+    """
+    print("Iniciando extração parcial de inadimplência via boleto recente...")
+    boleto_url = "https://app.winker.com.br/intra/meuCondominio/boleto"
+    page.goto(boleto_url, wait_until="networkidle")
+    
+    administradora, telefone = (None, None)
+    try:
+        locators = page.locator("strong, .panel-heading, div.alert.alert-info").all()
+        for loc in locators:
+            text = loc.inner_text().strip()
+            text = " ".join(text.split())
+            if re.search(r"\(\d{2}\)\s*\d{4,5}-?\d{4}", text):
+                if " - " in text:
+                    text = text.split(" - ")[-1].strip()
+                match = re.search(r"([A-ZÀ-Úa-z\s]+)\s*\((\d{2})\)\s*([\d-]+)", text)
+                if match:
+                    administradora = match.group(1).strip()
+                    ddd = match.group(2)
+                    num = match.group(3).replace("-", "").replace(" ", "").strip()
+                    telefone = f"{ddd}{num}"
+                    break
+    except Exception as ex_admin:
+        print(f"Erro ao extrair dados da administradora: {ex_admin}")
+        
+    try:
+        page.wait_for_selector(".list-group-item", timeout=15000)
+    except Exception:
+        print("Aviso: Nenhum boleto listado na página de boletos.")
+        return None, 0, 0.0, administradora, telefone
+        
+    first_item = page.locator(".list-group-item").first
+    badge_btn = first_item.locator("a.badge")
+    
+    if badge_btn.count() == 0:
+        print("Aviso: Botão de download/visualização do boleto não encontrado.")
+        return None, 0, 0.0, administradora, telefone
+        
+    temp_dir = os.path.join(project_root, "anexos", "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    try:
+        # Clicar no badge para abrir o modal de confirmação
+        print("Clicando no badge do boleto...")
+        badge_btn.click()
+        
+        # Aguarda o botão do SweetAlert aparecer e ser visível por até 5s
+        confirm_btn = page.locator("button.swal2-confirm")
+        try:
+            confirm_btn.wait_for(state="visible", timeout=5000)
+        except Exception:
+            print("Aviso: Botão de confirmação swal2-confirm não apareceu em 5s.")
+            return None, 0, 0.0, administradora, telefone
+            
+        # Clica no botão de confirmação esperando a abertura da nova página (PDF)
+        print("Modal de confirmação detectado. Clicando em: Baixar boleto original")
+        prefix = f"boleto_{int(time.time())}_"
+        temp_path, nome_orig_final = download_file_from_button(
+            context, confirm_btn, temp_dir,
+            filename_prefix=prefix, default_filename="boleto_recente.pdf"
+        )
+        
+        data_corte, unidades, valor = extract_inadimplencia_from_pdf(temp_path)
+        
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except:
+                pass
+                
+        print(f"Dados extraídos do PDF: Corte={data_corte}, Unidades={unidades}, Valor={valor}")
+        return data_corte, unidades, valor, administradora, telefone
+            
+    except Exception as e:
+        print(f"Erro durante a extração de inadimplência do boleto: {e}")
+        return None, 0, 0.0, administradora, telefone
+
 # ==========================================
 # 3. Regras de Negócio e Persistência Banco de Dados (SQLite)
 # ==========================================
@@ -425,8 +605,26 @@ def init_db(db_path=None):
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS condominio (
+            id TEXT PRIMARY KEY,
+            nome TEXT,
+            inadimplencia_data_corte TEXT,
+            inadimplencia_unidades INTEGER,
+            inadimplencia_valor REAL,
+            administradora TEXT,
+            telefone_administradora TEXT
+        )
+    """)
     
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS membros_gestao (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT,
+            cargo TEXT
+        )
+    """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS meses (
             id TEXT PRIMARY KEY, 
@@ -508,6 +706,37 @@ def init_db(db_path=None):
     
     conn.commit()
     return conn
+
+def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone, membros):
+    """
+    Salva ou atualiza as informações do condomínio e de seus membros de gestão no banco.
+    """
+    db_conn = init_db()
+    db_cursor = db_conn.cursor()
+    try:
+        db_cursor.execute("BEGIN")
+        # Garante registro único do condomínio no banco limpando dados anteriores
+        db_cursor.execute("DELETE FROM condominio")
+        db_cursor.execute("""
+            INSERT INTO condominio (id, nome, inadimplencia_data_corte, inadimplencia_unidades, inadimplencia_valor, administradora, telefone_administradora)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone))
+        
+        # Limpa e reinsere membros da gestão
+        db_cursor.execute("DELETE FROM membros_gestao")
+        for membro in membros:
+            db_cursor.execute("""
+                INSERT INTO membros_gestao (nome, cargo)
+                VALUES (?, ?)
+            """, (membro["nome"], membro["cargo"]))
+            
+        db_conn.commit()
+        print(f"Dados do condomínio '{condo_nome}' e {len(membros)} membros salvos no banco com sucesso.")
+    except Exception as e:
+        db_conn.rollback()
+        print(f"Erro ao salvar dados do condomínio e gestão no banco: {e}")
+    finally:
+        db_conn.close()
 
 def save_prestacao_contas(chave_unica, caminho_local, nome_original, consistente, motivo_inconsistencia):
     """
@@ -827,7 +1056,27 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
             page.click("#loginform > div.input-group.login-entrar > input")
             page.wait_for_url("**/intra", timeout=60000)
             
-            # Navega para o Balancete
+            # Inicializa tabelas uma única vez no início
+            init_db()
+            
+            # Verifica se a data fim contempla o mês atual do sistema
+            today = datetime.now()
+            is_current_month = (end_date_obj.year == today.year and end_date_obj.month == today.month)
+            
+            if is_current_month:
+                try:
+                    # 1. Extração do Condomínio e Corpo Diretivo (Membros da Gestão)
+                    condo_id, condo_nome, membros = extract_condominio_and_gestao(page)
+                    
+                    # 2. Extração parcial de Inadimplência do boleto recente
+                    data_corte, unidades, valor, administradora, telefone = extract_inadimplencia_boleto(page, context)
+                    
+                    # 3. Salva no banco de dados
+                    save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone, membros)
+                except Exception as ex_condo:
+                    print(f"Erro ao extrair/salvar dados de gestão e inadimplência: {ex_condo}")
+            
+            # 4. Navega para o Balancete
             balancete_url = "https://app.winker.com.br/intra/meuCondominio/balancete"
             page.goto(balancete_url, wait_until="networkidle")
             page.wait_for_selector("iframe[name='pageIframe']", timeout=20000)
@@ -837,9 +1086,6 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                 print("Erro: Não foi possível carregar o iframe do Balancete.")
                 return
             iframe.wait_for_load_state("domcontentloaded")
-            
-            # Inicializa tabelas uma única vez no início
-            init_db()
             
             # Itera sobre os períodos mensais (chunks)
             chunks = get_date_chunks(start_date_obj, end_date_obj)
@@ -1058,6 +1304,14 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
             traceback.print_exc()
         finally:
             browser.close()
+            # Limpa o diretório temporário de anexos se ele existir
+            temp_dir = os.path.join(project_root, "anexos", "temp")
+            if os.path.exists(temp_dir):
+                print(f"Limpando diretório temporário: {temp_dir}")
+                try:
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                except Exception as err_temp:
+                    print(f"Erro ao remover a pasta temporária: {err_temp}")
 
 # ==========================================
 # 5. Entrada do Script (CLI)

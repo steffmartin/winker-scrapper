@@ -172,5 +172,98 @@ class TestExtractWinker(unittest.TestCase):
         self.assertEqual(consistente, 0)
         self.assertEqual(json.loads(motivo)[0], "Prestação de contas indisponível")
 
+    def test_extract_inadimplencia_from_pdf(self):
+        from unittest.mock import MagicMock, patch
+        with patch('pypdf.PdfReader') as mock_pdf_reader:
+            mock_page = MagicMock()
+            mock_page.extract_text.return_value = (
+                "ATENÇÃO: Inadimplência do condomínio em 15/06/2026\n"
+                "Unidades inadimplentes: 12\n"
+                "Valor Total: 15.340,50"
+            )
+            mock_reader = MagicMock()
+            mock_reader.pages = [mock_page]
+            mock_pdf_reader.return_value = mock_reader
+            
+            from extract_winker import extract_inadimplencia_from_pdf
+            data_corte, unidades, valor = extract_inadimplencia_from_pdf("dummy_path.pdf")
+            
+            self.assertEqual(data_corte, "15/06/2026")
+            self.assertEqual(unidades, 12)
+            self.assertEqual(valor, 15340.50)
+
+    def test_save_condominio_and_gestao(self):
+        from unittest.mock import MagicMock, patch
+        import sqlite3
+        
+        class MockConnectionWrapper:
+            def __init__(self, conn):
+                self._conn = conn
+            def cursor(self):
+                return self._conn.cursor()
+            def commit(self):
+                return self._conn.commit()
+            def rollback(self):
+                return self._conn.rollback()
+            def close(self):
+                pass # Não faz nada para não apagar o banco em memória
+                
+        conn = sqlite3.connect(":memory:")
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS condominio (
+                id TEXT PRIMARY KEY,
+                nome TEXT,
+                inadimplencia_data_corte TEXT,
+                inadimplencia_unidades INTEGER,
+                inadimplencia_valor REAL,
+                administradora TEXT,
+                telefone_administradora TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS membros_gestao (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT,
+                cargo TEXT
+            )
+        """)
+        conn.commit()
+        
+        wrapper = MockConnectionWrapper(conn)
+        
+        with patch('extract_winker.init_db') as mock_init_db:
+            mock_init_db.return_value = wrapper
+            
+            from extract_winker import save_condominio_and_gestao
+            
+            membros = [
+                {"nome": "João Silva", "cargo": "Síndico"},
+                {"nome": "Maria Santos", "cargo": "Conselheiro"}
+            ]
+            
+            save_condominio_and_gestao(
+                condo_id="12345",
+                condo_nome="Residencial Teste",
+                data_corte="10/06/2026",
+                unidades=5,
+                valor=2500.00,
+                administradora="Cobrança S/A",
+                telefone="3133334444",
+                membros=membros
+            )
+            
+            cursor.execute("SELECT * FROM condominio")
+            condo_row = cursor.fetchone()
+            self.assertEqual(condo_row, ("12345", "Residencial Teste", "10/06/2026", 5, 2500.00, "Cobrança S/A", "3133334444"))
+            
+            cursor.execute("SELECT nome, cargo FROM membros_gestao")
+            membro_rows = cursor.fetchall()
+            self.assertEqual(len(membro_rows), 2)
+            self.assertEqual(membro_rows[0], ("João Silva", "Síndico"))
+            self.assertEqual(membro_rows[1], ("Maria Santos", "Conselheiro"))
+            
+        conn.close()
+
 if __name__ == "__main__":
     unittest.main()
