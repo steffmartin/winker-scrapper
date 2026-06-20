@@ -55,3 +55,27 @@ O projeto está organizado da seguinte maneira:
 * **[`dashboard/`](file:///D:/projects/winker/dashboard)**: O repositório de desenvolvimento contendo o código-fonte em Angular do painel Sakai-NG.
 * **[`anexos/`](file:///D:/projects/winker/anexos)**: Diretório onde o robô de extração armazena fisicamente os anexos (recibos e comprovantes em PDF/Imagens) das transações e as prestações de contas mensais de cada período.
 * **[`proximos_passos.md`](file:///D:/projects/winker/proximos_passos.md)**: Quadro de desenvolvimento contendo os próximos objetivos do projeto.
+
+---
+
+## 🛠️ Arquivos Principais do Frontend (Dashboard)
+
+Se precisar customizar a interface, a lógica ou o comportamento do painel, estes são os arquivos mais importantes localizados na pasta `dashboard/`:
+
+1. **Estrutura Visual (HTML):**
+   * [`dashboard/src/app/pages/dashboard/dashboard.html`](file:///D:/projects/winker/dashboard/src/app/pages/dashboard/dashboard.html)
+     * Define o layout de página única do painel com cards de KPIs, tabelas de meses/transações, tags dinâmicas e o painel superior de filtros usando componentes do PrimeNG e Tailwind.
+2. **Lógica e Integração (TypeScript):**
+   * [`dashboard/src/app/pages/dashboard/dashboard.ts`](file:///D:/projects/winker/dashboard/src/app/pages/dashboard/dashboard.ts)
+     * Gerencia a filtragem em tempo real, a detecção de ambiente (Modo Simulação vs. Conexão Real), formata textos do SQLite e invoca as chamadas do backend expostas pela API do `pywebview`.
+3. **Roteamento da Aplicação:**
+   * [`dashboard/src/app.routes.ts`](file:///D:/projects/winker/dashboard/src/app.routes.ts)
+     * Define a rota raiz para carregar diretamente o componente do dashboard dentro do layout Sakai.
+4. **Configurações Globais do Angular:**
+   * [`dashboard/src/app.config.ts`](file:///D:/projects/winker/dashboard/src/app.config.ts)
+     * Ativa o Hash Location (`withHashLocation`), eliminando erros 404 de navegação no navegador do app nativo.
+   * [`dashboard/src/index.html`](file:///D:/projects/winker/dashboard/src/index.html)
+     * Modifica `<base href="/">` para `./` viabilizando o carregamento relativo dos recursos locais.
+   * [`dashboard/angular.json`](file:///D:/projects/winker/dashboard/angular.json)
+     * Define o caminho de saída da compilação de produção (`outputPath: "../compilados"`), direcionando o build para a raiz.
+
