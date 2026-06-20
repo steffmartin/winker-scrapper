@@ -91,8 +91,6 @@ def parse_fornecedor(descricao):
         return None
     
     desc_upper = descricao.upper()
-    if "TARIFA COBRANÇA" in desc_upper or "TARIFA COBRANCA" in desc_upper:
-        return "SICOOB"
         
     if any(desc_upper.startswith(prefix) for prefix in ["TARIFA", "IOF", "IRRF"]):
         return None
