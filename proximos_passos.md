@@ -16,6 +16,7 @@ Este documento foi atualizado para consolidar os marcos recentes de estabilidade
 * **Regra Especial de Tarifas**: Implementação de regra para converter automaticamente despesas de `TARIFA COBRANÇA` para fornecedor `SICOOB` (e marcação automática de consistência), reduzindo em mais de 60% as inconsistências do banco histórico.
 * **Controle de Fechamento de Console**: Inclusão de parada controlada (`input`) no encerramento do script para permitir a leitura completa dos logs.
 * **Gerenciamento de Credenciais por `.env`**: Implementação de suporte para carregar automaticamente as credenciais `WINKER_USER`, `WINKER_PASSWORD` e `WINKER_CONDO` a partir do arquivo `.env` usando a biblioteca `python-dotenv`, mantendo os argumentos de linha de comando como prioridade máxima de sobressalência.
+* **Extração Automática de Prestação de Contas Mensal (Feature D)**: Implementação da extração automatizada de PDFs mensais de prestação de contas, integrada ao final do processamento das transações de cada chunk. Configuração da nova tabela `prestacoes_contas` com dupla referência aos IDs de meses (receita e despesa), com tratamento robusto para arquivos ausentes ou indisponíveis e gravação correspondente do motivo da inconsistência.
 
 ---
 
@@ -48,7 +49,7 @@ graph TD
   * Tabela interativa para pesquisa de transações com filtro por mês, fornecedor ou categoria.
   * Indicador visual destacado para os meses ou transações que estão marcados como inconsistentes no banco.
 
-### D. Extração Automática de Prestação de Contas Mensal (Novo)
+### D. Extração Automática de Prestação de Contas Mensal (Concluído)
 * **Objetivo**: Baixar de forma automatizada o documento consolidado em PDF de prestação de contas de cada mês, emitido pela administradora.
 * **Especificação Técnica Detalhada (Investigação e Validação Concluídas)**:
   1. **Navegação**: O robô deve alternar para a aba de prestação de contas do balancete utilizando o seletor `super-tab-button:has-text('PRESTAÇÃO DE CONTAS')` no iframe `pageIframe`.

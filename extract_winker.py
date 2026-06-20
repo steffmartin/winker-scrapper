@@ -303,8 +303,44 @@ def init_db(db_path="winker_data.db"):
         )
     """)
     
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS prestacoes_contas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mes_id_receita TEXT,
+            mes_id_despesa TEXT,
+            caminho_local TEXT,
+            nome_original TEXT,
+            consistente INTEGER DEFAULT 1,
+            motivo_inconsistencia TEXT,
+            FOREIGN KEY (mes_id_receita) REFERENCES meses(id) ON DELETE CASCADE,
+            FOREIGN KEY (mes_id_despesa) REFERENCES meses(id) ON DELETE CASCADE
+        )
+    """)
+    
     conn.commit()
     return conn
+
+def save_prestacao_contas(chave_unica, caminho_local, nome_original, consistente, motivo_inconsistencia):
+    """
+    Salva ou atualiza os dados da prestação de contas de um determinado mês.
+    """
+    db_conn = init_db()
+    db_cursor = db_conn.cursor()
+    try:
+        db_cursor.execute("BEGIN")
+        # Remove registro anterior
+        db_cursor.execute("DELETE FROM prestacoes_contas WHERE mes_id_receita = ? OR mes_id_despesa = ?", (chave_unica, chave_unica))
+        
+        db_cursor.execute("""
+            INSERT INTO prestacoes_contas (mes_id_receita, mes_id_despesa, caminho_local, nome_original, consistente, motivo_inconsistencia)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (chave_unica, chave_unica, caminho_local, nome_original, consistente, motivo_inconsistencia))
+        db_conn.commit()
+    except Exception as e:
+        db_conn.rollback()
+        print(f"Erro ao salvar prestação de contas no banco para {chave_unica}: {e}")
+    finally:
+        db_conn.close()
 
 def set_ion_datetime(iframe, selector_index, target_month, target_year):
     """
@@ -478,17 +514,18 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
             if not iframe: return
             iframe.wait_for_load_state("domcontentloaded")
             
-            tab_apresentacao = iframe.locator("super-tab-button:has-text('APRESENTAÇÃO')")
-            if "selected" not in (tab_apresentacao.get_attribute("class") or ""):
-                tab_apresentacao.click()
-                iframe.locator("ion-datetime").first.wait_for(state="visible", timeout=15000)
-                
             chunks = get_date_chunks(start_date_obj, end_date_obj)
             for i, (chunk_start, chunk_end) in enumerate(chunks):
+                tab_apresentacao = iframe.locator("super-tab-button:has-text('APRESENTAÇÃO')")
+                if "selected" not in (tab_apresentacao.get_attribute("class") or ""):
+                    tab_apresentacao.click()
+                    iframe.locator("ion-datetime").first.wait_for(state="visible", timeout=15000)
+                
                 set_ion_datetime(iframe, 0, chunk_start.strftime("%m"), chunk_start.strftime("%Y"))
                 set_ion_datetime(iframe, 1, chunk_end.strftime("%m"), chunk_end.strftime("%Y"))
                 time.sleep(5) # Ajustado: Atualização chunk data
                 
+                processed_months_in_chunk = []
                 month_buttons = iframe.locator("button.item.item-block.item-md").all()
                 for btn_index, btn in enumerate(month_buttons):
                     current_btn = iframe.locator("button.item.item-block.item-md").nth(btn_index)
@@ -717,6 +754,9 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                             os.rename(t_path, f_path)
                                         except Exception as err_move:
                                             print(f"  Erro ao mover anexo {t_path} para {f_path}: {err_move}")
+                            
+                            # Registra o mês processado no chunk
+                            processed_months_in_chunk.append((mes_num, ano_item, chave_unica))
                         except Exception as e:
                             db_conn.rollback()
                             print(f"Erro DB {chave_unica}: {e}")
@@ -724,6 +764,95 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                         lists_before_close = iframe.locator("ion-list").count()
                         iframe.get_by_role("button", name="close").last.click()
                         wait_for_list_close(iframe, lists_before_close)
+                
+                # Após processar todos os meses do chunk, extrai a prestação de contas mensal
+                if processed_months_in_chunk:
+                    print(f"\nIniciando extração de Prestações de Contas para o chunk...")
+                    tab_pc = iframe.locator("super-tab-button:has-text('PRESTAÇÃO DE CONTAS')")
+                    if tab_pc.count() > 0:
+                        tab_pc.click()
+                        try:
+                            # Aguarda o carregamento de um botão de visualização exclusivo desta aba
+                            iframe.locator("button:has-text('VISUALIZAR')").first.wait_for(state="visible", timeout=10000)
+                        except Exception as e:
+                            # Fallback para aguardar um tempo fixo de carregamento caso a página esteja vazia
+                            time.sleep(3)
+                        
+                        meses_portugues = {
+                            1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+                            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+                        }
+                        
+                        for mes_num, ano_item, chave_unica in processed_months_in_chunk:
+                            mes_ext = f"{meses_portugues[mes_num]} {ano_item}"
+                            col_locator = iframe.locator("ion-col").filter(has_text=mes_ext).first
+                            visualizar_btn = col_locator.locator("button:has-text('VISUALIZAR')")
+                            
+                            if col_locator.count() > 0 and visualizar_btn.count() > 0:
+                                try:
+                                    print(f"  Extraindo prestação de contas de {mes_ext}...")
+                                    visualizar_btn.click()
+                                    
+                                    action_sheet_btn = iframe.locator("button.action-sheet-button:has-text('Visualizar')")
+                                    action_sheet_btn.wait_for(state="visible", timeout=10000)
+                                    
+                                    with context.expect_page(timeout=15000) as new_page_info:
+                                        action_sheet_btn.click()
+                                    new_page = new_page_info.value
+                                    
+                                    target_url = ""
+                                    start_time = time.time()
+                                    while time.time() - start_time < 15.0:
+                                        target_url = new_page.url
+                                        if target_url and target_url.startswith("http") and "default/login" not in target_url:
+                                            break
+                                        time.sleep(0.1)
+                                    
+                                    if target_url and target_url.startswith("http") and "default/login" not in target_url:
+                                        print(f"    URL obtida: {target_url}")
+                                        response = context.request.get(target_url)
+                                        if response.status == 200:
+                                            content_type = response.headers.get("content-type", "").lower()
+                                            body_bytes = response.body()
+                                            
+                                            if "application/pdf" in content_type or body_bytes.startswith(b"%PDF"):
+                                                from urllib.parse import urlparse, unquote
+                                                parsed = urlparse(target_url)
+                                                nome_orig_pdf = os.path.basename(unquote(parsed.path))
+                                                if not nome_orig_pdf:
+                                                    nome_orig_pdf = f"Prestação de contas {mes_ext}.pdf"
+                                                
+                                                script_dir = os.path.dirname(os.path.abspath(__file__))
+                                                mes_dir = os.path.join(script_dir, "anexos", chave_unica)
+                                                os.makedirs(mes_dir, exist_ok=True)
+                                                caminho_final = os.path.join(mes_dir, f"{chave_unica}_prestacao_contas.pdf")
+                                                
+                                                with open(caminho_final, "wb") as f:
+                                                    f.write(body_bytes)
+                                                
+                                                caminho_rel = f"anexos/{chave_unica}/{chave_unica}_prestacao_contas.pdf"
+                                                
+                                                save_prestacao_contas(chave_unica, caminho_rel, nome_orig_pdf, 1, None)
+                                                print(f"    Prestação de contas salva com sucesso em {caminho_rel}")
+                                            else:
+                                                raise Exception(f"Resposta não é PDF válido (Content-Type: {content_type})")
+                                        else:
+                                            raise Exception(f"Erro HTTP {response.status} ao baixar arquivo")
+                                    else:
+                                        raise Exception("Não foi possível obter URL final de download (redirecionamento falhou/timeout)")
+                                    
+                                    try:
+                                        new_page.close()
+                                    except:
+                                        pass
+                                except Exception as err:
+                                    print(f"    Erro ao extrair prestação de contas de {mes_ext}: {err}")
+                                    save_prestacao_contas(chave_unica, None, None, 0, json.dumps(["Prestação de contas indisponível"], ensure_ascii=False))
+                            else:
+                                print(f"  Prestação de contas de {mes_ext} não encontrada ou indisponível.")
+                                save_prestacao_contas(chave_unica, None, None, 0, json.dumps(["Prestação de contas indisponível"], ensure_ascii=False))
+                    else:
+                        print("  Aba PRESTAÇÃO DE CONTAS não encontrada no iframe.")
         except Exception as e: print(f"Erro: {e}")
         finally: browser.close()
 

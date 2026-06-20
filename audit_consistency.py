@@ -115,7 +115,25 @@ def check_consistency():
             report.append(f"  - *Motivo*: {motivo_fmt}")
         report.append("")
         
-    # Verificar se existem arquivos físicos de anexos ausentes no disco
+    # 6. Auditoria de Prestações de Contas
+    cursor.execute("""
+        SELECT p.nome_original, p.caminho_local, p.motivo_inconsistencia, m.exibicao
+        FROM prestacoes_contas p
+        JOIN meses m ON p.mes_id_receita = m.id
+        WHERE p.consistente = 0
+    """)
+    inconsistent_pcs = cursor.fetchall()
+    if inconsistent_pcs:
+        report.append("## ⚠️ Prestações de Contas Inconsistentes")
+        for nome, caminho, motivo, mes_exib in inconsistent_pcs:
+            motivo_fmt = format_motivo(motivo)
+            report.append(f"- **{mes_exib} > {nome or 'Prestação de contas'}**")
+            if caminho:
+                report.append(f"  - *Caminho*: `{caminho}`")
+            report.append(f"  - *Motivo*: {motivo_fmt}")
+        report.append("")
+        
+    # Verificar se existem arquivos físicos de anexos ou prestações de contas ausentes no disco
     cursor.execute("""
         SELECT a.nome_original, a.caminho_local, t.descricao, m.exibicao
         FROM anexos a
@@ -128,17 +146,28 @@ def check_consistency():
     missing_files = []
     for nome, caminho, t_desc, mes_exib in all_attachments:
         if caminho and not os.path.exists(caminho):
-            missing_files.append((nome, caminho, t_desc, mes_exib))
+            missing_files.append((nome, caminho, f"Transação: '{t_desc}'", mes_exib))
+            
+    cursor.execute("""
+        SELECT p.nome_original, p.caminho_local, m.exibicao
+        FROM prestacoes_contas p
+        JOIN meses m ON p.mes_id_receita = m.id
+        WHERE p.caminho_local IS NOT NULL AND p.caminho_local != ''
+    """)
+    all_pcs = cursor.fetchall()
+    for nome, caminho, mes_exib in all_pcs:
+        if caminho and not os.path.exists(caminho):
+            missing_files.append((nome, caminho, "Prestação de contas mensal", mes_exib))
             
     if missing_files:
-        report.append("## 🔴 Arquivos de Anexos Ausentes no Disco")
-        for nome, caminho, t_desc, mes_exib in missing_files:
-            report.append(f"- **{mes_exib} > {nome}** (Transação: '{t_desc}')")
+        report.append("## 🔴 Arquivos Físicos Ausentes no Disco")
+        for nome, caminho, desc_tipo, mes_exib in missing_files:
+            report.append(f"- **{mes_exib} > {nome}** ({desc_tipo})")
             report.append(f"  - *Caminho Esperado*: `{caminho}`")
         report.append("")
     else:
         report.append("## 🟢 Integridade de Arquivos Físicos")
-        report.append("- Todos os anexos registrados no banco de dados estão presentes fisicamente no disco.")
+        report.append("- Todos os anexos e prestações de contas registrados no banco de dados estão presentes fisicamente no disco.")
         report.append("")
 
     conn.close()

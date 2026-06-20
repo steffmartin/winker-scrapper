@@ -316,4 +316,4 @@ Este relatório é baseado nos motivos de inconsistência pré-calculados e arma
   - *Motivo*: Fornecedor não identificado
 
 ## 🟢 Integridade de Arquivos Físicos
-- Todos os anexos registrados no banco de dados estão presentes fisicamente no disco.
+- Todos os anexos e prestações de contas registrados no banco de dados estão presentes fisicamente no disco.
