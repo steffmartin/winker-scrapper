@@ -244,7 +244,7 @@ def download_file_from_button(context, btn, dest_dir, filename_prefix="", defaul
         with context.expect_page(timeout=15000) as new_page_info:
             btn.click()
         new_page = new_page_info.value
-        
+
         target_url = ""
         start_time = time.time()
         while time.time() - start_time < 10.0:
@@ -794,7 +794,7 @@ def save_prestacao_contas(chave_unica, caminho_local, nome_original, consistente
 
 def get_ip_address():
     import urllib.request
-    url_list = ["https://api.ipify.org", "https://ipinfo.io/ip"]
+    url_list = ["https://api.ipify.org", "https://www.meuip.com/api/meuip.php", "https://ipinfo.io/ip"]
     for url in url_list:
         try:
             req = urllib.request.Request(
