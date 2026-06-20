@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Winker Dashboard - Teste de Conexão</title>
+    <!-- Google Font: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-color: #e2e8f0;
+            --text-muted: #94a3b8;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --primary-glow: rgba(59, 130, 246, 0.35);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.2);
+            --error: #ef4444;
+            --error-glow: rgba(239, 68, 68, 0.2);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background-image: radial-gradient(circle at 50% 50%, #1e293b 0%, #0b0f19 80%);
+        }
+
+        .container {
+            width: 90%;
+            max-width: 500px;
+            padding: 40px;
+            border-radius: 24px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            backdrop-filter: blur(16px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .logo-container {
+            margin-bottom: 24px;
+        }
+
+        .logo-icon {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            box-shadow: 0 8px 16px var(--primary-glow);
+            color: #ffffff;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+            background: linear-gradient(to right, #ffffff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 32px;
+        }
+
+        .btn-test {
+            width: 100%;
+            padding: 14px 28px;
+            font-size: 15px;
+            font-weight: 500;
+            color: #ffffff;
+            background-color: var(--primary);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px var(--primary-glow);
+            outline: none;
+        }
+
+        .btn-test:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px var(--primary-glow);
+        }
+
+        .btn-test:active {
+            transform: translateY(0);
+        }
+
+        .result-container {
+            margin-top: 28px;
+            min-height: 80px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .status-box {
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+            display: none;
+            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .status-box.success {
+            display: block;
+            background-color: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            box-shadow: 0 4px 12px var(--success-glow);
+        }
+
+        .status-box.error {
+            display: block;
+            background-color: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            box-shadow: 0 4px 12px var(--error-glow);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo-container">
+            <div class="logo-icon">W</div>
+            <h1>Conectividade do Banco</h1>
+            <p class="subtitle">Verificação local da base de dados winker_data.db</p>
+        </div>
+
+        <button class="btn-test" id="btnTest">Testar Conexão</button>
+
+        <div class="result-container">
+            <div class="status-box" id="statusBox"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('btnTest').addEventListener('click', function() {
+            const statusBox = document.getElementById('statusBox');
+            statusBox.className = 'status-box';
+            statusBox.style.display = 'none';
+
+            // Verifica se a API do Python está carregada
+            if (window.pywebview && window.pywebview.api) {
+                statusBox.textContent = 'Verificando conexão...';
+                statusBox.classList.add('success');
+                statusBox.style.display = 'block';
+
+                window.pywebview.api.test_db_connection().then(function(response) {
+                    statusBox.className = 'status-box';
+                    if (response.status === 'success') {
+                        statusBox.classList.add('success');
+                        statusBox.textContent = response.message;
+                    } else {
+                        statusBox.classList.add('error');
+                        statusBox.textContent = response.message;
+                    }
+                }).catch(function(err) {
+                    statusBox.className = 'status-box';
+                    statusBox.classList.add('error');
+                    statusBox.textContent = 'Erro ao se comunicar com o backend: ' + err;
+                });
+            } else {
+                statusBox.classList.add('error');
+                statusBox.style.display = 'block';
+                statusBox.textContent = 'Erro: API de comunicação do pywebview não foi carregada.';
+            }
+        });
+    </script>
+</body>
+</html>

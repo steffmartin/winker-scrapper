@@ -17,6 +17,7 @@ Este documento foi atualizado para consolidar os marcos recentes de estabilidade
 * **Controle de Fechamento de Console**: Inclusão de parada controlada (`input`) no encerramento do script para permitir a leitura completa dos logs.
 * **Gerenciamento de Credenciais por `.env`**: Implementação de suporte para carregar automaticamente as credenciais `WINKER_USER`, `WINKER_PASSWORD` e `WINKER_CONDO` a partir do arquivo `.env` usando a biblioteca `python-dotenv`, mantendo os argumentos de linha de comando como prioridade máxima de sobressalência.
 * **Extração Automática de Prestação de Contas Mensal (Feature D)**: Implementação da extração automatizada de PDFs mensais de prestação de contas, integrada ao final do processamento das transações de cada chunk. Configuração da nova tabela `prestacoes_contas` com dupla referência aos IDs de meses (receita e despesa), com tratamento robusto para arquivos ausentes ou indisponíveis e gravação correspondente do motivo da inconsistência.
+* **Infraestrutura do Dashboard Local (Feature C)**: Criado o script [run_dashboard.py](file:///D:/projects/winker/run_dashboard.py) integrado à janela nativa via `PyWebView` e com o banco SQLite. Ao fechar a interface [dashboard.html](file:///D:/projects/winker/dashboard.html), a conexão com a base de dados é automaticamente encerrada, evitando processos residuais em background. Atalho de inicialização rápida [Visualizar_Dashboard.lnk](file:///D:/projects/winker/Visualizar_Dashboard.lnk) configurado.
 
 ---
 
@@ -27,6 +28,7 @@ Abaixo estão as próximas metas do projeto, ordenadas por prioridade:
 ```mermaid
 graph TD
     B[1. Interface de Correção de Inconsistências] --> C[2. Dashboard Financeiro Local]
+    D[3. Extração Automática de Prestação de Contas] --> G[4. Extração de Inadimplência via Boleto]
 ```
 
 ### B. Interface para Correção Manual de Inconsistências
@@ -36,12 +38,13 @@ graph TD
   * Permitir que o usuário insira manualmente os dados faltantes (ex: associar um apartamento ou competência ao cashback).
   * Salvar e recalcular a consistência do registro automaticamente.
 
-### C. Dashboard de Visualização Financeira (Desktop App)
+### C. Dashboard de Visualização Financeira (Desktop App - Em Desenvolvimento)
 * **Objetivo**: Criar uma interface gráfica interativa de nível premium para analisar as finanças do condomínio.
-* **Tecnologias Propostas**:
-  * **Backend**: Python (com SQLite ativo)
-  * **Frontend**: HTML5 + Vanilla CSS (Aesthetics Premium) + Chart.js / ApexCharts para gráficos dinâmicos.
-  * **Wrapper Desktop**: `PyWebView` ou `Eel` (provendo empacotamento completo em janela nativa e desligamento automático ao fechar a janela).
+* **Infraestrutura Básica (Concluído)**: Configurado o wrapper desktop via `PyWebView`. Ao iniciar o atalho, a janela do dashboard inicia integrada ao banco SQLite; ao fechar a janela, o processo de backend é finalizado de forma limpa. Atalho [Visualizar_Dashboard.lnk](file:///D:/projects/winker/Visualizar_Dashboard.lnk) criado na raiz.
+* **Tecnologias Adotadas**:
+  * **Backend**: Python (com SQLite ativo via `pywebview`)
+  * **Frontend**: HTML5 + Vanilla CSS (Aesthetics Premium) + JavaScript assíncrono.
+  * **Wrapper Desktop**: `PyWebView` (garantindo empacotamento completo em janela nativa e desligamento automático ao fechar a janela).
 * **Funcionalidades do Dashboard**:
   * KPIs superiores (Saldo Mensal, Total de Receitas, Total de Despesas, % de Inadimplência).
   * Gráfico de Linhas/Área de Receitas vs. Despesas ao longo dos meses.
@@ -139,6 +142,32 @@ graph TD
   * **Correção no Script**: Modificou-se o robô [extract_winker.py](file:///D:/projects/winker/extract_winker.py) para limpar caracteres de parâmetros (`?` e `&`) do caminho da URL antes de extrair a extensão do arquivo.
   * **Saneamento do Banco e Disco**: Executou-se o script de saneamento histórico que renomeou fisicamente os 6 arquivos `.PDF&H` (meses `202505` e `202506`) no disco para `.pdf`, atualizou seus respectivos caminhos e nomes no banco `winker_data.db` e marcou a consistência deles como `1` (consistente).
 
+### G. Extração de Inadimplência via Boleto Recente (Aguardando Liberação)
+> [!IMPORTANT]
+> **Status**: Esta funcionalidade está pausada aguardando a data de **01/07/2026**, quando um novo boleto não pago ficará disponível no portal. Precisamos dessa liberação para inspecionar e capturar o seletor correto e as classes do badge/link para boletos em aberto (não pagos), garantindo a robustez do robô antes de prosseguir com o desenvolvimento.
+
+* **Objetivo**: Extrair as estatísticas de inadimplência do condomínio (unidades devedoras e valor total) a partir do boleto mais recente emitido.
+* **Especificação Técnica Detalhada (Investigação e Estrutura Concluídas)**:
+  1. **Ausência de Iframe**: Ao contrário das transações e balancetes, a página de boletos não roda dentro de um iframe `pageIframe`; ela está contida diretamente no frame principal sob a URL `https://app.winker.com.br/intra/meuCondominio/boleto`.
+  2. **Mapeamento do Boleto Mais Recente**: Os boletos do apartamento são listados de forma decrescente utilizando a classe `.list-group-item`. O localizador para obter o boleto mais recente é:
+     ```python
+     boleto_recente = page.locator(".list-group-item").first
+     ```
+  3. **Abertura do Boleto (Popup)**: O clique para visualizar o boleto deve ocorrer na tag de status/badge do item (geralmente contendo a classe `a.badge` e eventos `ng-click="consultaBoletoPago(...)"` ou equivalentes, com atributo `data-original-title="Click para visualizar"`):
+     ```python
+     with context.expect_page(timeout=15000) as new_page_info:
+         boleto_recente.locator("a.badge").click()
+     new_page = new_page_info.value
+     ```
+  4. **Extração e Leitura do PDF**:
+     * Capturar a URL final da nova aba e baixar o PDF usando `context.request.get(target_url)`.
+     * Utilizar uma biblioteca como `pypdf` ou `pdfplumber` para ler o PDF baixado.
+     * Localizar e extrair através de Regex os seguintes campos e valores:
+       * **Data da inadimplência**: `Inadimplência do condomínio em (\d{2}/\d{2}/\d{4})` (Ex: `20/06/2026`)
+       * **Unidades inadimplentes**: `Unidades inadimplentes:\s*(\d+)` (Ex: `9`)
+       * **Valor total**: `Valor Total:\s*([\d.,]+)` (Ex: `11.445,95`)
+  5. **Modelagem no Banco de Dados**:
+     Criar uma nova tabela dedicada chamada `inadimplencias` para manter esta informação.
 ---
 
 ## 3. Instruções de Leitura

@@ -16,6 +16,3 @@ anexos/
 
 # Backups manuais
 *_backup.py
-
-# Atalhos e executáveis locais
-*.lnk
