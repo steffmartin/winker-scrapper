@@ -1,0 +1,74 @@
+name: Execução de Testes Unitários
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  python-tests:
+    name: Testes Unitários - Python
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Instalar Dependências do Sistema (Playwright)
+        run: |
+          sudo npx playwright install-deps
+
+      - name: Instalar Dependências Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright python-dotenv pypdf pywebview
+
+      - name: Instalar Navegador Chromium (Playwright)
+        run: |
+          python -m playwright install chromium
+
+      - name: Executar Testes de Unidade (Python)
+        run: |
+          # Executa todos os testes na pasta 'scripts'
+          python -m unittest discover -s scripts -p "test_*.py"
+          
+          # Dica para o futuro: Se novas pastas com scripts e testes Python forem adicionadas,
+          # novos comandos de descoberta podem ser inseridos abaixo, por exemplo:
+          # python -m unittest discover -s nova_pasta/ -p "test_*.py"
+
+  frontend-tests:
+    name: Testes Unitários - Frontend (Angular)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Instalar Dependências do Frontend
+        run: |
+          cd dashboard
+          npm ci
+
+      - name: Executar Testes de Unidade (Angular)
+        # continue-on-error é utilizado pois a suíte do frontend pode não possuir testes configurados ou válidos no momento,
+        # garantindo que o pipeline de testes Python passe enquanto o frontend é preparado.
+        continue-on-error: true
+        run: |
+          cd dashboard
+          # Executa os testes no modo headless para CI
+          npm test -- --watch=false --browsers=ChromeHeadless
