@@ -50,10 +50,10 @@ O projeto conta com um conjunto de testes unitários automatizados para garantir
 Para executar os testes:
 
 ```bash
-python scripts/test_extract_winker.py
+python -m unittest discover -s scripts -p "test_*.py"
 ```
 
-Os testes rodam de forma 100% isolada e rápida, sem precisar interagir com a interface web ou com o banco de dados.
+Os testes rodam de forma 100% isolada e rápida, sem precisar interagir com a interface web ou com o banco de dados. O projeto possui um pipeline de integração contínua (CI) via GitHub Actions que executa automaticamente as suítes de testes unitários do Python e do Angular a cada push ou pull request.
 
 ---
 
