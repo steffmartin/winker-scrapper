@@ -497,14 +497,12 @@ def init_db(db_path=None):
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS prestacoes_contas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            mes_id_receita TEXT,
-            mes_id_despesa TEXT,
+            mes_id TEXT,
             caminho_local TEXT,
             nome_original TEXT,
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
-            FOREIGN KEY (mes_id_receita) REFERENCES meses(id) ON DELETE CASCADE,
-            FOREIGN KEY (mes_id_despesa) REFERENCES meses(id) ON DELETE CASCADE
+            FOREIGN KEY (mes_id) REFERENCES meses(id) ON DELETE CASCADE
         )
     """)
     
@@ -520,12 +518,12 @@ def save_prestacao_contas(chave_unica, caminho_local, nome_original, consistente
     try:
         db_cursor.execute("BEGIN")
         # Remove registro anterior
-        db_cursor.execute("DELETE FROM prestacoes_contas WHERE mes_id_receita = ? OR mes_id_despesa = ?", (chave_unica, chave_unica))
+        db_cursor.execute("DELETE FROM prestacoes_contas WHERE mes_id = ?", (chave_unica,))
         
         db_cursor.execute("""
-            INSERT INTO prestacoes_contas (mes_id_receita, mes_id_despesa, caminho_local, nome_original, consistente, motivo_inconsistencia)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (chave_unica, chave_unica, caminho_local, nome_original, consistente, motivo_inconsistencia))
+            INSERT INTO prestacoes_contas (mes_id, caminho_local, nome_original, consistente, motivo_inconsistencia)
+            VALUES (?, ?, ?, ?, ?)
+        """, (chave_unica, caminho_local, nome_original, consistente, motivo_inconsistencia))
         db_conn.commit()
     except Exception as e:
         db_conn.rollback()

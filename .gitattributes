@@ -1,0 +1,39 @@
+# Comportamento padrão de autocorreção para arquivos de texto
+* text=auto
+
+# Arquivos de código e texto estruturado com quebra de linha LF obrigatória
+*.py text eol=lf
+*.ts text eol=lf
+*.js text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.scss text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+*.txt text eol=lf
+*.xml text eol=lf
+*.iml text eol=lf
+*.svg text eol=lf
+*.bat text eol=crlf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Definição explícita de arquivos binários (não devem ser modificados pelo Git)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.db binary
+*.db-lock binary
+*.lnk binary
+*.pyc binary
+
+# Fontes e recursos binários
+*.woff binary
+*.woff2 binary
+*.eot binary
+*.ttf binary
