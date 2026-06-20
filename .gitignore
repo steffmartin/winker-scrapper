@@ -1,0 +1,21 @@
+# Segurança e Credenciais
+.env
+
+# Bancos de dados locais
+*.db
+
+# Cache do Python
+__pycache__/
+*.pyc
+
+# Pastas de dados e downloads
+anexos/
+
+# Cache e estado do Playwright
+.playwright-mcp/
+
+# Backups manuais
+*_backup.py
+
+# Atalhos e executáveis locais
+*.lnk
