@@ -667,6 +667,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                             
                                             trans_consistente = 1
                                             fields_ok = True
+                                            despesa_anexo_valido = True
                                             if tipo_flag == "R":
                                                 apto, comp = parse_receita_info(desc_completa)
                                                 if not (apto and apto.strip() and comp and comp.strip()):
@@ -677,10 +678,13 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                                     fields_ok = False
                                                 
                                             anexos_esperados = item.get("anexos_count", 0)
+                                            if tipo_flag == "D" and anexos_esperados == 0:
+                                                despesa_anexo_valido = False
+
                                             anexos_baixados = len(item.get("anexos", []))
                                             anexos_ok = (anexos_esperados == anexos_baixados)
                                             
-                                            if not (fields_ok and anexos_ok):
+                                            if not (fields_ok and anexos_ok and despesa_anexo_valido):
                                                 trans_consistente = 0
                                                 
                                             trans_motivo = None
@@ -694,6 +698,8 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                                 elif tipo_flag == "D":
                                                     if not (fornecedor and fornecedor.strip()):
                                                         reasons.append("Fornecedor não identificado")
+                                                    if not despesa_anexo_valido:
+                                                        reasons.append("Despesa sem comprovantes")
                                                 if not anexos_ok:
                                                     reasons.append("Quantidade de anexos divergente")
                                                 if not reasons:
