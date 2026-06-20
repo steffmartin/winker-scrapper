@@ -1,5 +1,7 @@
 # Winker Scraper & Dashboard Financeiro
 
+[![Execução de Testes Unitários](https://github.com/steffmartin/winker-scrapper/actions/workflows/tests.yml/badge.svg)](https://github.com/steffmartin/winker-scrapper/actions/workflows/tests.yml)
+
 Este projeto consiste em uma automação robusta para extração de lançamentos, transações e anexos financeiros do portal Winker, acoplado a um Dashboard nativo para Desktop de nível premium baseado no template **Sakai PrimeNG** (Angular v21 + PrimeNG v21 + Tailwind CSS v4).
 
 ---
