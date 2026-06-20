@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import sqlite3
 import re
 import shutil
+import json
 
 def install_dependencies():
     """
@@ -241,7 +242,8 @@ def init_db(db_path="winker_data.db"):
             exibicao TEXT,
             receita_total REAL,
             despesa_total REAL,
-            consistente INTEGER DEFAULT 1
+            consistente INTEGER DEFAULT 1,
+            motivo_inconsistencia TEXT
         )
     """)
     
@@ -253,6 +255,7 @@ def init_db(db_path="winker_data.db"):
             nome TEXT,
             valor REAL,
             consistente INTEGER DEFAULT 1,
+            motivo_inconsistencia TEXT,
             FOREIGN KEY (mes_id) REFERENCES meses(id) ON DELETE CASCADE
         )
     """)
@@ -265,6 +268,7 @@ def init_db(db_path="winker_data.db"):
             nome TEXT,
             valor REAL,
             consistente INTEGER DEFAULT 1,
+            motivo_inconsistencia TEXT,
             FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE
         )
     """)
@@ -282,6 +286,7 @@ def init_db(db_path="winker_data.db"):
             fornecedor TEXT,
             anexos INTEGER DEFAULT 0,
             consistente INTEGER DEFAULT 1,
+            motivo_inconsistencia TEXT,
             FOREIGN KEY (subcategoria_id) REFERENCES subcategorias(id) ON DELETE CASCADE
         )
     """)
@@ -293,6 +298,7 @@ def init_db(db_path="winker_data.db"):
             caminho_local TEXT,
             nome_original TEXT,
             consistente INTEGER DEFAULT 1,
+            motivo_inconsistencia TEXT,
             FOREIGN KEY (transacao_id) REFERENCES transacoes(id) ON DELETE CASCADE
         )
     """)
@@ -565,12 +571,21 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                             mes_desp_ok = abs(des_total_mes - soma_cat_desp) < 0.01
                             mes_consistente = 1 if (mes_rec_ok and mes_desp_ok) else 0
                             
+                            mes_motivo = None
                             if not mes_consistente:
                                 print(f"  [AVISO CONSISTÊNCIA] Inconsistência no Mês {nome_mes_abbr}/{ano_item}:")
                                 print(f"    - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
                                 print(f"    - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
+                                mes_reasons = []
+                                if not mes_rec_ok:
+                                    mes_reasons.append("Divergência em receitas")
+                                if not mes_desp_ok:
+                                    mes_reasons.append("Divergência em despesas")
+                                if not mes_reasons:
+                                    mes_reasons.append("Divergência em receitas ou despesas")
+                                mes_motivo = json.dumps(mes_reasons, ensure_ascii=False)
                             
-                            db_cursor.execute("INSERT INTO meses (id, exibicao, receita_total, despesa_total, consistente) VALUES (?, ?, ?, ?, ?)", (chave_unica, f"{nome_mes_abbr}/{ano_item}", rec_total_mes, des_total_mes, mes_consistente))
+                            db_cursor.execute("INSERT INTO meses (id, exibicao, receita_total, despesa_total, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?)", (chave_unica, f"{nome_mes_abbr}/{ano_item}", rec_total_mes, des_total_mes, mes_consistente, mes_motivo))
                             
                             for t_key in ["receitas", "despesas"]:
                                 tipo_flag = "R" if t_key == "receitas" else "D"
@@ -579,10 +594,12 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                     soma_sub = sum(parse_currency(sub['valor']) for sub in cat['subcategorias'])
                                     cat_consistente = 1 if abs(cat_val_num - soma_sub) < 0.01 else 0
                                     
+                                    cat_motivo = None
                                     if not cat_consistente:
                                         print(f"  [AVISO CONSISTÊNCIA] Categoria '{cat['nome']}': Valor informado = R$ {cat_val_num:.2f} | Soma subcategorias = R$ {soma_sub:.2f}")
+                                        cat_motivo = json.dumps(["Soma das subcategorias difere do total da categoria"], ensure_ascii=False)
                                         
-                                    db_cursor.execute("INSERT INTO categorias (mes_id, tipo, nome, valor, consistente) VALUES (?, ?, ?, ?, ?)", (chave_unica, tipo_flag, cat['nome'], cat_val_num, cat_consistente))
+                                    db_cursor.execute("INSERT INTO categorias (mes_id, tipo, nome, valor, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?)", (chave_unica, tipo_flag, cat['nome'], cat_val_num, cat_consistente, cat_motivo))
                                     cat_id = db_cursor.lastrowid
                                     
                                     for sub in cat['subcategorias']:
@@ -590,10 +607,12 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                         soma_itens = sum(parse_currency(item['valor']) for item in sub['itens'])
                                         sub_consistente = 1 if abs(sub_val_num - soma_itens) < 0.01 else 0
                                         
+                                        sub_motivo = None
                                         if not sub_consistente:
                                             print(f"  [AVISO CONSISTÊNCIA] Subcategoria '{sub['nome']}': Valor informado = R$ {sub_val_num:.2f} | Soma transações = R$ {soma_itens:.2f}")
+                                            sub_motivo = json.dumps(["Soma das transações difere do total da subcategoria"], ensure_ascii=False)
                                             
-                                        db_cursor.execute("INSERT INTO subcategorias (categoria_id, tipo, nome, valor, consistente) VALUES (?, ?, ?, ?, ?)", (cat_id, tipo_flag, sub['nome'], sub_val_num, sub_consistente))
+                                        db_cursor.execute("INSERT INTO subcategorias (categoria_id, tipo, nome, valor, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?)", (cat_id, tipo_flag, sub['nome'], sub_val_num, sub_consistente, sub_motivo))
                                         sub_id = db_cursor.lastrowid
                                         
                                         for item in sub['itens']:
@@ -624,15 +643,25 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                             if not (fields_ok and anexos_ok):
                                                 trans_consistente = 0
                                                 
+                                            trans_motivo = None
                                             if not trans_consistente:
                                                 reasons = []
-                                                if not fields_ok:
-                                                    reasons.append("campos obrigatórios ausentes")
+                                                if tipo_flag == "R":
+                                                    if not (apto and apto.strip()):
+                                                        reasons.append("Apartamento não identificado")
+                                                    if not (comp and comp.strip()):
+                                                        reasons.append("Competência não identificada")
+                                                elif tipo_flag == "D":
+                                                    if not (fornecedor and fornecedor.strip()):
+                                                        reasons.append("Fornecedor não identificado")
                                                 if not anexos_ok:
-                                                    reasons.append(f"anexos divergentes: esperado {anexos_esperados}, baixado {anexos_baixados}")
-                                                print(f"  [AVISO CONSISTÊNCIA] Transação '{desc_f}' [{tipo_flag}]: Inconsistente ({', '.join(reasons)})")
+                                                    reasons.append("Quantidade de anexos divergente")
+                                                if not reasons:
+                                                    reasons.append("Dados da transação inconsistentes")
+                                                trans_motivo = json.dumps(reasons, ensure_ascii=False)
+                                                print(f"  [AVISO CONSISTÊNCIA] Transação '{desc_f}' [{tipo_flag}]: Inconsistente ({' | '.join(reasons)})")
                                                 
-                                            db_cursor.execute("INSERT INTO transacoes (subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (sub_id, tipo_flag, data_t, desc_f, parse_currency(item['valor']), apto, comp, fornecedor, anexos_esperados, trans_consistente))
+                                            db_cursor.execute("INSERT INTO transacoes (subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (sub_id, tipo_flag, data_t, desc_f, parse_currency(item['valor']), apto, comp, fornecedor, anexos_esperados, trans_consistente, trans_motivo))
                                             transacao_id = db_cursor.lastrowid
                                             
                                             for anexo in item.get("anexos", []):
@@ -643,9 +672,13 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                                     # Anexo consistente se contiver extensão (2 a 5 caracteres alfanuméricos)
                                                     anexo_consistente = 1 if re.search(r"\.[a-zA-Z0-9]{2,5}$", nome_orig) else 0
                                                     
+                                                    anexo_motivo = None
+                                                    if not anexo_consistente:
+                                                        anexo_motivo = json.dumps(["Extensão de arquivo inválida ou ausente"], ensure_ascii=False)
+                                                        
                                                     db_cursor.execute(
-                                                        "INSERT INTO anexos (transacao_id, caminho_local, nome_original, consistente) VALUES (?, ?, ?, ?)",
-                                                        (transacao_id, "", nome_orig, anexo_consistente)
+                                                        "INSERT INTO anexos (transacao_id, caminho_local, nome_original, consistente, motivo_inconsistencia) VALUES (?, ?, ?, ?, ?)",
+                                                        (transacao_id, "", nome_orig, anexo_consistente, anexo_motivo)
                                                     )
                                                     anexo_id = db_cursor.lastrowid
                                                     

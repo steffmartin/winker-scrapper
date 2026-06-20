@@ -109,12 +109,27 @@ graph TD
        * *Prós*: Mantém a semântica de dados limpa e separada. Se um mês no futuro tiver mais de um documento de prestação de contas, basta remover a restrição `UNIQUE` da coluna `mes_id` para permitir 1-para-N arquivos por mês.
        * *Contras*: Adiciona uma tabela a mais no banco de dados e exige junções (JOIN) nas consultas de listagem.
 
-### E. Armazenamento do Motivo de Inconsistência no Banco (Novo)
+### E. Armazenamento do Motivo de Inconsistência no Banco (Concluído)
 * **Objetivo**: Persistir a causa de uma inconsistência diretamente nas tabelas do banco de dados, simplificando exibições em dashboards e auditorias rápidas sem a necessidade de recalcular os motivos em tempo de execução.
-* **Ação**:
-  * Criar um script de migração para adicionar a coluna `motivo_inconsistencia TEXT` nas tabelas `meses`, `categorias`, `subcategorias` e `transacoes`.
-  * Atualizar o robô [extract_winker.py](file:///D:/projects/winker/extract_winker.py) para que salve os detalhes das inconsistências detectadas em tempo de execução (ex: *"Divergência de anexos: esperado 2, baixados 1"* ou *"Fornecedor não identificado"*) nesta nova coluna quando `consistente = 0`.
-  * Adaptar o script [audit_consistency.py](file:///C:/Users/steff/.gemini/antigravity-cli/brain/239e4ca8-b828-4900-a560-76ce349b7535/scratch/audit_consistency.py) para que utilize a coluna `motivo_inconsistencia` para emitir os relatórios e logs, otimizando as verificações de integridade.
+* **Ações Executadas**:
+  * **Migração e Retrofit JSON**: Criou-se e executou-se o script de migração [migrate_motivo_json.py](file:///C:/Users/steff/.gemini/antigravity-cli/brain/115c74fc-1307-4897-8580-f3bd8d727c2f/scratch/migrate_motivo_json.py) para converter os motivos pré-existentes nas 5 tabelas do banco (`meses`, `categorias`, `subcategorias`, `transacoes`, `anexos`) em listas estruturadas em formato de **Array JSON** (ex: `["Apartamento não identificado", "Competência não identificada"]`), permitindo a existência de múltiplos motivos por registro e viabilizando consultas SQL poderosas com funções nativas do SQLite (como `json_each`).
+  * **Atualização do Robô**: Atualizou-se o robô [extract_winker.py](file:///D:/projects/winker/extract_winker.py) para que calcule, estruture e armazene automaticamente os motivos no formato de array JSON usando `json.dumps`.
+  * **Atualização do Auditor**: Adaptou-se o script de auditoria [audit_consistency.py](file:///D:/projects/winker/audit_consistency.py) no diretório raiz do projeto para que leia as colunas de motivos e faça o parsing correto de JSON para gerar relatórios legíveis em [relatorio_consistencia.md](file:///D:/projects/winker/relatorio_consistencia.md).
+  * **Exemplos de Consulta (`json_each`)**:
+    Como a coluna `motivo_inconsistencia` armazena uma lista em formato JSON, consulte abaixo exemplos de como filtrar e agrupar esses motivos nativamente no SQLite:
+    * *Filtrar transações com um motivo específico na lista:*
+      ```sql
+      SELECT t.id, t.descricao 
+      FROM transacoes t, json_each(t.motivo_inconsistencia)
+      WHERE json_each.value = 'Fornecedor não identificado';
+      ```
+    * *Agrupar e contar a quantidade de ocorrências por tipo de motivo individual:*
+      ```sql
+      SELECT json_each.value AS motivo, COUNT(*) AS total
+      FROM transacoes t, json_each(t.motivo_inconsistencia)
+      GROUP BY motivo
+      ORDER BY total DESC;
+      ```
 
 ### F. Validação de Regras de Extensão e Inconsistências de Anexos (Concluído)
 * **Objetivo**: Garantir que o tratamento de extensões seja idêntico entre o salvamento físico no disco, os campos do banco de dados e as regras do validador, além de sanear arquivos com a extensão malformada `.PDF&H`.

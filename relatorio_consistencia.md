@@ -1,0 +1,319 @@
+# Relatório Detalhado de Consistência e Auditoria
+Este relatório é baseado nos motivos de inconsistência pré-calculados e armazenados no banco de dados no formato JSON.
+
+## ⚠️ Transações Inconsistentes
+- **SET/2024 > Reembolso (R) > CREDITO DEVOLUCAO PIX - DOC: 0** (10/09/2024) - R$ 167.04
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **SET/2024 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: 0** (30/09/2024) - R$ 3.60
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **SET/2024 > Juros S/ Aplicação > Juros S/ Aplicação** (30/09/2024) - R$ 63.54
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **SET/2024 > Juros S/ Aplicação > Juros S/ Aplicação** (30/09/2024) - R$ 208.78
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **OUT/2024 > Receita de Sinistro > PIX RECEBIDO - OUTRA IF / seguro acionado para as câmeras** (14/10/2024) - R$ 6,937.00
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **OUT/2024 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS** (31/10/2024) - R$ 2.10
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **OUT/2024 > Juros S/ Aplicação > Juros S/ Aplicação** (31/10/2024) - R$ 71.23
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **OUT/2024 > Juros S/ Aplicação > Juros S/ Aplicação** (31/10/2024) - R$ 235.74
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **NOV/2024 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS** (29/11/2024) - R$ 2.70
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **NOV/2024 > Juros S/ Aplicação > Juros S/ Aplicação** (30/11/2024) - R$ 61.33
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **NOV/2024 > Juros S/ Aplicação > Juros S/ Aplicação** (30/11/2024) - R$ 225.22
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **DEZ/2024 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS** (31/12/2024) - R$ 2.10
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **DEZ/2024 > Distribuição de Resultados > Distribuição de Resultados** (31/12/2024) - R$ 53.55
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **DEZ/2024 > Juros S/ Aplicação > Juros S/ Aplicação** (31/12/2024) - R$ 72.47
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **DEZ/2024 > Juros S/ Aplicação > Juros S/ Aplicação** (31/12/2024) - R$ 298.58
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JAN/2025 > Juros / Multa > UND: Apto / 305 - CTA. PGTO: CONTA CORRENTE - SICOOB** (28/01/2025) - R$ 58.26
+  - *Motivo*: Competência não identificada
+- **JAN/2025 > Multa Infração Reg. Interno/Convenção > UND: Apto / 305 - CTA. PGTO: CONTA CORRENTE - SICOOB** (28/01/2025) - R$ 396.24
+  - *Motivo*: Competência não identificada
+- **JAN/2025 > Honorários Cobrança Extra Judicial > UND: Apto / 305 - CTA. PGTO: CONTA CORRENTE - SICOOB** (28/01/2025) - R$ 88.15
+  - *Motivo*: Competência não identificada
+- **JAN/2025 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS** (31/01/2025) - R$ 3.00
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JAN/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/01/2025) - R$ 79.60
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JAN/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/01/2025) - R$ 347.19
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **FEV/2025 > Juros / Multa > UND: Apto / 701 - CTA. PGTO: CONTA CORRENTE - SICOOB** (10/02/2025) - R$ 6.64
+  - *Motivo*: Competência não identificada
+- **FEV/2025 > Taxa de Mudança > UND: Apto / 701 - CTA. PGTO: CONTA CORRENTE - SICOOB** (10/02/2025) - R$ 316.99
+  - *Motivo*: Competência não identificada
+- **FEV/2025 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS** (28/02/2025) - R$ 2.40
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **FEV/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (28/02/2025) - R$ 78.44
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **FEV/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (28/02/2025) - R$ 379.70
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAR/2025 > Taxa de Condomínio > UND: Apto / 701 - CTA. PGTO: CONTA CORRENTE - SICOOB** (14/03/2025) - R$ 1,465.60
+  - *Motivo*: Competência não identificada
+- **MAR/2025 > Juros / Multa > UND: Apto / 701 - CTA. PGTO: CONTA CORRENTE - SICOOB** (14/03/2025) - R$ 28.30
+  - *Motivo*: Competência não identificada
+- **MAR/2025 > Fundo de Reserva > UND: Apto / 701 - CTA. PGTO: CONTA CORRENTE - SICOOB** (14/03/2025) - R$ 288.16
+  - *Motivo*: Competência não identificada
+- **MAR/2025 > Honorários Cobrança Extra Judicial > UND: Apto / 701 - CTA. PGTO: CONTA CORRENTE - SICOOB** (14/03/2025) - R$ 150.59
+  - *Motivo*: Competência não identificada
+- **MAR/2025 > Reembolso (R) > PIX RECEBIDO - OUTRA IF Juros reembolsado pelo sindico** (13/03/2025) - R$ 61.48
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAR/2025 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS** (31/03/2025) - R$ 2.40
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAR/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/03/2025) - R$ 322.40
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAR/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/03/2025) - R$ 77.26
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **ABR/2025 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (30/04/2025) - R$ 2.70
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **ABR/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (30/04/2025) - R$ 81.74
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **ABR/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (30/04/2025) - R$ 75.31
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **ABR/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (30/04/2025) - R$ 341.78
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **ABR/2025 > IRRF S/ Aplicação > IRRF S/ Aplicação** (30/04/2025) - R$ 55.53
+  - *Motivo*: Fornecedor não identificado
+- **JUL/2025 > Taxa de Condomínio > UND: Apto / 403 - CTA. PGTO: CONTA CORRENTE - SICOOB** (03/07/2025) - R$ 360.22
+  - *Motivo*: Competência não identificada
+- **JUL/2025 > Taxa de Condomínio > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (08/07/2025) - R$ 312.08
+  - *Motivo*: Competência não identificada
+- **JUL/2025 > Taxa de Condomínio > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (21/07/2025) - R$ 360.22
+  - *Motivo*: Competência não identificada
+- **JUL/2025 > Juros / Multa > UND: Apto / 403 - CTA. PGTO: CONTA CORRENTE - SICOOB** (03/07/2025) - R$ 23.86
+  - *Motivo*: Competência não identificada
+- **JUL/2025 > Juros / Multa > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (21/07/2025) - R$ 13.36
+  - *Motivo*: Competência não identificada
+- **JUL/2025 > Fundo de Reserva > UND: Apto / 403 - CTA. PGTO: CONTA CORRENTE - SICOOB** (03/07/2025) - R$ 36.02
+  - *Motivo*: Competência não identificada
+- **JUL/2025 > Fundo de Reserva > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (21/07/2025) - R$ 36.02
+  - *Motivo*: Competência não identificada
+- **JUL/2025 > Taxa de Mudança > UND: Apto / 403 - CTA. PGTO: CONTA CORRENTE - SICOOB** (03/07/2025) - R$ 316.99
+  - *Motivo*: Competência não identificada
+- **JUL/2025 > Honorários Cobrança Extra Judicial > UND: Apto / 403 - CTA. PGTO: CONTA CORRENTE - SICOOB** (03/07/2025) - R$ 68.00
+  - *Motivo*: Competência não identificada
+- **JUL/2025 > Honorários Cobrança Extra Judicial > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (21/07/2025) - R$ 81.92
+  - *Motivo*: Competência não identificada
+- **JUL/2025 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (31/07/2025) - R$ 4.20
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JUL/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/07/2025) - R$ 454.61
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JUL/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/07/2025) - R$ 98.30
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JUL/2025 > IRRF S/ Aplicação > IRRF S/ Aplicação** (31/07/2025) - R$ 126.98
+  - *Motivo*: Fornecedor não identificado
+- **AGO/2025 > Taxa de Condomínio > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (11/08/2025) - R$ 312.08
+  - *Motivo*: Competência não identificada
+- **AGO/2025 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (29/08/2025) - R$ 2.70
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **AGO/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/08/2025) - R$ 97.69
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **AGO/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/08/2025) - R$ 360.85
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **AGO/2025 > IRRF S/ Aplicação > IRRF S/ Aplicação** (31/08/2025) - R$ 226.17
+  - *Motivo*: Fornecedor não identificado
+- **OUT/2025 > Taxa de Condomínio > UND: Apto / 201 - CTA. PGTO: CONTA CORRENTE - SICOOB** (31/10/2025) - R$ 720.44
+  - *Motivo*: Competência não identificada
+- **OUT/2025 > Juros / Multa > UND: Apto / 201 - CTA. PGTO: CONTA CORRENTE - SICOOB** (31/10/2025) - R$ 36.89
+  - *Motivo*: Competência não identificada
+- **OUT/2025 > Fundo de Reserva > UND: Apto / 201 - CTA. PGTO: CONTA CORRENTE - SICOOB** (31/10/2025) - R$ 72.04
+  - *Motivo*: Competência não identificada
+- **OUT/2025 > Taxa de Mudança > UND: Apto / 201 - CTA. PGTO: CONTA CORRENTE - SICOOB** (31/10/2025) - R$ 316.99
+  - *Motivo*: Competência não identificada
+- **OUT/2025 > Honorários Cobrança Extra Judicial > UND: Apto / 201 - CTA. PGTO: CONTA CORRENTE - SICOOB** (31/10/2025) - R$ 148.00
+  - *Motivo*: Competência não identificada
+- **OUT/2025 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (01/10/2025) - R$ 2.70
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **OUT/2025 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (31/10/2025) - R$ 3.30
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **OUT/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/10/2025) - R$ 109.65
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **OUT/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/10/2025) - R$ 450.32
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **NOV/2025 > Taxa de Condomínio > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (03/11/2025) - R$ 371.37
+  - *Motivo*: Competência não identificada
+- **NOV/2025 > Juros / Multa > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (03/11/2025) - R$ 335.78
+  - *Motivo*: Competência não identificada
+- **NOV/2025 > Fundo de Reserva > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (03/11/2025) - R$ 47.43
+  - *Motivo*: Competência não identificada
+- **NOV/2025 > Chamada Extra > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (03/11/2025) - R$ 205.36
+  - *Motivo*: Competência não identificada
+- **NOV/2025 > Honorários Cobrança Extra Judicial > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (03/11/2025) - R$ 120.00
+  - *Motivo*: Competência não identificada
+- **NOV/2025 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (28/11/2025) - R$ 2.40
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **NOV/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (30/11/2025) - R$ 91.61
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **NOV/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (30/11/2025) - R$ 429.85
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **NOV/2025 > IRRF S/ Aplicação > IRRF S/ Aplicação** (30/11/2025) - R$ 11.90
+  - *Motivo*: Fornecedor não identificado
+- **MAI/2026 > Taxa de Condomínio > UND: Apto / 302 - CTA. PGTO: CONTA CORRENTE - SICOOB** (28/05/2026) - R$ 403.64
+  - *Motivo*: Competência não identificada
+- **MAI/2026 > Juros / Multa > UND: Apto / 302 - CTA. PGTO: CONTA CORRENTE - SICOOB** (28/05/2026) - R$ 16.22
+  - *Motivo*: Competência não identificada
+- **MAI/2026 > Fundo de Reserva > UND: Apto / 302 - CTA. PGTO: CONTA CORRENTE - SICOOB** (28/05/2026) - R$ 40.36
+  - *Motivo*: Competência não identificada
+- **MAI/2026 > Honorários Advocatícios (R) > UND: Apto / 302 - CTA. PGTO: CONTA CORRENTE - SICOOB** (28/05/2026) - R$ 92.04
+  - *Motivo*: Competência não identificada
+- **MAI/2026 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (29/05/2026) - R$ 3.30
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAI/2026 > Juros S/ Aplicação > Juros S/ Aplicação** (31/05/2026) - R$ 99.89
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAI/2026 > Juros S/ Aplicação > Juros S/ Aplicação** (31/05/2026) - R$ 560.30
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAI/2026 > IRRF S/ Aplicação > IRRF S/ Aplicação** (31/05/2026) - R$ 132.17
+  - *Motivo*: Fornecedor não identificado
+- **MAR/2026 > Taxa de Condomínio > UND: Apto / 905 - CTA. PGTO: CONTA CORRENTE - SICOOB** (30/03/2026) - R$ 4,092.68
+  - *Motivo*: Competência não identificada
+- **MAR/2026 > Juros / Multa > UND: Apto / 905 - CTA. PGTO: CONTA CORRENTE - SICOOB** (30/03/2026) - R$ 459.19
+  - *Motivo*: Competência não identificada
+- **MAR/2026 > Fundo de Reserva > UND: Apto / 905 - CTA. PGTO: CONTA CORRENTE - SICOOB** (30/03/2026) - R$ 409.24
+  - *Motivo*: Competência não identificada
+- **MAR/2026 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (31/03/2026) - R$ 3.00
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAR/2026 > Honorários Advocatícios (R) > UND: Apto / 905 - CTA. PGTO: CONTA CORRENTE - SICOOB** (30/03/2026) - R$ -992.22
+  - *Motivo*: Competência não identificada
+- **MAR/2026 > Juros S/ Aplicação > Juros S/ Aplicação** (31/03/2026) - R$ 110.32
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAR/2026 > Juros S/ Aplicação > Juros S/ Aplicação** (31/03/2026) - R$ 559.46
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **SET/2025 > Taxa de Condomínio > UND: Apto / 504 - CTA. PGTO: CONTA CORRENTE - SICOOB** (01/09/2025) - R$ 6,483.96
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Taxa de Condomínio > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (15/09/2025) - R$ 360.22
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Taxa de Condomínio > UND: Apto / 405 - CTA. PGTO: CONTA CORRENTE - SICOOB** (19/09/2025) - R$ 720.44
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Juros / Multa > UND: Apto / 504 - CTA. PGTO: CONTA CORRENTE - SICOOB** (01/09/2025) - R$ 1,123.81
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Juros / Multa > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (15/09/2025) - R$ 12.70
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Juros / Multa > UND: Apto / 405 - CTA. PGTO: CONTA CORRENTE - SICOOB** (19/09/2025) - R$ 22.35
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Fundo de Reserva > UND: Apto / 504 - CTA. PGTO: CONTA CORRENTE - SICOOB** (01/09/2025) - R$ 648.36
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Fundo de Reserva > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (15/09/2025) - R$ 36.02
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Fundo de Reserva > UND: Apto / 405 - CTA. PGTO: CONTA CORRENTE - SICOOB** (19/09/2025) - R$ 72.04
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Multa Infração Reg. Interno/Convenção > UND: Apto / 504 - CTA. PGTO: CONTA CORRENTE - SICOOB** (01/09/2025) - R$ 792.48
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Honorários Cobrança Extra Judicial > UND: Apto / 504 - CTA. PGTO: CONTA CORRENTE - SICOOB** (01/09/2025) - R$ -1,809.72
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Honorários Cobrança Extra Judicial > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (15/09/2025) - R$ 81.79
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Honorários Cobrança Extra Judicial > UND: Apto / 405 - CTA. PGTO: CONTA CORRENTE - SICOOB** (19/09/2025) - R$ 82.00
+  - *Motivo*: Competência não identificada
+- **SET/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (30/09/2025) - R$ 103.57
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **SET/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (30/09/2025) - R$ 386.22
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **DEZ/2025 > Taxa de Condomínio > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (10/12/2025) - R$ 279.68
+  - *Motivo*: Competência não identificada
+- **DEZ/2025 > Fundo de Reserva > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (10/12/2025) - R$ 32.40
+  - *Motivo*: Competência não identificada
+- **DEZ/2025 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (31/12/2025) - R$ 3.60
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **DEZ/2025 > Distribuição de Resultados > Distribuição de Resultados** (31/12/2025) - R$ 65.49
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **DEZ/2025 > Reembolso (R) > CRÉDITO DEVOLUÇÃO PIX - DOC: Pix** (16/12/2025) - R$ 0.34
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **DEZ/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/12/2025) - R$ 433.07
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **DEZ/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/12/2025) - R$ 107.30
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **DEZ/2025 > IRRF S/ Aplicação > IRRF S/ Aplicação** (31/12/2025) - R$ 57.34
+  - *Motivo*: Fornecedor não identificado
+- **JAN/2026 > Taxa de Condomínio > UND: Apto / 701 - CTA. PGTO: CONTA CORRENTE - SICOOB** (07/01/2026) - R$ 396.34
+  - *Motivo*: Competência não identificada
+- **JAN/2026 > Juros / Multa > UND: Apto / 701 - CTA. PGTO: CONTA CORRENTE - SICOOB** (07/01/2026) - R$ 174.65
+  - *Motivo*: Competência não identificada
+- **JAN/2026 > Honorários Cobrança Extra Judicial > UND: Apto / 701 - CTA. PGTO: CONTA CORRENTE - SICOOB** (07/01/2026) - R$ 529.01
+  - *Motivo*: Competência não identificada
+- **JAN/2026 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (30/01/2026) - R$ 2.10
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JAN/2026 > Juros S/ Aplicação > Juros S/ Aplicação** (31/01/2026) - R$ 513.52
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JAN/2026 > Juros S/ Aplicação > Juros S/ Aplicação** (31/01/2026) - R$ 103.63
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JAN/2026 > IRRF S/ Aplicação > IRRF S/ Aplicação** (31/01/2026) - R$ 35.04
+  - *Motivo*: Fornecedor não identificado
+- **FEV/2026 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (27/02/2026) - R$ 3.90
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **FEV/2026 > Juros S/ Aplicação > Juros S/ Aplicação** (28/02/2026) - R$ 89.79
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **FEV/2026 > Juros S/ Aplicação > Juros S/ Aplicação** (28/02/2026) - R$ 480.47
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **FEV/2026 > IRRF S/ Aplicação > IRRF S/ Aplicação** (28/02/2026) - R$ 134.23
+  - *Motivo*: Fornecedor não identificado
+- **ABR/2026 > Taxa de Condomínio > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (09/04/2026) - R$ 312.08
+  - *Motivo*: Competência não identificada
+- **ABR/2026 > Reembolso (R) > CRÉDITO DEVOLUÇÃO PIX - DOC: Pix** (30/04/2026) - R$ 107.96
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **ABR/2026 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (30/04/2026) - R$ 3.30
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **ABR/2026 > Juros S/ Aplicação > Juros S/ Aplicação** (30/04/2026) - R$ 565.36
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **ABR/2026 > Juros S/ Aplicação > Juros S/ Aplicação** (30/04/2026) - R$ 100.44
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **ABR/2026 > IRRF S/ Aplicação > IRRF S/ Aplicação** (30/04/2026) - R$ 1.68
+  - *Motivo*: Fornecedor não identificado
+- **AGO/2024 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: 0** (30/08/2024) - R$ 2.70
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **AGO/2024 > Juros S/ Aplicação > Juros S/ Aplicação** (31/08/2024) - R$ 65.48
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **AGO/2024 > Juros S/ Aplicação > Juros S/ Aplicação** (31/08/2024) - R$ 215.59
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAI/2025 > Taxa de Condomínio > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (20/05/2025) - R$ 360.22
+  - *Motivo*: Competência não identificada
+- **MAI/2025 > Juros / Multa > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (02/05/2025) - R$ 342.75
+  - *Motivo*: Competência não identificada
+- **MAI/2025 > Juros / Multa > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (20/05/2025) - R$ 13.23
+  - *Motivo*: Competência não identificada
+- **MAI/2025 > Fundo de Reserva > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (20/05/2025) - R$ 36.02
+  - *Motivo*: Competência não identificada
+- **MAI/2025 > Honorários Cobrança Extra Judicial > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (02/05/2025) - R$ 811.40
+  - *Motivo*: Competência não identificada
+- **MAI/2025 > Honorários Cobrança Extra Judicial > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (20/05/2025) - R$ 81.89
+  - *Motivo*: Competência não identificada
+- **MAI/2025 > Distribuição de Resultados > CRÉD.DISTRIBUIÇÃO SOBRAS/VALORES - DOC: 2804202511** (08/05/2025) - R$ 57.14
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAI/2025 > Distribuição de Resultados > Distribuição de Resultados** (08/05/2025) - R$ 185.83
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAI/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/05/2025) - R$ 75.55
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAI/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (31/05/2025) - R$ 456.51
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **MAI/2025 > IRRF S/ Aplicação > IRRF S/ Aplicação** (31/05/2025) - R$ 28.25
+  - *Motivo*: Fornecedor não identificado
+- **JUN/2025 > Taxa de Condomínio > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (11/06/2025) - R$ 180.62
+  - *Motivo*: Competência não identificada
+- **JUN/2025 > Taxa de Condomínio > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (23/06/2025) - R$ 360.22
+  - *Motivo*: Competência não identificada
+- **JUN/2025 > Juros / Multa > UND: Apto / 303 - CTA. PGTO: CONTA CORRENTE - SICOOB** (11/06/2025) - R$ 137.80
+  - *Motivo*: Competência não identificada
+- **JUN/2025 > Juros / Multa > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (23/06/2025) - R$ 13.76
+  - *Motivo*: Competência não identificada
+- **JUN/2025 > Fundo de Reserva > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (23/06/2025) - R$ 36.02
+  - *Motivo*: Competência não identificada
+- **JUN/2025 > Honorários Cobrança Extra Judicial > UND: Apto / 702 - CTA. PGTO: CONTA CORRENTE - SICOOB** (23/06/2025) - R$ 82.00
+  - *Motivo*: Competência não identificada
+- **JUN/2025 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (02/06/2025) - R$ 3.90
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JUN/2025 > Distribuição de Resultados > CREDITO REPASSE PAGTO POR SERV.PRESTADOS - DOC: CASHBACK** (30/06/2025) - R$ 4.50
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JUN/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (30/06/2025) - R$ 415.76
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JUN/2025 > Juros S/ Aplicação > Juros S/ Aplicação** (30/06/2025) - R$ 73.66
+  - *Motivo*: Apartamento não identificado | Competência não identificada
+- **JUN/2025 > IRRF S/ Aplicação > IRRF S/ Aplicação** (30/06/2025) - R$ 82.78
+  - *Motivo*: Fornecedor não identificado
+
+## 🟢 Integridade de Arquivos Físicos
+- Todos os anexos registrados no banco de dados estão presentes fisicamente no disco.
