@@ -2,6 +2,7 @@ import os
 import sys
 import sqlite3
 import webview
+import subprocess
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
@@ -176,7 +177,6 @@ def main():
         if not os.path.exists(angular_index):
             print("Compilados do frontend não encontrados na pasta 'compilados/'.")
             print("Iniciando montagem automática do frontend...")
-            import subprocess
             
             dashboard_dir = os.path.join(project_root, "dashboard")
             node_modules_dir = os.path.join(dashboard_dir, "node_modules")

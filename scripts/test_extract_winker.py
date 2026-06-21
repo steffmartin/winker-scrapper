@@ -1,6 +1,8 @@
 import unittest
 from datetime import datetime
 import json
+from unittest.mock import MagicMock, patch
+import sqlite3
 
 # Importa as funções do script extract_winker
 from extract_winker import (
@@ -173,7 +175,6 @@ class TestExtractWinker(unittest.TestCase):
         self.assertEqual(json.loads(motivo)[0], "Prestação de contas indisponível")
 
     def test_extract_inadimplencia_from_pdf(self):
-        from unittest.mock import MagicMock, patch
         with patch('pypdf.PdfReader') as mock_pdf_reader:
             mock_page = MagicMock()
             mock_page.extract_text.return_value = (
@@ -193,9 +194,6 @@ class TestExtractWinker(unittest.TestCase):
             self.assertEqual(valor, 15340.50)
 
     def test_save_condominio_and_gestao(self):
-        from unittest.mock import MagicMock, patch
-        import sqlite3
-        
         class MockConnectionWrapper:
             def __init__(self, conn):
                 self._conn = conn
@@ -276,9 +274,6 @@ class TestExtractWinker(unittest.TestCase):
         self.assertTrue(mac is None or isinstance(mac, str))
 
     def test_save_auditoria(self):
-        from unittest.mock import MagicMock, patch
-        import sqlite3
-        
         class MockConnectionWrapper:
             def __init__(self, conn):
                 self._conn = conn

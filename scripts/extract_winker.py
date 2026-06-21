@@ -11,6 +11,9 @@ import json
 import socket
 import uuid
 import logging
+from urllib.parse import urlparse, unquote, parse_qs
+import urllib.request
+
 
 def setup_logging(level_name="INFO"):
     level = getattr(logging, level_name.upper(), logging.INFO)
@@ -56,6 +59,7 @@ install_dependencies()
 
 from playwright.sync_api import sync_playwright
 from dotenv import load_dotenv
+import pypdf
 
 # Carrega variáveis de ambiente do .env localizado na raiz do projeto
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -155,7 +159,6 @@ def extract_inadimplencia_from_pdf(pdf_path):
     Lê o PDF do boleto mais recente e extrai os dados de inadimplência utilizando Regex.
     Retorna uma tupla (data_corte, unidades, valor).
     """
-    import pypdf
     data_corte = None
     unidades = 0
     valor = 0.0
@@ -193,8 +196,6 @@ def download_http_file(context, url, dest_dir, filename_prefix="", default_filen
     Baixa um arquivo via requisição HTTP GET utilizando o contexto do Playwright e salva no destino.
     Retorna o caminho local completo do arquivo baixado e o nome original higienizado.
     """
-    from urllib.parse import urlparse, unquote
-    
     response = context.request.get(url)
     if response.status != 200:
         raise Exception(f"Erro HTTP {response.status} ao baixar arquivo de: {url}")
@@ -251,8 +252,6 @@ def download_file_from_button(context, btn, dest_dir, filename_prefix="", defaul
     ou inicia um download direto (como em modo headless), e realiza o download.
     Retorna o caminho local completo do arquivo baixado e o nome original.
     """
-    from urllib.parse import urlparse, parse_qs
-    
     # Obtém a página onde o botão está localizado
     page = btn.page
     
@@ -837,7 +836,6 @@ def save_prestacao_contas(chave_unica, caminho_local, nome_original, consistente
         db_conn.close()
 
 def get_ip_address():
-    import urllib.request
     url_list = ["https://api.ipify.org", "https://www.meuip.com/api/meuip.php", "https://ipinfo.io/ip"]
     for url in url_list:
         try:
