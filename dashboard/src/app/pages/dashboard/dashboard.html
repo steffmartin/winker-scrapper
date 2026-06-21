@@ -183,6 +183,7 @@
                         <div class="flex justify-center gap-1.5">
                             <p-tag value="Apto {{ tx.apartamento }}" severity="info" *ngIf="tx.apartamento"></p-tag>
                             <p-tag value="Comp: {{ formatComp(tx.competencia) }}" severity="secondary" *ngIf="tx.competencia"></p-tag>
+                            <p-tag value="{{ tx.conta }}" severity="warn" *ngIf="tx.conta"></p-tag>
                         </div>
                     </td>
                     <td class="text-center">
