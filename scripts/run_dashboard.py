@@ -165,11 +165,14 @@ class Api:
         return os.path.join(project_root, "database", "winker_data.db")
 
 def main():
+    html_content = None
+    html_path = None
+    
     # 1. Verifica se a base de dados SQLite existe
     db_path = os.path.join(project_root, "database", "winker_data.db")
     if not os.path.exists(db_path):
         print("AVISO: Banco de dados não encontrado em database/winker_data.db!")
-        html_path = "data:text/html,<html><head><meta charset='utf-8'/><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:40px;background:#1e293b;color:#f8fafc;}h2{color:#eab308;}code{background:#334155;padding:2px 6px;border-radius:4px;font-family:monospace;}ol{line-height:1.6;}</style></head><body><h2>Banco de Dados Não Encontrado</h2><p>Não foi possível localizar o banco de dados local em <code>database/winker_data.db</code>.</p><p><b>Como resolver:</b> Você precisa realizar a extração inicial de dados para criar e popular o banco de dados antes de abrir o painel. Por favor:</p><ol><li>Dê um duplo clique no atalho <b><code>Extrair_Dados.lnk</code></b> (ou <b><code>Extrair_Dados_Headless.lnk</code></b>) na raiz do projeto.</li><li>Aguarde o extrator concluir o processamento de pelo menos um período de transações.</li><li>Após o término da extração com sucesso, abra novamente o dashboard.</li></ol></body></html>"
+        html_content = "<html><head><meta charset='utf-8'/><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:40px;background:#1e293b;color:#f8fafc;}h2{color:#eab308;}code{background:#334155;padding:2px 6px;border-radius:4px;font-family:monospace;}ol{line-height:1.6;}</style></head><body><h2>Banco de Dados Não Encontrado</h2><p>Não foi possível localizar o banco de dados local em <code>database/winker_data.db</code>.</p><p><b>Como resolver:</b> Você precisa realizar a extração inicial de dados para criar e popular o banco de dados antes de abrir o painel. Por favor:</p><ol><li>Dê um duplo clique no atalho <b><code>Extrair_Dados.lnk</code></b> (ou <b><code>Extrair_Dados_Headless.lnk</code></b>) na raiz do projeto.</li><li>Aguarde o extrator concluir o processamento de pelo menos um período de transações.</li><li>Após o término da extração com sucesso, abra novamente o dashboard.</li></ol></body></html>"
         print("Carregando aviso de banco de dados ausente...")
     else:
         # 2. Se o banco de dados existe, verifica a existência do frontend compilado
@@ -206,21 +209,32 @@ def main():
             html_path = os.path.join(project_root, "dashboard.html")
             if not os.path.exists(html_path):
                 # Fallback inline amigável em HTML para exibir instruções se o Node.js não estiver no PATH
-                html_path = "data:text/html,<html><head><meta charset='utf-8'/><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:40px;background:#1e293b;color:#f8fafc;}h2{color:#f43f5e;}code{background:#334155;padding:2px 6px;border-radius:4px;font-family:monospace;}</style></head><body><h2>Erro de Inicialização do Dashboard</h2><p>Não foi possível encontrar ou compilar a interface do dashboard.</p><p><b>Possível Solução:</b> O sistema precisa do <b>Node.js</b> instalado para compilar o frontend Angular pela primeira vez. Por favor:</p><ol><li>Instale o Node.js (recomendado v18 ou superior).</li><li>Abra um terminal na pasta <code>dashboard/</code> do projeto e execute:</li><pre><code>npm install<br/>npm run build</code></pre><li>Após a compilação, reinicie este aplicativo.</li></ol></body></html>"
+                html_content = "<html><head><meta charset='utf-8'/><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:40px;background:#1e293b;color:#f8fafc;}h2{color:#f43f5e;}code{background:#334155;padding:2px 6px;border-radius:4px;font-family:monospace;}</style></head><body><h2>Erro de Inicialização do Dashboard</h2><p>Não foi possível encontrar ou compilar a interface do dashboard.</p><p><b>Possível Solução:</b> O sistema precisa do <b>Node.js</b> instalado para compilar o frontend Angular pela primeira vez. Por favor:</p><ol><li>Instale o Node.js (recomendado v18 ou superior).</li><li>Abra um terminal na pasta <code>dashboard/</code> do projeto e execute:</li><pre><code>npm install<br/>npm run build</code></pre><li>Após a compilação, reinicie este aplicativo.</li></ol></body></html>"
             print(f"Interface Angular não disponível. Carregando fallback: {html_path}")
         
     api = Api()
     
     # Cria a janela desktop nativa provida pelo PyWebView
-    webview.create_window(
-        title="Winker Scraper Dashboard - Visualização Financeira",
-        url=html_path,
-        js_api=api,
-        width=1280,
-        height=800,
-        resizable=True,
-        maximized=True
-    )
+    if html_content is not None:
+        webview.create_window(
+            title="Winker Scraper Dashboard - Visualização Financeira",
+            html=html_content,
+            js_api=api,
+            width=1280,
+            height=800,
+            resizable=True,
+            maximized=True
+        )
+    else:
+        webview.create_window(
+            title="Winker Scraper Dashboard - Visualização Financeira",
+            url=html_path,
+            js_api=api,
+            width=1280,
+            height=800,
+            resizable=True,
+            maximized=True
+        )
     
     # Inicia o loop de eventos
     webview.start()
