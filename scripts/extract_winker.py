@@ -1001,7 +1001,7 @@ def evaluate_entity_consistency(entity_type, **kwargs):
         consistente = 1 if abs(val_num - soma_sub) < 0.01 else 0
         motivo = None
         if not consistente:
-            logger.debug(f"  [AVISO CONSISTÊNCIA] Categoria '{nome}': Valor informado = R$ {val_num:.2f} | Soma subcategorias = R$ {soma_sub:.2f}")
+            logger.debug(f"    [AVISO CONSISTÊNCIA] Categoria '{nome}': Valor informado = R$ {val_num:.2f} | Soma subcategorias = R$ {soma_sub:.2f}")
             motivo = json.dumps(["Soma das subcategorias difere do total da categoria"], ensure_ascii=False)
             
         return consistente, motivo
@@ -1014,7 +1014,7 @@ def evaluate_entity_consistency(entity_type, **kwargs):
         consistente = 1 if abs(val_num - soma_itens) < 0.01 else 0
         motivo = None
         if not consistente:
-            logger.debug(f"  [AVISO CONSISTÊNCIA] Subcategoria '{nome}': Valor informado = R$ {val_num:.2f} | Soma transações = R$ {soma_itens:.2f}")
+            logger.debug(f"    [AVISO CONSISTÊNCIA] Subcategoria '{nome}': Valor informado = R$ {val_num:.2f} | Soma transações = R$ {soma_itens:.2f}")
             motivo = json.dumps(["Soma das transações difere do total da subcategoria"], ensure_ascii=False)
             
         return consistente, motivo
@@ -1112,9 +1112,9 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
         )
         
         if not mes_consistente:
-            logger.debug(f"  [AVISO CONSISTÊNCIA] Inconsistência no Mês {nome_mes_abbr}/{ano_item}:")
-            logger.debug(f"    - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
-            logger.debug(f"    - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
+            logger.debug(f"    [AVISO CONSISTÊNCIA] Inconsistência no Mês {nome_mes_abbr}/{ano_item}:")
+            logger.debug(f"      - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
+            logger.debug(f"      - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
             
         db_cursor.execute(
             "INSERT INTO meses (id, exibicao, receita_total, despesa_total, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -1184,7 +1184,7 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                         )
                         
                         if not trans_consistente:
-                            logger.debug(f"  [AVISO CONSISTÊNCIA] Transação '{desc_f}' [{tipo_flag}]: Inconsistente ({trans_motivo})")
+                            logger.debug(f"    [AVISO CONSISTÊNCIA] Transação '{desc_f}' [{tipo_flag}]: Inconsistente ({trans_motivo})")
                             
                         db_cursor.execute(
                             """
