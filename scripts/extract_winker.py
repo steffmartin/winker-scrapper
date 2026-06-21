@@ -10,13 +10,27 @@ import shutil
 import json
 import socket
 import uuid
+import logging
+
+def setup_logging(level_name="INFO"):
+    level = getattr(logging, level_name.upper(), logging.INFO)
+    log = logging.getLogger("winker")
+    log.setLevel(level)
+    for h in list(log.handlers):
+        log.removeHandler(h)
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    log.addHandler(handler)
+    return log
+
+logger = setup_logging(os.environ.get("LOG_LEVEL", "INFO"))
 
 def install_dependencies():
     """
     Verifica e instala as dependências necessárias (playwright, python-dotenv).
     Também garante que os binários do navegador Playwright estejam instalados.
     """
-    print("Verificando dependências...")
+    logger.info("Verificando dependências...")
     
     packages = ["playwright", "python-dotenv", "pypdf"]
     
@@ -29,14 +43,13 @@ def install_dependencies():
             elif package == "pypdf":
                 import pypdf
         except ImportError:
-            print(f"Instalando pacote: {package}...")
+            logger.info(f"Instalando pacote: {package}...")
             subprocess.check_call([sys.executable, "-m", "pip", "install", package, "--quiet"])
     
     try:
-        print("Garantindo que o Chromium do Playwright está instalado...")
         subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError as e:
-        print(f"Aviso: Erro ao tentar instalar navegadores Playwright: {e}")
+        logger.warning(f"Aviso: Erro ao tentar instalar navegadores Playwright: {e}")
 
 # Instala as dependências antes de realizar os imports principais
 install_dependencies()
@@ -167,7 +180,7 @@ def extract_inadimplencia_from_pdf(pdf_path):
             valor = parse_currency(match_valor.group(1))
             
     except Exception as e:
-        print(f"Erro ao analisar o PDF de inadimplência: {e}")
+        logger.error(f"Erro ao analisar o PDF de inadimplência: {e}")
         
     return data_corte, unidades, valor
 
@@ -350,7 +363,7 @@ def download_anexos(loc, context):
                 "nome_original": nome_orig_final
             })
         except Exception as e:
-            print(f"Erro ao baixar anexo {nome_original}: {e}")
+            logger.error(f"Erro ao baixar anexo {nome_original}: {e}")
                     
     return downloaded_files, count
 
@@ -362,7 +375,6 @@ def set_ion_datetime(iframe, selector_index, target_month, target_year):
     if len(datetime_elements) <= selector_index:
         return False
 
-    print(f"Abrindo seletor de data {'inicial' if selector_index == 0 else 'final'} ({target_month}/{target_year})...")
     datetime_elements[selector_index].click()
     iframe.locator("ion-picker-cmp").wait_for(state="visible", timeout=10000)
 
@@ -456,9 +468,7 @@ def extract_list_from_modal(iframe, context=None):
                     "anexos_count": anexos_count
                 })
         except Exception as e:
-            import traceback
-            print(f"Erro em extract_list_from_modal no item {i}: {e}")
-            traceback.print_exc()
+            logger.error(f"Erro em extract_list_from_modal no item {i}: {e}", exc_info=True)
             continue
     return results
 
@@ -507,7 +517,6 @@ def extract_condominio_and_gestao(page):
     Navega para a página de informações do condomínio, extrai o ID de segurança,
     o nome do condomínio e os membros da gestão.
     """
-    print("Iniciando extração do Condomínio e Membros da Gestão...")
     condo_url = "https://app.winker.com.br/intra/condominio/sobre/index"
     page.goto(condo_url, wait_until="networkidle")
     
@@ -551,8 +560,6 @@ def extract_condominio_and_gestao(page):
                     "cargo": cargo_membro or "Membro da Gestão"
                 })
                 
-    print(f"Condomínio extraído: {condo_nome} (ID: {condo_id})")
-    print(f"Membros extraídos: {membros}")
     return condo_id, condo_nome, membros
 
 def extract_inadimplencia_boleto(page, context):
@@ -561,7 +568,6 @@ def extract_inadimplencia_boleto(page, context):
     extrai os dados de inadimplência e as informações da administradora.
     Retorna uma tupla (data_corte, unidades, valor, administradora, telefone).
     """
-    print("Iniciando extração parcial de inadimplência via boleto recente...")
     boleto_url = "https://app.winker.com.br/intra/meuCondominio/boleto"
     page.goto(boleto_url, wait_until="networkidle")
     
@@ -582,19 +588,19 @@ def extract_inadimplencia_boleto(page, context):
                     telefone = f"{ddd}{num}"
                     break
     except Exception as ex_admin:
-        print(f"Erro ao extrair dados da administradora: {ex_admin}")
+        logger.error(f"Erro ao extrair dados da administradora: {ex_admin}")
         
     try:
         page.wait_for_selector(".list-group-item", timeout=15000)
     except Exception:
-        print("Aviso: Nenhum boleto listado na página de boletos.")
+        logger.warning("Aviso: Nenhum boleto listado na página de boletos.")
         return None, 0, 0.0, administradora, telefone
         
     first_item = page.locator(".list-group-item").first
     badge_btn = first_item.locator("a.badge")
     
     if badge_btn.count() == 0:
-        print("Aviso: Botão de download/visualização do boleto não encontrado.")
+        logger.warning("Aviso: Botão de download/visualização do boleto não encontrado.")
         return None, 0, 0.0, administradora, telefone
         
     temp_dir = os.path.join(project_root, "anexos", "temp")
@@ -602,7 +608,6 @@ def extract_inadimplencia_boleto(page, context):
     
     try:
         # Clicar no badge para abrir o modal de confirmação
-        print("Clicando no badge do boleto...")
         badge_btn.click()
         
         # Aguarda o botão do SweetAlert aparecer e ser visível por até 5s
@@ -610,11 +615,10 @@ def extract_inadimplencia_boleto(page, context):
         try:
             confirm_btn.wait_for(state="visible", timeout=5000)
         except Exception:
-            print("Aviso: Botão de confirmação swal2-confirm não apareceu em 5s.")
+            logger.warning("Aviso: Botão de confirmação swal2-confirm não apareceu em 5s.")
             return None, 0, 0.0, administradora, telefone
             
         # Clica no botão de confirmação esperando a abertura da nova página (PDF)
-        print("Modal de confirmação detectado. Clicando em: Baixar boleto original")
         prefix = f"boleto_{int(time.time())}_"
         temp_path, nome_orig_final = download_file_from_button(
             context, confirm_btn, temp_dir,
@@ -629,11 +633,10 @@ def extract_inadimplencia_boleto(page, context):
             except:
                 pass
                 
-        print(f"Dados extraídos do PDF: Corte={data_corte}, Unidades={unidades}, Valor={valor}")
         return data_corte, unidades, valor, administradora, telefone
             
     except Exception as e:
-        print(f"Erro durante a extração de inadimplência do boleto: {e}")
+        logger.error(f"Erro durante a extração de inadimplência do boleto: {e}")
         return None, 0, 0.0, administradora, telefone
 
 # ==========================================
@@ -805,10 +808,9 @@ def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor
             """, (membro["nome"], membro["cargo"]))
             
         db_conn.commit()
-        print(f"Dados do condomínio '{condo_nome}' e {len(membros)} membros salvos no banco com sucesso.")
     except Exception as e:
         db_conn.rollback()
-        print(f"Erro ao salvar dados do condomínio e gestão no banco: {e}")
+        logger.error(f"Erro ao salvar dados do condomínio e gestão no banco: {e}")
     finally:
         db_conn.close()
 
@@ -830,7 +832,7 @@ def save_prestacao_contas(chave_unica, caminho_local, nome_original, consistente
         db_conn.commit()
     except Exception as e:
         db_conn.rollback()
-        print(f"Erro ao salvar prestação de contas no banco para {chave_unica}: {e}")
+        logger.error(f"Erro ao salvar prestação de contas no banco para {chave_unica}: {e}")
     finally:
         db_conn.close()
 
@@ -1001,7 +1003,7 @@ def evaluate_entity_consistency(entity_type, **kwargs):
         consistente = 1 if abs(val_num - soma_sub) < 0.01 else 0
         motivo = None
         if not consistente:
-            print(f"  [AVISO CONSISTÊNCIA] Categoria '{nome}': Valor informado = R$ {val_num:.2f} | Soma subcategorias = R$ {soma_sub:.2f}")
+            logger.debug(f"  [AVISO CONSISTÊNCIA] Categoria '{nome}': Valor informado = R$ {val_num:.2f} | Soma subcategorias = R$ {soma_sub:.2f}")
             motivo = json.dumps(["Soma das subcategorias difere do total da categoria"], ensure_ascii=False)
             
         return consistente, motivo
@@ -1014,7 +1016,7 @@ def evaluate_entity_consistency(entity_type, **kwargs):
         consistente = 1 if abs(val_num - soma_itens) < 0.01 else 0
         motivo = None
         if not consistente:
-            print(f"  [AVISO CONSISTÊNCIA] Subcategoria '{nome}': Valor informado = R$ {val_num:.2f} | Soma transações = R$ {soma_itens:.2f}")
+            logger.debug(f"  [AVISO CONSISTÊNCIA] Subcategoria '{nome}': Valor informado = R$ {val_num:.2f} | Soma transações = R$ {soma_itens:.2f}")
             motivo = json.dumps(["Soma das transações difere do total da subcategoria"], ensure_ascii=False)
             
         return consistente, motivo
@@ -1112,9 +1114,9 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
         )
         
         if not mes_consistente:
-            print(f"  [AVISO CONSISTÊNCIA] Inconsistência no Mês {nome_mes_abbr}/{ano_item}:")
-            print(f"    - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
-            print(f"    - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
+            logger.debug(f"  [AVISO CONSISTÊNCIA] Inconsistência no Mês {nome_mes_abbr}/{ano_item}:")
+            logger.debug(f"    - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
+            logger.debug(f"    - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
             
         db_cursor.execute(
             "INSERT INTO meses (id, exibicao, receita_total, despesa_total, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -1184,7 +1186,7 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                         )
                         
                         if not trans_consistente:
-                            print(f"  [AVISO CONSISTÊNCIA] Transação '{desc_f}' [{tipo_flag}]: Inconsistente ({trans_motivo})")
+                            logger.debug(f"  [AVISO CONSISTÊNCIA] Transação '{desc_f}' [{tipo_flag}]: Inconsistente ({trans_motivo})")
                             
                         db_cursor.execute(
                             """
@@ -1230,7 +1232,7 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
         db_conn.commit()
     except Exception as e:
         db_conn.rollback()
-        print(f"Erro DB {chave_unica}: {e}")
+        logger.error(f"Erro DB {chave_unica}: {e}")
         raise e
     finally:
         db_conn.close()
@@ -1245,7 +1247,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
     """
     Fluxo principal de extração web de dados do Winker via Playwright.
     """
-    print(f"Iniciando extração Winker (Condo: {condo})...")
+    logger.info("Iniciando extração Winker")
 
     # Inicializa rastreadores para auditoria
     start_time = time.time()
@@ -1284,7 +1286,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                         data = response.json()
                         user_data.update(data)
                 except Exception as e:
-                    print(f"Erro ao capturar dados do usuário na response: {e}")
+                    logger.error(f"Erro ao capturar dados do usuário na response: {e}")
 
         page.on("response", handle_response)
 
@@ -1325,7 +1327,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                     save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone, membros)
                     update_current_audit()
                 except Exception as ex_condo:
-                    print(f"Erro ao extrair/salvar dados de gestão e inadimplência: {ex_condo}")
+                    logger.error(f"Erro ao extrair/salvar dados de gestão e inadimplência: {ex_condo}")
 
             # 4. Navega para o Balancete
             balancete_url = "https://app.winker.com.br/intra/meuCondominio/balancete"
@@ -1334,7 +1336,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
             
             iframe = page.frame(name="pageIframe") or page.frame(url=lambda u: "financial-summary" in u)
             if not iframe:
-                print("Erro: Não foi possível carregar o iframe do Balancete.")
+                logger.error("Erro: Não foi possível carregar o iframe do Balancete.")
                 return
             iframe.wait_for_load_state("domcontentloaded")
             
@@ -1349,6 +1351,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                     tab_apresentacao.click()
                     iframe.locator("ion-datetime").first.wait_for(state="visible", timeout=15000)
                 
+                logger.info(f"Filtrando período {chunk_start.strftime('%m/%Y')} a {chunk_end.strftime('%m/%Y')}")
                 set_ion_datetime(iframe, 0, chunk_start.strftime("%m"), chunk_start.strftime("%Y"))
                 set_ion_datetime(iframe, 1, chunk_end.strftime("%m"), chunk_end.strftime("%Y"))
                 time.sleep(5) # Ajustado: Atualização chunk data
@@ -1374,10 +1377,12 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                         rec_total_mes = parse_currency(lines[1].strip())
                         des_total_mes = parse_currency(lines[2].strip())
                         if abs(rec_total_mes) < 0.01 and abs(des_total_mes) < 0.01:
-                            print(f"  Pulo {nome_mes_abbr}/{ano_item} (Vazio).")
+                            logger.info(f"  Pulo {nome_mes_abbr}/{ano_item} (Vazio).")
                             continue
  
-                        print(f"  Processando {nome_mes_abbr}/{ano_item}...")
+                        if logger.isEnabledFor(logging.INFO):
+                            sys.stdout.write(f"  Processando transações de {nome_mes_abbr}/{ano_item}: 0 transações lidas...")
+                            sys.stdout.flush()
                         lists_before_month = iframe.locator("ion-list").count()
                         current_btn.click()
                         wait_for_new_list_and_items(iframe, lists_before_month, expected_non_zero=(abs(rec_total_mes) > 0.01 or abs(des_total_mes) > 0.01))
@@ -1409,8 +1414,10 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                     itens_finais = extract_list_from_modal(iframe, context)
                                     transacoes_lidas += len(itens_finais)
                                     total_transacoes_lidas += len(itens_finais)
-                                    sys.stdout.write(f"\r    {transacoes_lidas} transações lidas...")
-                                    sys.stdout.flush()
+
+                                    if logger.isEnabledFor(logging.INFO):
+                                        sys.stdout.write(f"\r  Processando transações de {nome_mes_abbr}/{ano_item}: {transacoes_lidas} transações lidas...")
+                                        sys.stdout.flush()
                                     
                                     sub_data_list.append({
                                         "nome": sub['nome'],
@@ -1430,8 +1437,9 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                 })
                                 close_last_modal(iframe)
                                 
-                        if transacoes_lidas > 0:
-                            print()
+                        if logger.isEnabledFor(logging.INFO):
+                            sys.stdout.write("\n")
+                            sys.stdout.flush()
                                 
                         try:
                             # 3. Salva no banco de dados e move anexos temporários
@@ -1443,7 +1451,6 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                             
                             mes_dir = os.path.join(project_root, "anexos", chave_unica)
                             if os.path.exists(mes_dir):
-                                print(f"  Removendo diretório de anexos antigo: {mes_dir}")
                                 shutil.rmtree(mes_dir, ignore_errors=True)
                                 
                             if anexos_para_mover:
@@ -1455,7 +1462,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                         try:
                                             os.rename(t_path, f_path)
                                         except Exception as err_move:
-                                            print(f"  Erro ao mover anexo {t_path} para {f_path}: {err_move}")
+                                            logger.error(f"  Erro ao mover anexo {t_path} para {f_path}: {err_move}")
                             
                             processed_months_in_chunk.append((mes_num, ano_item, chave_unica))
                             update_current_audit()
@@ -1467,7 +1474,6 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                 
                 # 4. Extração de Prestações de Contas no final do chunk
                 if processed_months_in_chunk:
-                    print(f"\nIniciando extração de Prestações de Contas para o chunk...")
                     tab_pc = iframe.locator("super-tab-button:has-text('PRESTAÇÃO DE CONTAS')")
                     if tab_pc.count() > 0:
                         tab_pc.click()
@@ -1480,15 +1486,20 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                             1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
                             7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
                         }
+                        meses_abbr_map = {
+                            1: "JAN", 2: "FEV", 3: "MAR", 4: "ABR", 5: "MAI", 6: "JUN",
+                            7: "JUL", 8: "AGO", 9: "SET", 10: "OUT", 11: "NOV", 12: "DEZ"
+                        }
                         
                         for mes_num, ano_item, chave_unica in processed_months_in_chunk:
                             mes_ext = f"{meses_portugues[mes_num]} {ano_item}"
+                            mes_abbr = meses_abbr_map[mes_num]
                             col_locator = iframe.locator("ion-col").filter(has_text=mes_ext).first
                             visualizar_btn = col_locator.locator("button:has-text('VISUALIZAR')")
                             
                             if col_locator.count() > 0 and visualizar_btn.count() > 0:
                                 try:
-                                    print(f"  Extraindo prestação de contas de {mes_ext}...")
+                                    logger.info(f"  Fazendo download da prestação de contas de {mes_abbr}/{ano_item}")
                                     visualizar_btn.click()
                                     
                                     action_sheet_btn = iframe.locator("button.action-sheet-button:has-text('Visualizar')")
@@ -1518,7 +1529,6 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                     target_url = res_data.get("return", {}).get("document_link", "")
                                     
                                     if target_url and target_url.startswith("http") and "default/login" not in target_url:
-                                        print(f"    URL obtida da API: {target_url}")
                                         mes_dir = os.path.join(project_root, "anexos", chave_unica)
                                         default_pdf_name = f"Prestação de contas {mes_ext}.pdf"
                                         
@@ -1539,18 +1549,17 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                         # Avalia consistência da prestação de contas de forma centralizada
                                         pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=True)
                                         save_prestacao_contas(chave_unica, caminho_rel, nome_orig_pdf, pc_consistente, pc_motivo)
-                                        print(f"    Prestação de contas salva com sucesso em {caminho_rel}")
                                         total_downloads_prestacoes += 1
                                     else:
                                         raise Exception("Não foi possível obter URL final de download (redirecionamento falhou/timeout)")
                                 except Exception as err:
-                                    print(f"    Erro ao extrair prestação de contas de {mes_ext}: {err}")
+                                    logger.error(f"    Erro ao extrair prestação de contas de {mes_ext}: {err}")
                                     pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=False)
                                     save_prestacao_contas(
                                         chave_unica, None, None, pc_consistente, pc_motivo
                                     )
                             else:
-                                print(f"  Prestação de contas de {mes_ext} não encontrada ou indisponível.")
+                                logger.warning(f"  Prestação de contas de {mes_ext} não encontrada ou indisponível.")
                                 pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=False)
                                 save_prestacao_contas(
                                     chave_unica, None, None, pc_consistente, pc_motivo
@@ -1559,24 +1568,21 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                             # Atualiza auditoria após cada prestação de contas processada e comitada
                             update_current_audit()
                     else:
-                        print("  Aba PRESTAÇÃO DE CONTAS não encontrada no iframe.")
+                        logger.warning("  Aba PRESTAÇÃO DE CONTAS não encontrada no iframe.")
             
             # Salvar dados de auditoria
             update_current_audit()
         except Exception as e:
-            import traceback
-            print(f"Erro inesperado durante a extração: {e}")
-            traceback.print_exc()
+            logger.error(f"Erro inesperado durante a extração: {e}", exc_info=True)
         finally:
             browser.close()
             # Limpa o diretório temporário de anexos se ele existir
             temp_dir = os.path.join(project_root, "anexos", "temp")
             if os.path.exists(temp_dir):
-                print(f"Limpando diretório temporário: {temp_dir}")
                 try:
                     shutil.rmtree(temp_dir, ignore_errors=True)
                 except Exception as err_temp:
-                    print(f"Erro ao remover a pasta temporária: {err_temp}")
+                    logger.error(f"Erro ao remover a pasta temporária: {err_temp}")
 
 # ==========================================
 # 5. Entrada do Script (CLI)
@@ -1591,7 +1597,10 @@ if __name__ == "__main__":
     parser.add_argument('--end', default=None)
     parser.add_argument('--headless', action='store_true')
     parser.add_argument('--no-wait', action='store_true')
+    parser.add_argument('--log-level', default=os.environ.get("LOG_LEVEL", "INFO"), choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
     args = parser.parse_args()
+    
+    logger = setup_logging(args.log_level)
     
     # Prioridade para os argumentos de linha de comando, caindo para as env vars
     user = args.user or os.environ.get("WINKER_USER")
