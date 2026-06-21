@@ -235,44 +235,86 @@ def download_http_file(context, url, dest_dir, filename_prefix="", default_filen
 def download_file_from_button(context, btn, dest_dir, filename_prefix="", default_filename=""):
     """
     Clica em um botão que abre uma nova aba contendo um PDF ou arquivo,
-    extrai a URL da nova aba e realiza o download usando download_http_file.
+    ou inicia um download direto (como em modo headless), e realiza o download.
     Retorna o caminho local completo do arquivo baixado e o nome original.
     """
     from urllib.parse import urlparse, parse_qs
-    new_page = None
-    try:
-        with context.expect_page(timeout=15000) as new_page_info:
-            btn.click()
-        new_page = new_page_info.value
+    
+    # Obtém a página onde o botão está localizado
+    page = btn.page
+    
+    event_data = {"download": None, "popup": None}
+    
+    def on_download(download):
+        event_data["download"] = download
+        
+    def on_popup(popup):
+        event_data["popup"] = popup
 
-        target_url = ""
+    # Registra listeners temporários na página
+    page.on("download", on_download)
+    page.on("popup", on_popup)
+    
+    try:
+        # Clica no botão para disparar a ação
+        btn.click()
+        
+        # Aguarda até 15 segundos por um evento de popup ou download direto
         start_time = time.time()
-        while time.time() - start_time < 10.0:
-            target_url = new_page.url
-            if target_url and target_url.startswith("http"):
-                break
-            time.sleep(0.05)
-            
-        if target_url and target_url.startswith("http"):
-            if "viewer.html" in target_url and "file=" in target_url:
-                parsed = urlparse(target_url)
-                query_params = parse_qs(parsed.query)
-                file_param = query_params.get("file", [None])[0]
-                if file_param:
-                    target_url = file_param
+        while time.time() - start_time < 15.0:
+            # Caso 1: Foi disparado um evento de download direto (ex: em headless)
+            if event_data["download"] is not None:
+                dl = event_data["download"]
+                os.makedirs(dest_dir, exist_ok=True)
+                temp_filename = f"{filename_prefix}{default_filename or dl.suggested_filename}"
+                local_path = os.path.join(dest_dir, temp_filename)
+                dl.save_as(local_path)
+                return local_path, default_filename or dl.suggested_filename
+                
+            # Caso 2: Foi aberto um popup (ex: em modo normal/headful)
+            if event_data["popup"] is not None:
+                popup = event_data["popup"]
+                
+                # Aguarda que o popup navegue para uma URL http válida
+                target_url = ""
+                popup_start = time.time()
+                while time.time() - popup_start < 10.0:
+                    target_url = popup.url
+                    if target_url and target_url.startswith("http"):
+                        break
+                    page.wait_for_timeout(50)
                     
-            return download_http_file(
-                context, target_url, dest_dir,
-                filename_prefix=filename_prefix, default_filename=default_filename
-            )
-        else:
-            raise Exception("Não foi possível obter a URL final de download.")
+                if target_url and target_url.startswith("http"):
+                    if "viewer.html" in target_url and "file=" in target_url:
+                        parsed = urlparse(target_url)
+                        query_params = parse_qs(parsed.query)
+                        file_param = query_params.get("file", [None])[0]
+                        if file_param:
+                            target_url = file_param
+                            
+                    res = download_http_file(
+                        context, target_url, dest_dir,
+                        filename_prefix=filename_prefix, default_filename=default_filename
+                    )
+                    try:
+                        popup.close()
+                    except:
+                        pass
+                    return res
+                    
+            page.wait_for_timeout(50)
+            
+        raise Exception("Não foi possível obter a URL ou o arquivo de download.")
     finally:
-        if new_page:
-            try:
-                new_page.close()
-            except:
-                pass
+        # Remove os listeners temporários para evitar vazamento de memória ou eventos duplicados
+        try:
+            page.remove_listener("download", on_download)
+        except:
+            pass
+        try:
+            page.remove_listener("popup", on_popup)
+        except:
+            pass
 
 def download_anexos(loc, context):
     """
