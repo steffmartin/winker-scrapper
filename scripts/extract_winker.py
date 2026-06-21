@@ -107,6 +107,17 @@ def parse_receita_info(descricao):
             
     return apto, competencia
 
+def parse_conta(descricao):
+    """
+    Extrai a conta da descrição da transação.
+    """
+    if not descricao:
+        return None
+    match = re.search(r"(?:Conta|CTA\.\s*PGTO)\s*:\s*([^-\n]+)", descricao, re.IGNORECASE)
+    if match:
+        return match.group(1).strip().upper()
+    return None
+
 def parse_fornecedor(descricao):
     """
     Extrai o fornecedor da descrição de uma despesa.
@@ -722,6 +733,7 @@ def init_db(db_path=None):
             apartamento TEXT,
             competencia TEXT,
             fornecedor TEXT,
+            conta TEXT,
             anexos INTEGER DEFAULT 0,
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
@@ -968,7 +980,7 @@ def evaluate_entity_consistency(entity_type, **kwargs):
     Avalia as regras de negócio para consistência de diferentes entidades do sistema.
     Tipos suportados: 'mes', 'categoria', 'subcategoria', 'transacao', 'anexo', 'prestacao_contas'.
     Retorna uma tupla onde os dois primeiros elementos são sempre (consistente_flag, motivo_inconsistencia).
-    Para 'transacao', retorna adicionalmente (apto, competencia, fornecedor).
+    Para 'transacao', retorna adicionalmente (apto, competencia, fornecedor, conta).
     """
     if entity_type == 'mes':
         rec_total = kwargs.get('rec_total_mes', 0.0)
@@ -1040,6 +1052,10 @@ def evaluate_entity_consistency(entity_type, **kwargs):
             if not (fornecedor and fornecedor.strip()):
                 fields_ok = False
                 
+        conta = parse_conta(desc_completa)
+        if not (conta and conta.strip()):
+            fields_ok = False
+            
         anexos_ok = (anexos_esperados == anexos_baixados)
         consistente = 1 if (fields_ok and anexos_ok and despesa_anexo_valido) else 0
         
@@ -1056,13 +1072,15 @@ def evaluate_entity_consistency(entity_type, **kwargs):
                     reasons.append("Fornecedor não identificado")
                 if not despesa_anexo_valido:
                     reasons.append("Despesa sem comprovantes")
+            if not (conta and conta.strip()):
+                reasons.append("Conta não identificada")
             if not anexos_ok:
                 reasons.append("Quantidade de anexos divergente")
             if not reasons:
                 reasons.append("Dados da transação inconsistentes")
             motivo = json.dumps(reasons, ensure_ascii=False)
             
-        return consistente, motivo, apto, comp, fornecedor
+        return consistente, motivo, apto, comp, fornecedor, conta
 
     elif entity_type == 'anexo':
         nome_orig = kwargs.get('nome_original', '')
@@ -1173,7 +1191,7 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                         despesa_anexo_valido = not (tipo_flag == "D" and anexos_esperados == 0)
                         
                         # Avalia a consistência da transação de forma isolada
-                        trans_consistente, trans_motivo, apto, comp, fornecedor = evaluate_entity_consistency(
+                        trans_consistente, trans_motivo, apto, comp, fornecedor, conta = evaluate_entity_consistency(
                             'transacao',
                             tipo_flag=tipo_flag,
                             desc_completa=desc_completa,
@@ -1188,10 +1206,10 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                             
                         db_cursor.execute(
                             """
-                            INSERT INTO transacoes (subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia, revisado_usuario)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO transacoes (subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, conta, anexos, consistente, motivo_inconsistencia, revisado_usuario)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """,
-                            (sub_id, tipo_flag, data_t, desc_f, parse_currency(item['valor']), apto, comp, fornecedor, anexos_esperados, trans_consistente, trans_motivo, trans_consistente)
+                            (sub_id, tipo_flag, data_t, desc_f, parse_currency(item['valor']), apto, comp, fornecedor, conta, anexos_esperados, trans_consistente, trans_motivo, trans_consistente)
                         )
                         transacao_id = db_cursor.lastrowid
                         

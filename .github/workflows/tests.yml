@@ -40,7 +40,7 @@ jobs:
           # Executa todos os testes na pasta 'scripts'
           python -m unittest discover -s scripts -p "test_*.py"
           
-          # Dica para o futuro: Se novas pastas com scripts e testes Python forem adicionadas,
+          # Se novas pastas com scripts e testes Python forem adicionadas,
           # novos comandos de descoberta podem ser inseridos abaixo, por exemplo:
           # python -m unittest discover -s nova_pasta/ -p "test_*.py"
 
@@ -65,9 +65,6 @@ jobs:
           npm ci
 
       - name: Executar Testes de Unidade (Angular)
-        # continue-on-error é utilizado pois a suíte do frontend pode não possuir testes configurados ou válidos no momento,
-        # garantindo que o pipeline de testes Python passe enquanto o frontend é preparado.
-        continue-on-error: true
         run: |
           cd dashboard
           # Executa os testes no modo headless para CI

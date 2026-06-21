@@ -245,6 +245,7 @@ export class Dashboard implements OnInit {
             const matchesQuery = !query || 
                 t.descricao.toLowerCase().includes(query) || 
                 (t.fornecedor && t.fornecedor.toLowerCase().includes(query)) ||
+                (t.conta && t.conta.toLowerCase().includes(query)) ||
                 t.subcategoria_nome.toLowerCase().includes(query) ||
                 t.categoria_nome.toLowerCase().includes(query);
 

@@ -114,6 +114,7 @@ class Api:
                     t.apartamento,
                     t.competencia,
                     t.fornecedor,
+                    t.conta,
                     t.anexos as qtde_anexos_original,
                     t.consistente,
                     t.motivo_inconsistencia,
