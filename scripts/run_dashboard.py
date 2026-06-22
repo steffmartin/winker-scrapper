@@ -26,6 +26,197 @@ class Api:
         except Exception as e:
             return {"status": "error", "message": f"Erro de conexão: {str(e)}"}
 
+    def get_condominio_info(self):
+        """
+        Retorna informações do condomínio.
+        """
+        try:
+            db_path = self._get_db_path()
+            if not os.path.exists(db_path):
+                return {"status": "error", "message": "Banco de dados não encontrado."}
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM condominio LIMIT 1")
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                return {"status": "success", "data": dict(row)}
+            else:
+                return {"status": "success", "data": None}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def get_monthly_tree(self, mes_id):
+        """
+        Retorna a árvore hierárquica completa para um determinado mês (mes_id).
+        """
+        try:
+            db_path = self._get_db_path()
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # 1. Buscar o mês
+            cursor.execute("SELECT * FROM meses WHERE id = ?", (mes_id,))
+            mes_row = cursor.fetchone()
+            if not mes_row:
+                conn.close()
+                return {"status": "error", "message": f"Mês {mes_id} não encontrado."}
+            mes_dict = dict(mes_row)
+            
+            # 2. Buscar categorias do mês
+            cursor.execute("SELECT * FROM categorias WHERE mes_id = ? order by tipo desc, nome", (mes_id,))
+            cat_rows = cursor.fetchall()
+            
+            # Estrutura para consolidação por nome para evitar duplicados visuais caso o scraper tenha rodado múltiplas vezes
+            cat_by_name = {}
+            
+            for cat_row in cat_rows:
+                cat = dict(cat_row)
+                cat_key = (cat["nome"].upper().strip(), cat["tipo"])
+                
+                if cat_key not in cat_by_name:
+                    cat_by_name[cat_key] = {
+                        "nome": cat["nome"].upper().strip(),
+                        "tipo": cat["tipo"],
+                        "valor": cat["valor"],
+                        "consistente": 1,
+                        "motivo_inconsistencia": None,
+                        "sub_by_name": {}
+                    }
+                
+                if cat["consistente"] == 0:
+                    cat_by_name[cat_key]["consistente"] = 0
+                    cat_by_name[cat_key]["motivo_inconsistencia"] = cat["motivo_inconsistencia"]
+                
+                # 3. Buscar subcategorias para esta categoria usando o ID dela
+                cursor.execute("SELECT * FROM subcategorias WHERE categoria_id = ? order by nome", (cat["id"],))
+                sub_rows = cursor.fetchall()
+                
+                for sub_row in sub_rows:
+                    sub = dict(sub_row)
+                    sub_key = sub["nome"].upper().strip()
+                    
+                    if sub_key not in cat_by_name[cat_key]["sub_by_name"]:
+                        cat_by_name[cat_key]["sub_by_name"][sub_key] = {
+                            "nome": sub["nome"].upper().strip(),
+                            "tipo": sub["tipo"],
+                            "valor": sub["valor"],
+                            "consistente": 1,
+                            "motivo_inconsistencia": None,
+                            "transactions": []
+                        }
+                    
+                    if sub["consistente"] == 0:
+                        cat_by_name[cat_key]["sub_by_name"][sub_key]["consistente"] = 0
+                        cat_by_name[cat_key]["sub_by_name"][sub_key]["motivo_inconsistencia"] = sub["motivo_inconsistencia"]
+                    
+                    # 4. Buscar transações para esta subcategoria usando o ID dela
+                    cursor.execute("SELECT * FROM transacoes WHERE subcategoria_id = ? ORDER BY data", (sub["id"],))
+                    tx_rows = cursor.fetchall()
+                    
+                    for tx_row in tx_rows:
+                        tx = dict(tx_row)
+                        
+                        if "processed_tx_keys" not in cat_by_name[cat_key]["sub_by_name"][sub_key]:
+                            cat_by_name[cat_key]["sub_by_name"][sub_key]["processed_tx_keys"] = set()
+                        
+                        # Chave composta baseada nos dados da transação para desduplicação de clones físicos do banco
+                        tx_key = (tx["data"], tx["descricao"], tx["valor"], tx["apartamento"], tx["tipo"])
+                        
+                        if tx_key not in cat_by_name[cat_key]["sub_by_name"][sub_key]["processed_tx_keys"]:
+                            cat_by_name[cat_key]["sub_by_name"][sub_key]["processed_tx_keys"].add(tx_key)
+                            
+                            tx_node = {
+                                "data": {
+                                    "id": f"tx_{tx['id']}",
+                                    "nome": tx["descricao"],
+                                    "valor": tx["valor"],
+                                    "tipo": tx["tipo"],
+                                    "consistente": tx["consistente"],
+                                    "motivo_inconsistencia": tx["motivo_inconsistencia"],
+                                    "detalhe": f"Apto {tx['apartamento']}" if tx['apartamento'] else "",
+                                    "data": tx["data"],
+                                    "anexos": tx["anexos"],
+                                    "nivel": 4
+                                }
+                            }
+                            
+                            cat_by_name[cat_key]["sub_by_name"][sub_key]["transactions"].append(tx_node)
+            
+            conn.close()
+            
+            # Montar a árvore final a partir do dicionário consolidado ordenando tipo 'R' antes de 'D', e por valor decrescente
+            cat_nodes = []
+            sorted_cat_keys = sorted(cat_by_name.keys(), key=lambda x: (x[1] != 'R', -cat_by_name[x]["valor"]))
+            for cat_key in sorted_cat_keys:
+                cat_data = cat_by_name[cat_key]
+                sub_nodes = []
+                # Ordenar subcategorias por valor decrescente
+                sorted_sub_items = sorted(cat_data["sub_by_name"].items(), key=lambda item: -item[1]["valor"])
+                for sub_key, sub_data in sorted_sub_items:
+                    # Ordenar transações por data crescente
+                    def parse_tx_date(t_node):
+                        date_str = t_node["data"].get("data") or ""
+                        try:
+                            parts = date_str.split('/')
+                            if len(parts) == 3:
+                                return (int(parts[2]), int(parts[1]), int(parts[0]))
+                        except:
+                            pass
+                        return (0, 0, 0)
+                    
+                    sub_data["transactions"].sort(key=parse_tx_date)
+                    
+                    sub_node = {
+                        "data": {
+                            "id": f"sub_{cat_data['nome']}_{sub_data['nome']}",
+                            "nome": sub_data["nome"],
+                            "valor": sub_data["valor"],
+                            "tipo": sub_data["tipo"],
+                            "consistente": sub_data["consistente"],
+                            "motivo_inconsistencia": sub_data["motivo_inconsistencia"],
+                            "nivel": 3
+                        },
+                        "children": sub_data["transactions"]
+                    }
+                    sub_nodes.append(sub_node)
+                
+                cat_node = {
+                    "data": {
+                        "id": f"cat_{cat_data['nome']}",
+                        "nome": cat_data["nome"],
+                        "valor": cat_data["valor"],
+                        "tipo": cat_data["tipo"],
+                        "consistente": cat_data["consistente"],
+                        "motivo_inconsistencia": cat_data["motivo_inconsistencia"],
+                        "nivel": 2
+                    },
+                    "expanded": True,
+                    "children": sub_nodes
+                }
+                cat_nodes.append(cat_node)
+            
+            # Nó raiz do mês
+            root_node = {
+                "data": {
+                    "id": f"mes_{mes_dict['id']}",
+                    "nome": mes_dict["exibicao"],
+                    "receita_total": mes_dict["receita_total"],
+                    "despesa_total": mes_dict["despesa_total"],
+                    "consistente": mes_dict["consistente"],
+                    "motivo_inconsistencia": mes_dict["motivo_inconsistencia"],
+                    "nivel": 1
+                },
+                "expanded": True,
+                "children": cat_nodes
+            }
+            
+            return {"status": "success", "data": root_node}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     def get_dashboard_stats(self):
         """
         Retorna estatísticas consolidadas para os cards do topo.
@@ -129,7 +320,22 @@ class Api:
                 ORDER BY m.id DESC, t.id DESC
             """)
             rows = cursor.fetchall()
-            transactions = [dict(row) for row in rows]
+            seen_keys = set()
+            transactions = []
+            for row in rows:
+                row_dict = dict(row)
+                # Chave composta para desduplicar transações no retorno geral
+                tx_key = (
+                    row_dict["mes_id"],
+                    row_dict["data"],
+                    row_dict["descricao"],
+                    row_dict["valor"],
+                    row_dict["apartamento"],
+                    row_dict["tipo"]
+                )
+                if tx_key not in seen_keys:
+                    seen_keys.add(tx_key)
+                    transactions.append(row_dict)
             conn.close()
             return {"status": "success", "data": transactions}
         except Exception as e:

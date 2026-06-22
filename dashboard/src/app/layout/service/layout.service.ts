@@ -29,6 +29,8 @@ export class LayoutService {
         menuMode: 'static'
     });
 
+    condominioNome = signal<string>('CONDOMÍNIO');
+
     layoutState = signal<LayoutState>({
         staticMenuDesktopInactive: false,
         overlayMenuActive: false,
