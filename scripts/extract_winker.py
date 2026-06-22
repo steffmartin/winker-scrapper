@@ -742,6 +742,12 @@ def init_db(db_path=None):
         )
     """)
     
+    # Garante que a coluna 'conta' existe na tabela transacoes para bancos existentes
+    cursor.execute("PRAGMA table_info(transacoes)")
+    colunas = [col[1] for col in cursor.fetchall()]
+    if colunas and "conta" not in colunas:
+        cursor.execute("ALTER TABLE transacoes ADD COLUMN conta TEXT")
+    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS anexos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
