@@ -681,6 +681,7 @@ def init_db(db_path=None):
         db_path = os.path.join(project_root, "database", "winker_data.db")
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA foreign_keys = ON")
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS condominio (
@@ -700,7 +701,7 @@ def init_db(db_path=None):
             condominio_id TEXT,
             nome TEXT,
             cargo TEXT,
-            FOREIGN KEY (condominio_id) REFERENCES condominio(id)
+            FOREIGN KEY (condominio_id) REFERENCES condominio(id) ON DELETE CASCADE
         )
     """)
 
@@ -715,7 +716,7 @@ def init_db(db_path=None):
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
             revisado_usuario INTEGER DEFAULT 0,
-            FOREIGN KEY (condominio_id) REFERENCES condominio(id)
+            FOREIGN KEY (condominio_id) REFERENCES condominio(id) ON DELETE CASCADE
         )
     """)
     
@@ -823,7 +824,7 @@ def init_db(db_path=None):
             capturou_condominio INTEGER,
             capturou_inadimplencia INTEGER,
             capturou_membros INTEGER,
-            FOREIGN KEY (condominio_id) REFERENCES condominio(id)
+            FOREIGN KEY (condominio_id) REFERENCES condominio(id) ON DELETE CASCADE
         )
     """)
     
