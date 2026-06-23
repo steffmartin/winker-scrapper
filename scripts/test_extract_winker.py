@@ -17,12 +17,33 @@ from extract_winker import (
 class TestExtractWinker(unittest.TestCase):
 
     def test_parse_currency(self):
+        from extract_winker import parse_currency
+
         self.assertEqual(parse_currency("R$ 1.234,56"), 1234.56)
         self.assertEqual(parse_currency("- R$ 10,00"), -10.00)
         self.assertEqual(parse_currency("R$ 0,00"), 0.0)
         self.assertEqual(parse_currency(""), 0.0)
         self.assertEqual(parse_currency(None), 0.0)
         self.assertEqual(parse_currency("150,75"), 150.75)
+        
+    def test_get_competencia(self):
+        from extract_winker import get_competencia
+        self.assertEqual(get_competencia("ABR/2026"), "2026-04")
+        self.assertEqual(get_competencia("DEZ/2025"), "2025-12")
+        self.assertIsNone(get_competencia(None))
+        self.assertIsNone(get_competencia("INVALIDO"))
+        
+    def test_get_extensao(self):
+        from extract_winker import get_extensao
+        self.assertEqual(get_extensao("documento.pdf"), "pdf")
+        self.assertEqual(get_extensao("foto.JPG"), "jpg")
+        self.assertEqual(get_extensao("arquivo.tar.gz"), "gz")
+        self.assertEqual(get_extensao("nome-do-arquivo.pdf&h"), "pdf")
+        self.assertEqual(get_extensao("doc.pdf?version=1"), "pdf")
+        self.assertEqual(get_extensao("planilha.xlsx#section"), "xlsx")
+        self.assertEqual(get_extensao("img.png!"), "png")
+        self.assertIsNone(get_extensao("sem_extensao"))
+        self.assertIsNone(get_extensao(None))
 
     def test_parse_receita_info(self):
         apto, comp = parse_receita_info("Taxa Ordinária Apto - 101 JUN 2026")
@@ -167,14 +188,17 @@ class TestExtractWinker(unittest.TestCase):
 
     def test_evaluate_consistency_anexo(self):
         # Anexo consistente (com extensão válida)
-        consistente, motivo = evaluate_entity_consistency('anexo', nome_original="boleto.pdf")
+        consistente, motivo = evaluate_entity_consistency('anexo', extensao="pdf")
         self.assertEqual(consistente, 1)
         self.assertIsNone(motivo)
 
         # Anexo inconsistente (sem extensão ou muito curta/longa)
-        consistente, motivo = evaluate_entity_consistency('anexo', nome_original="boleto_invalido")
+        consistente, motivo = evaluate_entity_consistency('anexo', extensao=None)
         self.assertEqual(consistente, 0)
         self.assertEqual(json.loads(motivo)[0], "Extensão de arquivo inválida ou ausente")
+
+        consistente, motivo = evaluate_entity_consistency('anexo', extensao="toolong")
+        self.assertEqual(consistente, 0)
 
     def test_evaluate_consistency_prestacao_contas(self):
         # Prestação de contas baixada com sucesso

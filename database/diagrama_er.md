@@ -22,6 +22,7 @@ erDiagram
         INTEGER id PK
         TEXT condominio_id FK
         TEXT exibicao
+        TEXT competencia
         REAL receita_total
         REAL despesa_total
         INTEGER consistente
@@ -73,6 +74,8 @@ erDiagram
         INTEGER transacao_id FK
         TEXT caminho_local
         TEXT nome_original
+        TEXT url_download
+        TEXT extensao
         INTEGER consistente
         TEXT motivo_inconsistencia
         INTEGER revisado_usuario
@@ -83,6 +86,8 @@ erDiagram
         INTEGER mes_id FK
         TEXT caminho_local
         TEXT nome_original
+        TEXT url_download
+        TEXT extensao
         INTEGER consistente
         TEXT motivo_inconsistencia
         INTEGER revisado_usuario

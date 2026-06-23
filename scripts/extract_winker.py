@@ -70,6 +70,26 @@ load_dotenv(dotenv_path=os.path.join(project_root, '.env'))
 # 1. Utilitários de String, Moeda e Data
 # ==========================================
 
+def get_competencia(exibicao):
+    if not exibicao or '/' not in exibicao:
+        return None
+    mes_str, ano_str = exibicao.split('/')
+    meses_map = {'JAN': '01', 'FEV': '02', 'MAR': '03', 'ABR': '04', 'MAI': '05', 'JUN': '06', 'JUL': '07', 'AGO': '08', 'SET': '09', 'OUT': '10', 'NOV': '11', 'DEZ': '12'}
+    return f"{ano_str}-{meses_map.get(mes_str, '01')}"
+
+def get_extensao(nome_arquivo):
+    if not nome_arquivo:
+        return None
+    ext_match = re.search(r'\.([^.]+)$', nome_arquivo)
+    if not ext_match:
+        return None
+    raw_ext = ext_match.group(1).lower()
+    # Remove query strings e fragmentos
+    raw_ext = raw_ext.split('?')[0].split('&')[0].split('#')[0]
+    # Mantém apenas caracteres alfanuméricos
+    clean_ext = re.sub(r'[^a-z0-9]', '', raw_ext)
+    return clean_ext if clean_ext else None
+
 def parse_currency(val_str):
     """
     Converte uma string de moeda (ex: 'R$ 1.234,56' ou '- R$ 10,00') para float.
@@ -292,7 +312,7 @@ def download_file_from_button(context, btn, dest_dir, filename_prefix="", defaul
                 temp_filename = f"{filename_prefix}{default_filename or dl.suggested_filename}"
                 local_path = os.path.join(dest_dir, temp_filename)
                 dl.save_as(local_path)
-                return local_path, default_filename or dl.suggested_filename
+                return local_path, default_filename or dl.suggested_filename, dl.url
                 
             # Caso 2: Foi aberto um popup (ex: em modo normal/headful)
             if event_data["popup"] is not None:
@@ -323,7 +343,7 @@ def download_file_from_button(context, btn, dest_dir, filename_prefix="", defaul
                         popup.close()
                     except:
                         pass
-                    return res
+                    return res[0], res[1], target_url
                     
             page.wait_for_timeout(50)
             
@@ -363,14 +383,15 @@ def download_anexos(loc, context):
         
         prefix = f"temp_{int(time.time() * 1000)}_{idx}_"
         try:
-            temp_path, nome_orig_final = download_file_from_button(
+            temp_path, nome_orig_final, url_download = download_file_from_button(
                 context, btn, temp_dir, 
                 filename_prefix=prefix, default_filename=nome_original
             )
             
             downloaded_files.append({
                 "temp_path": temp_path,
-                "nome_original": nome_orig_final
+                "nome_original": nome_orig_final,
+                "url_download": url_download
             })
         except Exception as e:
             logger.error(f"Erro ao baixar anexo {nome_original}: {e}")
@@ -630,7 +651,7 @@ def extract_inadimplencia_boleto(page, context):
             
         # Clica no botão de confirmação esperando a abertura da nova página (PDF)
         prefix = f"boleto_{int(time.time())}_"
-        temp_path, nome_orig_final = download_file_from_button(
+        temp_path, nome_orig_final, _ = download_file_from_button(
             context, confirm_btn, temp_dir,
             filename_prefix=prefix, default_filename="boleto_recente.pdf"
         )
@@ -689,6 +710,7 @@ def init_db(db_path=None):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             condominio_id TEXT,
             exibicao TEXT,
+            competencia TEXT,
             receita_total REAL,
             despesa_total REAL,
             consistente INTEGER DEFAULT 1,
@@ -758,6 +780,8 @@ def init_db(db_path=None):
             transacao_id INTEGER,
             caminho_local TEXT,
             nome_original TEXT,
+            url_download TEXT,
+            extensao TEXT,
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
             revisado_usuario INTEGER DEFAULT 0,
@@ -771,6 +795,8 @@ def init_db(db_path=None):
             mes_id INTEGER,
             caminho_local TEXT,
             nome_original TEXT,
+            url_download TEXT,
+            extensao TEXT,
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
             revisado_usuario INTEGER DEFAULT 0,
@@ -838,7 +864,7 @@ def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor
     finally:
         db_conn.close()
 
-def save_prestacao_contas(mes_id, caminho_local, nome_original, consistente, motivo_inconsistencia):
+def save_prestacao_contas(mes_id, caminho_local, nome_original, url_download, extensao, consistente, motivo_inconsistencia):
     """
     Salva ou atualiza os dados da prestação de contas de um determinado mês.
     Recebe o mes_id inteiro (PK de meses) para vincular o registro.
@@ -849,9 +875,9 @@ def save_prestacao_contas(mes_id, caminho_local, nome_original, consistente, mot
         db_cursor.execute("BEGIN")
         
         db_cursor.execute("""
-            INSERT INTO prestacoes_contas (mes_id, caminho_local, nome_original, consistente, motivo_inconsistencia, revisado_usuario)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (mes_id, caminho_local, nome_original, consistente, motivo_inconsistencia, consistente))
+            INSERT INTO prestacoes_contas (mes_id, caminho_local, nome_original, url_download, extensao, consistente, motivo_inconsistencia, revisado_usuario)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (mes_id, caminho_local, nome_original, url_download, extensao, consistente, motivo_inconsistencia, consistente))
         db_conn.commit()
     except Exception as e:
         db_conn.rollback()
@@ -1120,9 +1146,9 @@ def evaluate_entity_consistency(entity_type, **kwargs):
         return consistente, motivo, apto, comp, fornecedor, conta
 
     elif entity_type == 'anexo':
-        nome_orig = kwargs.get('nome_original', '')
-        # Anexo consistente se contiver extensão (2 a 5 caracteres alfanuméricos)
-        consistente = 1 if re.search(r"\.[a-zA-Z0-9]{2,5}$", nome_orig) else 0
+        extensao = kwargs.get('extensao', '')
+        # Anexo consistente se tiver uma extensão válida de 2 a 5 caracteres alfanuméricos
+        consistente = 1 if extensao and re.match(r"^[a-zA-Z0-9]{2,5}$", extensao) else 0
         
         motivo = None
         if not consistente:
@@ -1178,9 +1204,11 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
             logger.debug(f"      - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
             logger.debug(f"      - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
             
+        competencia = get_competencia(exibicao)
+
         db_cursor.execute(
-            "INSERT INTO meses (condominio_id, exibicao, receita_total, despesa_total, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (condominio_id, exibicao, rec_total_mes, des_total_mes, mes_consistente, mes_motivo, mes_consistente)
+            "INSERT INTO meses (condominio_id, exibicao, competencia, receita_total, despesa_total, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (condominio_id, exibicao, competencia, rec_total_mes, des_total_mes, mes_consistente, mes_motivo, mes_consistente)
         )
         mes_id = db_cursor.lastrowid
         
@@ -1261,17 +1289,19 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                         for anexo in item.get("anexos", []):
                             temp_path = anexo["temp_path"]
                             nome_orig = anexo["nome_original"]
+                            url_download = anexo.get("url_download")
+                            extensao = get_extensao(nome_orig)
                             
                             if os.path.exists(temp_path):
                                 # Análise do anexo centralizada
                                 anexo_consistente, anexo_motivo = evaluate_entity_consistency(
                                     'anexo',
-                                    nome_original=nome_orig
+                                    extensao=extensao
                                 )
                                     
                                 db_cursor.execute(
-                                    "INSERT INTO anexos (transacao_id, caminho_local, nome_original, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?)",
-                                    (transacao_id, "", nome_orig, anexo_consistente, anexo_motivo, anexo_consistente)
+                                    "INSERT INTO anexos (transacao_id, caminho_local, nome_original, url_download, extensao, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                    (transacao_id, "", nome_orig, url_download, extensao, anexo_consistente, anexo_motivo, anexo_consistente)
                                 )
                                 anexo_id = db_cursor.lastrowid
                                 
@@ -1610,10 +1640,11 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                         os.rename(temp_path, caminho_final)
                                         
                                         caminho_rel = f"anexos/{condo_id_extraido}/{chave_unica}/{chave_unica}_prestacao_contas.pdf"
+                                        extensao = "pdf"
                                         
                                         # Avalia consistência da prestação de contas de forma centralizada
                                         pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=True)
-                                        save_prestacao_contas(mes_id, caminho_rel, nome_orig_pdf, pc_consistente, pc_motivo)
+                                        save_prestacao_contas(mes_id, caminho_rel, nome_orig_pdf, target_url, extensao, pc_consistente, pc_motivo)
                                         total_downloads_prestacoes += 1
                                     else:
                                         raise Exception("Não foi possível obter URL final de download (redirecionamento falhou/timeout)")
@@ -1621,13 +1652,13 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                     logger.error(f"    Erro ao extrair prestação de contas de {mes_ext}: {err}")
                                     pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=False)
                                     save_prestacao_contas(
-                                        mes_id, None, None, pc_consistente, pc_motivo
+                                        mes_id, None, None, None, None, pc_consistente, pc_motivo
                                     )
                             else:
                                 logger.warning(f"  Prestação de contas de {mes_ext} não encontrada ou indisponível.")
                                 pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=False)
                                 save_prestacao_contas(
-                                    mes_id, None, None, pc_consistente, pc_motivo
+                                    mes_id, None, None, None, None, pc_consistente, pc_motivo
                                 )
                             
                             # Atualiza auditoria após cada prestação de contas processada e comitada

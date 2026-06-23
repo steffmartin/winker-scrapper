@@ -3,6 +3,7 @@
 
 # Bancos de dados locais estruturados
 database/*.db
+database/*.db.bak
 
 # Caches e arquivos compilados do Python (em qualquer subdiretório)
 **/__pycache__/
