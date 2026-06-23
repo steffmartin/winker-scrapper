@@ -91,7 +91,9 @@ O projeto está organizado da seguinte maneira:
     * `test_extract_winker.py`: Suíte de testes unitários da extração e lógica de consistência.
     * `run_dashboard.py`: O backend Python exposto à interface gráfica via `pywebview`.
 * **[`database/`](file:///D:/projects/winker/database)**: Contém o arquivo do banco de dados SQLite local (
-  `winker_data.db`) utilizado pelo extrator e lido pelo dashboard.
+  `winker_data.db`) utilizado pelo extrator e lido pelo dashboard. Consulte o
+  [`database/diagrama_er.md`](database/diagrama_er.md) para visualizar o diagrama de entidade-relacionamento completo
+  das tabelas.
 * **[`compilados/`](file:///D:/projects/winker/compilados)**: Contém os arquivos estáticos prontos para produção do
   frontend gerados pelo compilador do Angular.
 * **[`dashboard/`](file:///D:/projects/winker/dashboard)**: O repositório de desenvolvimento contendo o código-fonte em
