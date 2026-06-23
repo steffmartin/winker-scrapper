@@ -1371,7 +1371,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
             # A extração do condomínio não é mais condicional: todo scrapper deve preencher
             # a tabela condominio antes de registrar meses, membros ou qualquer dado vinculado.
             try:
-                logger.info("Extraindo dados do condomínio (etapa obrigatória)...")
+                logger.info("Lendo informações do condomínio")
                 condo_id_extraido, condo_nome, membros = extract_condominio_and_gestao(page)
                 if condo_id_extraido:
                     capturou_condominio = 1
