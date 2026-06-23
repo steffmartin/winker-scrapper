@@ -74,7 +74,6 @@ erDiagram
         INTEGER transacao_id FK
         TEXT caminho_local
         TEXT nome_original
-        TEXT url_download
         TEXT extensao
         INTEGER consistente
         TEXT motivo_inconsistencia
@@ -86,7 +85,6 @@ erDiagram
         INTEGER mes_id FK
         TEXT caminho_local
         TEXT nome_original
-        TEXT url_download
         TEXT extensao
         INTEGER consistente
         TEXT motivo_inconsistencia
