@@ -235,8 +235,10 @@ class TestExtractWinker(unittest.TestCase):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS membros_gestao (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                condominio_id TEXT,
                 nome TEXT,
-                cargo TEXT
+                cargo TEXT,
+                FOREIGN KEY (condominio_id) REFERENCES condominio(id)
             )
         """)
         conn.commit()
@@ -268,11 +270,11 @@ class TestExtractWinker(unittest.TestCase):
             condo_row = cursor.fetchone()
             self.assertEqual(condo_row, ("12345", "Residencial Teste", "10/06/2026", 5, 2500.00, "Cobrança S/A", "3133334444"))
             
-            cursor.execute("SELECT nome, cargo FROM membros_gestao")
+            cursor.execute("SELECT condominio_id, nome, cargo FROM membros_gestao")
             membro_rows = cursor.fetchall()
             self.assertEqual(len(membro_rows), 2)
-            self.assertEqual(membro_rows[0], ("João Silva", "Síndico"))
-            self.assertEqual(membro_rows[1], ("Maria Santos", "Conselheiro"))
+            self.assertEqual(membro_rows[0], ("12345", "João Silva", "Síndico"))
+            self.assertEqual(membro_rows[1], ("12345", "Maria Santos", "Conselheiro"))
             
         conn.close()
 
@@ -304,6 +306,7 @@ class TestExtractWinker(unittest.TestCase):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS auditoria (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                condominio_id TEXT,
                 usuario_uuid TEXT,
                 usuario_id INTEGER,
                 usuario_name TEXT,
@@ -336,7 +339,7 @@ class TestExtractWinker(unittest.TestCase):
             mock_get_ip.return_value = "192.168.1.10"
             mock_get_mac.return_value = "00:11:22:33:44:55"
             
-            from extract_winker import create_auditoria, update_auditoria
+            from extract_winker import create_auditoria, update_auditoria, update_auditoria_condominio_id
             
             auditoria_id = create_auditoria(periodo_inicio="2026-01", periodo_fim="2026-02")
             self.assertEqual(auditoria_id, 1)
@@ -344,16 +347,18 @@ class TestExtractWinker(unittest.TestCase):
             cursor.execute("SELECT * FROM auditoria WHERE id = ?", (auditoria_id,))
             initial_row = cursor.fetchone()
             self.assertIsNotNone(initial_row)
-            self.assertEqual(initial_row[9], "192.168.1.10")
-            self.assertEqual(initial_row[10], "00:11:22:33:44:55")
-            self.assertEqual(initial_row[11], "2026-01")
-            self.assertEqual(initial_row[12], "2026-02")
-            self.assertEqual(initial_row[13], 0)
+            # condominio_id deve ser NULL no início (índice 1 com a nova coluna)
+            self.assertIsNone(initial_row[1])
+            self.assertEqual(initial_row[10], "192.168.1.10")
+            self.assertEqual(initial_row[11], "00:11:22:33:44:55")
+            self.assertEqual(initial_row[12], "2026-01")
+            self.assertEqual(initial_row[13], "2026-02")
             self.assertEqual(initial_row[14], 0)
-            self.assertEqual(initial_row[15], 0.0)
-            self.assertEqual(initial_row[16], 0)
+            self.assertEqual(initial_row[15], 0)
+            self.assertEqual(initial_row[16], 0.0)
             self.assertEqual(initial_row[17], 0)
             self.assertEqual(initial_row[18], 0)
+            self.assertEqual(initial_row[19], 0)
             
             user_data = {
                 "uuid": "test-uuid-123",
@@ -375,28 +380,104 @@ class TestExtractWinker(unittest.TestCase):
                 capturou_inadimplencia=0,
                 capturou_membros=1
             )
+
+            # Testa update_auditoria_condominio_id: preenche condominio_id após obtenção
+            update_auditoria_condominio_id(auditoria_id=auditoria_id, condominio_id="CONDO-001")
             
             cursor.execute("SELECT * FROM auditoria WHERE id = ?", (auditoria_id,))
             row = cursor.fetchone()
             self.assertIsNotNone(row)
-            self.assertEqual(row[1], "test-uuid-123")
-            self.assertEqual(row[2], 999)
-            self.assertEqual(row[3], "Audit User")
-            self.assertEqual(row[4], "111.111.111-11")
-            self.assertEqual(row[5], "MG-11.111.111")
-            self.assertEqual(row[6], "31988888888")
-            self.assertEqual(row[7], "302")
-            self.assertEqual(row[9], "192.168.1.10")
-            self.assertEqual(row[10], "00:11:22:33:44:55")
-            self.assertEqual(row[11], "2026-01")
-            self.assertEqual(row[12], "2026-02")
-            self.assertEqual(row[13], 5)
-            self.assertEqual(row[14], 150)
-            self.assertEqual(row[15], 12.5)
-            self.assertEqual(row[16], 1)
-            self.assertEqual(row[17], 0)
-            self.assertEqual(row[18], 1)
+            # Verifica condominio_id atualizado (índice 1)
+            self.assertEqual(row[1], "CONDO-001")
+            self.assertEqual(row[2], "test-uuid-123")
+            self.assertEqual(row[3], 999)
+            self.assertEqual(row[4], "Audit User")
+            self.assertEqual(row[5], "111.111.111-11")
+            self.assertEqual(row[6], "MG-11.111.111")
+            self.assertEqual(row[7], "31988888888")
+            self.assertEqual(row[8], "302")
+            self.assertEqual(row[10], "192.168.1.10")
+            self.assertEqual(row[11], "00:11:22:33:44:55")
+            self.assertEqual(row[12], "2026-01")
+            self.assertEqual(row[13], "2026-02")
+            self.assertEqual(row[14], 5)
+            self.assertEqual(row[15], 150)
+            self.assertEqual(row[16], 12.5)
+            self.assertEqual(row[17], 1)
+            self.assertEqual(row[18], 0)
+            self.assertEqual(row[19], 1)
             
+        conn.close()
+
+    def test_database_migration_add_condominio_id(self):
+        """Testa a migração que adiciona condominio_id nas tabelas meses, membros_gestao e auditoria."""
+        conn = sqlite3.connect(":memory:")
+        cursor = conn.cursor()
+
+        # Cria o schema antigo (sem condominio_id)
+        cursor.execute("""
+            CREATE TABLE condominio (
+                id TEXT PRIMARY KEY,
+                nome TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE meses (
+                id TEXT PRIMARY KEY,
+                exibicao TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE membros_gestao (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT,
+                cargo TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE auditoria (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                periodo_inicio TEXT,
+                periodo_fim TEXT
+            )
+        """)
+
+        # Popula com dados de teste
+        cursor.execute("INSERT INTO condominio (id, nome) VALUES ('CONDO-001', 'Residencial Teste')")
+        cursor.execute("INSERT INTO meses (id, exibicao) VALUES ('202601', 'JAN/2026')")
+        cursor.execute("INSERT INTO meses (id, exibicao) VALUES ('202602', 'FEV/2026')")
+        cursor.execute("INSERT INTO membros_gestao (nome, cargo) VALUES ('João', 'Síndico')")
+        cursor.execute("INSERT INTO auditoria (periodo_inicio, periodo_fim) VALUES ('2026-01', '2026-02')")
+        conn.commit()
+
+        from migration_add_condominio_id import migrate_db
+        migrate_db(conn=conn)
+
+        # Verifica meses: condominio_id deve ter sido preenchido
+        cursor.execute("PRAGMA table_info(meses)")
+        colunas_meses = [col[1] for col in cursor.fetchall()]
+        self.assertIn("condominio_id", colunas_meses)
+        cursor.execute("SELECT id, condominio_id FROM meses ORDER BY id")
+        meses_rows = cursor.fetchall()
+        self.assertEqual(meses_rows[0], ("202601", "CONDO-001"))
+        self.assertEqual(meses_rows[1], ("202602", "CONDO-001"))
+
+        # Verifica membros_gestao: condominio_id deve ter sido preenchido
+        cursor.execute("PRAGMA table_info(membros_gestao)")
+        colunas_mg = [col[1] for col in cursor.fetchall()]
+        self.assertIn("condominio_id", colunas_mg)
+        cursor.execute("SELECT nome, condominio_id FROM membros_gestao")
+        mg_rows = cursor.fetchall()
+        self.assertEqual(mg_rows[0], ("João", "CONDO-001"))
+
+        # Verifica auditoria: condominio_id deve ser NULL (campo opcional)
+        cursor.execute("PRAGMA table_info(auditoria)")
+        colunas_aud = [col[1] for col in cursor.fetchall()]
+        self.assertIn("condominio_id", colunas_aud)
+        cursor.execute("SELECT periodo_inicio, condominio_id FROM auditoria")
+        aud_rows = cursor.fetchall()
+        self.assertEqual(aud_rows[0], ("2026-01", None))
+
         conn.close()
 
     def test_database_migration(self):

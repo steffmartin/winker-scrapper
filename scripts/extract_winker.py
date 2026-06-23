@@ -677,22 +677,38 @@ def init_db(db_path=None):
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS membros_gestao (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            condominio_id TEXT,
             nome TEXT,
-            cargo TEXT
+            cargo TEXT,
+            FOREIGN KEY (condominio_id) REFERENCES condominio(id)
         )
     """)
+
+    # Garante que a coluna 'condominio_id' existe na tabela membros_gestao para bancos existentes
+    cursor.execute("PRAGMA table_info(membros_gestao)")
+    colunas_mg = [col[1] for col in cursor.fetchall()]
+    if colunas_mg and "condominio_id" not in colunas_mg:
+        cursor.execute("ALTER TABLE membros_gestao ADD COLUMN condominio_id TEXT REFERENCES condominio(id)")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS meses (
             id TEXT PRIMARY KEY, 
+            condominio_id TEXT,
             exibicao TEXT,
             receita_total REAL,
             despesa_total REAL,
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
-            revisado_usuario INTEGER DEFAULT 0
+            revisado_usuario INTEGER DEFAULT 0,
+            FOREIGN KEY (condominio_id) REFERENCES condominio(id)
         )
     """)
+
+    # Garante que a coluna 'condominio_id' existe na tabela meses para bancos existentes
+    cursor.execute("PRAGMA table_info(meses)")
+    colunas_m = [col[1] for col in cursor.fetchall()]
+    if colunas_m and "condominio_id" not in colunas_m:
+        cursor.execute("ALTER TABLE meses ADD COLUMN condominio_id TEXT REFERENCES condominio(id)")
     
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
@@ -777,6 +793,7 @@ def init_db(db_path=None):
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS auditoria (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            condominio_id TEXT,
             usuario_uuid TEXT,
             usuario_id INTEGER,
             usuario_name TEXT,
@@ -794,9 +811,16 @@ def init_db(db_path=None):
             tempo_duracao REAL,
             capturou_condominio INTEGER,
             capturou_inadimplencia INTEGER,
-            capturou_membros INTEGER
+            capturou_membros INTEGER,
+            FOREIGN KEY (condominio_id) REFERENCES condominio(id)
         )
     """)
+
+    # Garante que a coluna 'condominio_id' existe na tabela auditoria para bancos existentes
+    cursor.execute("PRAGMA table_info(auditoria)")
+    colunas_a = [col[1] for col in cursor.fetchall()]
+    if colunas_a and "condominio_id" not in colunas_a:
+        cursor.execute("ALTER TABLE auditoria ADD COLUMN condominio_id TEXT REFERENCES condominio(id)")
     
     conn.commit()
     return conn
@@ -804,6 +828,7 @@ def init_db(db_path=None):
 def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone, membros):
     """
     Salva ou atualiza as informações do condomínio e de seus membros de gestão no banco.
+    Todos os membros da gestão são vinculados ao condomínio via condominio_id.
     """
     db_conn = init_db()
     db_cursor = db_conn.cursor()
@@ -816,13 +841,13 @@ def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone))
         
-        # Limpa e reinsere membros da gestão
+        # Limpa e reinsere membros da gestão vinculados ao condomínio
         db_cursor.execute("DELETE FROM membros_gestao")
         for membro in membros:
             db_cursor.execute("""
-                INSERT INTO membros_gestao (nome, cargo)
-                VALUES (?, ?)
-            """, (membro["nome"], membro["cargo"]))
+                INSERT INTO membros_gestao (condominio_id, nome, cargo)
+                VALUES (?, ?, ?)
+            """, (condo_id, membro["nome"], membro["cargo"]))
             
         db_conn.commit()
     except Exception as e:
@@ -903,6 +928,8 @@ def get_mac_address():
 def create_auditoria(periodo_inicio, periodo_fim):
     """
     Cria uma nova linha de auditoria no início da execução e retorna o seu ID.
+    O campo condominio_id é inicialmente NULL pois o log começa antes da extração do condomínio;
+    deve ser atualizado via update_auditoria_condominio_id() após a obtenção do id.
     """
     db_conn = init_db()
     db_cursor = db_conn.cursor()
@@ -915,10 +942,10 @@ def create_auditoria(periodo_inicio, periodo_fim):
         db_cursor.execute("BEGIN")
         db_cursor.execute("""
             INSERT INTO auditoria (
-                data_hora_captura, ip, mac, periodo_inicio, periodo_fim,
+                condominio_id, data_hora_captura, ip, mac, periodo_inicio, periodo_fim,
                 downloads_realizados, transacoes_lidas, tempo_duracao,
                 capturou_condominio, capturou_inadimplencia, capturou_membros
-            ) VALUES (?, ?, ?, ?, ?, 0, 0, 0.0, 0, 0, 0)
+            ) VALUES (NULL, ?, ?, ?, ?, ?, 0, 0, 0.0, 0, 0, 0)
         """, (data_hora_captura, ip, mac, periodo_inicio, periodo_fim))
         auditoria_id = db_cursor.lastrowid
         db_conn.commit()
@@ -926,6 +953,29 @@ def create_auditoria(periodo_inicio, periodo_fim):
     except Exception as e:
         db_conn.rollback()
         return None
+    finally:
+        db_conn.close()
+
+def update_auditoria_condominio_id(auditoria_id, condominio_id):
+    """
+    Atualiza o condominio_id do registro de auditoria após a obtenção do ID do condomínio.
+    Chamada imediatamente após a extração bem-sucedida dos dados do condomínio.
+    """
+    if auditoria_id is None or condominio_id is None:
+        return
+
+    db_conn = init_db()
+    db_cursor = db_conn.cursor()
+    try:
+        db_cursor.execute("BEGIN")
+        db_cursor.execute(
+            "UPDATE auditoria SET condominio_id = ? WHERE id = ?",
+            (condominio_id, auditoria_id)
+        )
+        db_conn.commit()
+    except Exception as e:
+        db_conn.rollback()
+        logger.error(f"Erro ao atualizar condominio_id na auditoria: {e}")
     finally:
         db_conn.close()
 
@@ -1109,7 +1159,7 @@ def evaluate_entity_consistency(entity_type, **kwargs):
     else:
         raise ValueError(f"Tipo de entidade desconhecido para validação de consistência: {entity_type}")
 
-def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root):
+def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root, condominio_id=None):
     """
     Insere todos os dados extraídos do mês no banco de dados SQLite, executando as análises
     de consistência e retornando a lista de anexos temporários que precisam ser movidos.
@@ -1141,8 +1191,8 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
             logger.debug(f"      - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
             
         db_cursor.execute(
-            "INSERT INTO meses (id, exibicao, receita_total, despesa_total, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (chave_unica, f"{nome_mes_abbr}/{ano_item}", rec_total_mes, des_total_mes, mes_consistente, mes_motivo, mes_consistente)
+            "INSERT INTO meses (id, condominio_id, exibicao, receita_total, despesa_total, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (chave_unica, condominio_id, f"{nome_mes_abbr}/{ano_item}", rec_total_mes, des_total_mes, mes_consistente, mes_motivo, mes_consistente)
         )
         
         # 2. Processa categorias, subcategorias, transações e anexos
@@ -1281,6 +1331,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
     capturou_membros = 0
     auditoria_id = None
     user_data = {}
+    condo_id_extraido = None  # Será preenchido após a extração obrigatória do condomínio
     
     def update_current_audit():
         if auditoria_id is not None:
@@ -1324,32 +1375,33 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
             # Inicializa tabelas uma única vez no início
             init_db()
 
-            # Cria registro inicial de auditoria
+            # Cria registro inicial de auditoria (condominio_id começa como NULL)
             auditoria_id = create_auditoria(start_date_obj.strftime("%Y-%m"), end_date_obj.strftime("%Y-%m"))
 
-            # Verifica se a data fim contempla o mês atual do sistema
-            today = datetime.now()
-            is_current_month = (end_date_obj.year == today.year and end_date_obj.month == today.month)
+            # 1. Extração OBRIGATÓRIA do Condomínio e Corpo Diretivo (Membros da Gestão)
+            # A extração do condomínio não é mais condicional: todo scrapper deve preencher
+            # a tabela condominio antes de registrar meses, membros ou qualquer dado vinculado.
+            try:
+                logger.info("Extraindo dados do condomínio (etapa obrigatória)...")
+                condo_id_extraido, condo_nome, membros = extract_condominio_and_gestao(page)
+                if condo_id_extraido:
+                    capturou_condominio = 1
+                if membros:
+                    capturou_membros = 1
 
-            if is_current_month:
-                try:
-                    # 1. Extração do Condomínio e Corpo Diretivo (Membros da Gestão)
-                    condo_id, condo_nome, membros = extract_condominio_and_gestao(page)
-                    if condo_id:
-                        capturou_condominio = 1
-                    if membros:
-                        capturou_membros = 1
+                # 2. Extração parcial de Inadimplência do boleto recente
+                data_corte, unidades, valor, administradora, telefone = extract_inadimplencia_boleto(page, context)
+                if data_corte:
+                    capturou_inadimplencia = 1
 
-                    # 2. Extração parcial de Inadimplência do boleto recente
-                    data_corte, unidades, valor, administradora, telefone = extract_inadimplencia_boleto(page, context)
-                    if data_corte:
-                        capturou_inadimplencia = 1
+                # 3. Salva condomínio e membros no banco de dados
+                save_condominio_and_gestao(condo_id_extraido, condo_nome, data_corte, unidades, valor, administradora, telefone, membros)
 
-                    # 3. Salva no banco de dados
-                    save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone, membros)
-                    update_current_audit()
-                except Exception as ex_condo:
-                    logger.error(f"Erro ao extrair/salvar dados de gestão e inadimplência: {ex_condo}")
+                # 4. Atualiza condominio_id na auditoria assim que o id é obtido
+                update_auditoria_condominio_id(auditoria_id, condo_id_extraido)
+                update_current_audit()
+            except Exception as ex_condo:
+                logger.error(f"Erro ao extrair/salvar dados de gestão e inadimplência: {ex_condo}")
 
             # 4. Navega para o Balancete
             balancete_url = "https://app.winker.com.br/intra/meuCondominio/balancete"
@@ -1466,7 +1518,8 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                         try:
                             # 3. Salva no banco de dados e move anexos temporários
                             anexos_para_mover = save_extraction_data_to_db(
-                                chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root
+                                chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root,
+                                condominio_id=condo_id_extraido
                             )
                             if anexos_para_mover:
                                 total_downloads_anexos += len(anexos_para_mover)
