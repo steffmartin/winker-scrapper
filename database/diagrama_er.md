@@ -19,7 +19,7 @@ erDiagram
 
     meses {
         TEXT id PK
-        TEXT condominio_id FK
+        TEXT condominio_id PK, FK
         TEXT exibicao
         REAL receita_total
         REAL despesa_total

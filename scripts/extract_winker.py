@@ -684,15 +684,9 @@ def init_db(db_path=None):
         )
     """)
 
-    # Garante que a coluna 'condominio_id' existe na tabela membros_gestao para bancos existentes
-    cursor.execute("PRAGMA table_info(membros_gestao)")
-    colunas_mg = [col[1] for col in cursor.fetchall()]
-    if colunas_mg and "condominio_id" not in colunas_mg:
-        cursor.execute("ALTER TABLE membros_gestao ADD COLUMN condominio_id TEXT REFERENCES condominio(id)")
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS meses (
-            id TEXT PRIMARY KEY, 
+            id TEXT,
             condominio_id TEXT,
             exibicao TEXT,
             receita_total REAL,
@@ -700,15 +694,10 @@ def init_db(db_path=None):
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
             revisado_usuario INTEGER DEFAULT 0,
+            PRIMARY KEY (id, condominio_id),
             FOREIGN KEY (condominio_id) REFERENCES condominio(id)
         )
     """)
-
-    # Garante que a coluna 'condominio_id' existe na tabela meses para bancos existentes
-    cursor.execute("PRAGMA table_info(meses)")
-    colunas_m = [col[1] for col in cursor.fetchall()]
-    if colunas_m and "condominio_id" not in colunas_m:
-        cursor.execute("ALTER TABLE meses ADD COLUMN condominio_id TEXT REFERENCES condominio(id)")
     
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
@@ -815,12 +804,6 @@ def init_db(db_path=None):
             FOREIGN KEY (condominio_id) REFERENCES condominio(id)
         )
     """)
-
-    # Garante que a coluna 'condominio_id' existe na tabela auditoria para bancos existentes
-    cursor.execute("PRAGMA table_info(auditoria)")
-    colunas_a = [col[1] for col in cursor.fetchall()]
-    if colunas_a and "condominio_id" not in colunas_a:
-        cursor.execute("ALTER TABLE auditoria ADD COLUMN condominio_id TEXT REFERENCES condominio(id)")
     
     conn.commit()
     return conn
