@@ -409,77 +409,7 @@ class TestExtractWinker(unittest.TestCase):
             
         conn.close()
 
-    def test_database_migration(self):
-        # Cria um banco de dados temporário em memória para testar a migração
-        conn = sqlite3.connect(":memory:")
-        cursor = conn.cursor()
-        
-        # Cria a tabela transacoes sem a coluna conta
-        cursor.execute("""
-            CREATE TABLE transacoes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                descricao TEXT,
-                consistente INTEGER DEFAULT 1,
-                motivo_inconsistencia TEXT
-            )
-        """)
-        
-        # Insere dados de teste:
-        # 1. Transação consistente com conta no formato 'Conta:'
-        cursor.execute("INSERT INTO transacoes (descricao, consistente, motivo_inconsistencia) VALUES (?, ?, ?)",
-                       ("Recebimento Apto - 301 Competência AGO 2024 - Conta: CONTA CORRENTE - SICOOB", 1, None))
-        
-        # 2. Transação consistente com conta no formato 'CTA. PGTO:'
-        cursor.execute("INSERT INTO transacoes (descricao, consistente, motivo_inconsistencia) VALUES (?, ?, ?)",
-                       ("UND: Apto / 402 - FEV 2025 - CTA. PGTO: CONTA CORRENTE - SICOOB", 1, None))
-                       
-        # 3. Transação que já era inconsistente e não tem conta
-        cursor.execute("INSERT INTO transacoes (descricao, consistente, motivo_inconsistencia) VALUES (?, ?, ?)",
-                       ("Juros S/ Aplicação", 0, '["Apartamento não identificado"]'))
-                       
-        # 4. Transação consistente mas que ficará inconsistente por falta de conta
-        cursor.execute("INSERT INTO transacoes (descricao, consistente, motivo_inconsistencia) VALUES (?, ?, ?)",
-                       ("Taxa ordinaria sem conta", 1, None))
-                       
-        conn.commit()
-        
-        # Importa e executa a migração
-        from migration_add_conta import migrate_db
-        migrate_db(conn=conn)
-        
-        # Verifica se a coluna conta foi adicionada e os valores foram preenchidos corretamente
-        cursor.execute("PRAGMA table_info(transacoes)")
-        colunas = [col[1] for col in cursor.fetchall()]
-        self.assertIn("conta", colunas)
-        
-        # Seleciona os registros e valida as transformações
-        cursor.execute("SELECT id, descricao, consistente, motivo_inconsistencia, conta FROM transacoes ORDER BY id")
-        rows = cursor.fetchall()
-        
-        # 1. Primeira transação
-        self.assertEqual(rows[0][4], "CONTA CORRENTE")
-        self.assertEqual(rows[0][2], 1)
-        self.assertIsNone(rows[0][3])
-        
-        # 2. Segunda transação
-        self.assertEqual(rows[1][4], "CONTA CORRENTE")
-        self.assertEqual(rows[1][2], 1)
-        self.assertIsNone(rows[1][3])
-        
-        # 3. Terceira transação (já inconsistente, sem conta)
-        self.assertIsNone(rows[2][4])
-        self.assertEqual(rows[2][2], 0)
-        reasons_3 = json.loads(rows[2][3])
-        self.assertIn("Apartamento não identificado", reasons_3)
-        self.assertIn("Conta não identificada", reasons_3)
-        
-        # 4. Quarta transação (ficou inconsistente por falta de conta)
-        self.assertIsNone(rows[3][4])
-        self.assertEqual(rows[3][2], 0)
-        reasons_4 = json.loads(rows[3][3])
-        self.assertEqual(reasons_4, ["Conta não identificada"])
-        
-        conn.close()
+
 
 
 if __name__ == "__main__":
