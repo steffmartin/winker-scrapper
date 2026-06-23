@@ -686,7 +686,7 @@ def init_db(db_path=None):
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS meses (
-            id TEXT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             condominio_id TEXT,
             exibicao TEXT,
             receita_total REAL,
@@ -694,7 +694,6 @@ def init_db(db_path=None):
             consistente INTEGER DEFAULT 1,
             motivo_inconsistencia TEXT,
             revisado_usuario INTEGER DEFAULT 0,
-            PRIMARY KEY (id, condominio_id),
             FOREIGN KEY (condominio_id) REFERENCES condominio(id)
         )
     """)
@@ -702,7 +701,7 @@ def init_db(db_path=None):
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            mes_id TEXT,
+            mes_id INTEGER,
             tipo TEXT, 
             nome TEXT,
             valor REAL,
@@ -769,7 +768,7 @@ def init_db(db_path=None):
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS prestacoes_contas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            mes_id TEXT,
+            mes_id INTEGER,
             caminho_local TEXT,
             nome_original TEXT,
             consistente INTEGER DEFAULT 1,
@@ -839,25 +838,24 @@ def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor
     finally:
         db_conn.close()
 
-def save_prestacao_contas(chave_unica, caminho_local, nome_original, consistente, motivo_inconsistencia):
+def save_prestacao_contas(mes_id, caminho_local, nome_original, consistente, motivo_inconsistencia):
     """
     Salva ou atualiza os dados da prestação de contas de um determinado mês.
+    Recebe o mes_id inteiro (PK de meses) para vincular o registro.
     """
     db_conn = init_db()
     db_cursor = db_conn.cursor()
     try:
         db_cursor.execute("BEGIN")
-        # Remove registro anterior
-        db_cursor.execute("DELETE FROM prestacoes_contas WHERE mes_id = ?", (chave_unica,))
         
         db_cursor.execute("""
             INSERT INTO prestacoes_contas (mes_id, caminho_local, nome_original, consistente, motivo_inconsistencia, revisado_usuario)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (chave_unica, caminho_local, nome_original, consistente, motivo_inconsistencia, consistente))
+        """, (mes_id, caminho_local, nome_original, consistente, motivo_inconsistencia, consistente))
         db_conn.commit()
     except Exception as e:
         db_conn.rollback()
-        logger.error(f"Erro ao salvar prestação de contas no banco para {chave_unica}: {e}")
+        logger.error(f"Erro ao salvar prestação de contas no banco para mes_id={mes_id}: {e}")
     finally:
         db_conn.close()
 
@@ -1145,16 +1143,23 @@ def evaluate_entity_consistency(entity_type, **kwargs):
 def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root, condominio_id=None):
     """
     Insere todos os dados extraídos do mês no banco de dados SQLite, executando as análises
-    de consistência e retornando a lista de anexos temporários que precisam ser movidos.
+    de consistência e retornando uma tupla (mes_id, anexos_para_mover) onde mes_id é o
+    INTEGER gerado para o registro de meses, usado para vincular prestações de contas.
+    chave_unica (YYYYMM) é mantido apenas para nomear diretórios de anexos.
     """
     db_conn = init_db()
     db_cursor = db_conn.cursor()
     anexos_para_mover = []
+    exibicao = f"{nome_mes_abbr}/{ano_item}"
     
     try:
         db_cursor.execute("BEGIN")
-        # Remove registros antigos do mesmo mês para evitar duplicados
-        db_cursor.execute("DELETE FROM meses WHERE id = ?", (chave_unica,))
+        # Remove registros antigos do mesmo mês/condomínio para evitar duplicados.
+        # Usa exibicao + condominio_id como identificador natural, pois id agora é AUTOINCREMENT.
+        db_cursor.execute(
+            "DELETE FROM meses WHERE exibicao = ? AND condominio_id = ?",
+            (exibicao, condominio_id)
+        )
         
         # 1. Análise de consistência do mês
         soma_cat_rec = sum(parse_currency(cat['valor']) for cat in detalhes_mes["receitas"])
@@ -1174,9 +1179,10 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
             logger.debug(f"      - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
             
         db_cursor.execute(
-            "INSERT INTO meses (id, condominio_id, exibicao, receita_total, despesa_total, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (chave_unica, condominio_id, f"{nome_mes_abbr}/{ano_item}", rec_total_mes, des_total_mes, mes_consistente, mes_motivo, mes_consistente)
+            "INSERT INTO meses (condominio_id, exibicao, receita_total, despesa_total, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (condominio_id, exibicao, rec_total_mes, des_total_mes, mes_consistente, mes_motivo, mes_consistente)
         )
+        mes_id = db_cursor.lastrowid
         
         # 2. Processa categorias, subcategorias, transações e anexos
         for t_key in ["receitas", "despesas"]:
@@ -1194,7 +1200,7 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                     
                 db_cursor.execute(
                     "INSERT INTO categorias (mes_id, tipo, nome, valor, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (chave_unica, tipo_flag, cat['nome'], cat_val_num, cat_consistente, cat_motivo, cat_consistente)
+                    (mes_id, tipo_flag, cat['nome'], cat_val_num, cat_consistente, cat_motivo, cat_consistente)
                 )
                 cat_id = db_cursor.lastrowid
                 
@@ -1270,14 +1276,14 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                                 anexo_id = db_cursor.lastrowid
                                 
                                 nome_final = f"{chave_unica}_{cat_id}_{sub_id}_{transacao_id}_{anexo_id}_{nome_orig}"
-                                caminho_relativo = f"anexos/{chave_unica}/{nome_final}"
+                                caminho_relativo = f"anexos/{condominio_id}/{chave_unica}/{nome_final}"
                                 
                                 db_cursor.execute(
                                     "UPDATE anexos SET caminho_local = ? WHERE id = ?",
                                     (caminho_relativo, anexo_id)
                                 )
                                 
-                                mes_dir = os.path.join(project_root, "anexos", chave_unica)
+                                mes_dir = os.path.join(project_root, "anexos", str(condominio_id), chave_unica)
                                 caminho_final = os.path.join(mes_dir, nome_final)
                                 
                                 anexos_para_mover.append({
@@ -1292,7 +1298,7 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
     finally:
         db_conn.close()
         
-    return anexos_para_mover
+    return mes_id, anexos_para_mover
 
 # ==========================================
 # 4. Orquestrador Principal do Script
@@ -1500,14 +1506,14 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                 
                         try:
                             # 3. Salva no banco de dados e move anexos temporários
-                            anexos_para_mover = save_extraction_data_to_db(
+                            mes_id, anexos_para_mover = save_extraction_data_to_db(
                                 chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root,
                                 condominio_id=condo_id_extraido
                             )
                             if anexos_para_mover:
                                 total_downloads_anexos += len(anexos_para_mover)
                             
-                            mes_dir = os.path.join(project_root, "anexos", chave_unica)
+                            mes_dir = os.path.join(project_root, "anexos", str(condo_id_extraido), chave_unica)
                             if os.path.exists(mes_dir):
                                 shutil.rmtree(mes_dir, ignore_errors=True)
                                 
@@ -1522,7 +1528,8 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                         except Exception as err_move:
                                             logger.error(f"  Erro ao mover anexo {t_path} para {f_path}: {err_move}")
                             
-                            processed_months_in_chunk.append((mes_num, ano_item, chave_unica))
+                            # Armazena mes_id (inteiro) junto com chave_unica (usada para dirs de anexos)
+                            processed_months_in_chunk.append((mes_num, ano_item, chave_unica, mes_id))
                             update_current_audit()
                         except Exception as e:
                             # A exceção foi tratada internamente em save_extraction_data_to_db
@@ -1549,7 +1556,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                             7: "JUL", 8: "AGO", 9: "SET", 10: "OUT", 11: "NOV", 12: "DEZ"
                         }
                         
-                        for mes_num, ano_item, chave_unica in processed_months_in_chunk:
+                        for mes_num, ano_item, chave_unica, mes_id in processed_months_in_chunk:
                             mes_ext = f"{meses_portugues[mes_num]} {ano_item}"
                             mes_abbr = meses_abbr_map[mes_num]
                             col_locator = iframe.locator("ion-col").filter(has_text=mes_ext).first
@@ -1587,7 +1594,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                     target_url = res_data.get("return", {}).get("document_link", "")
                                     
                                     if target_url and target_url.startswith("http") and "default/login" not in target_url:
-                                        mes_dir = os.path.join(project_root, "anexos", chave_unica)
+                                        mes_dir = os.path.join(project_root, "anexos", str(condo_id_extraido), chave_unica)
                                         default_pdf_name = f"Prestação de contas {mes_ext}.pdf"
                                         
                                         # Baixa o arquivo direto na pasta final
@@ -1602,11 +1609,11 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                             os.remove(caminho_final)
                                         os.rename(temp_path, caminho_final)
                                         
-                                        caminho_rel = f"anexos/{chave_unica}/{chave_unica}_prestacao_contas.pdf"
+                                        caminho_rel = f"anexos/{condo_id_extraido}/{chave_unica}/{chave_unica}_prestacao_contas.pdf"
                                         
                                         # Avalia consistência da prestação de contas de forma centralizada
                                         pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=True)
-                                        save_prestacao_contas(chave_unica, caminho_rel, nome_orig_pdf, pc_consistente, pc_motivo)
+                                        save_prestacao_contas(mes_id, caminho_rel, nome_orig_pdf, pc_consistente, pc_motivo)
                                         total_downloads_prestacoes += 1
                                     else:
                                         raise Exception("Não foi possível obter URL final de download (redirecionamento falhou/timeout)")
@@ -1614,13 +1621,13 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                     logger.error(f"    Erro ao extrair prestação de contas de {mes_ext}: {err}")
                                     pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=False)
                                     save_prestacao_contas(
-                                        chave_unica, None, None, pc_consistente, pc_motivo
+                                        mes_id, None, None, pc_consistente, pc_motivo
                                     )
                             else:
                                 logger.warning(f"  Prestação de contas de {mes_ext} não encontrada ou indisponível.")
                                 pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=False)
                                 save_prestacao_contas(
-                                    chave_unica, None, None, pc_consistente, pc_motivo
+                                    mes_id, None, None, pc_consistente, pc_motivo
                                 )
                             
                             # Atualiza auditoria após cada prestação de contas processada e comitada
