@@ -1622,7 +1622,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                     
                                     if target_url and target_url.startswith("http") and "default/login" not in target_url:
                                         mes_dir = os.path.join(project_root, "anexos", str(condo_id_extraido), chave_unica)
-                                        default_pdf_name = f"Prestação de contas {mes_ext}.pdf"
+                                        default_pdf_name = f"Prestação de contas {mes_ext}"
                                         
                                         # Baixa o arquivo direto na pasta final
                                         temp_path, nome_orig_pdf = download_http_file(
@@ -1630,14 +1630,17 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
                                             filename_prefix="", default_filename=default_pdf_name
                                         )
                                         
+                                        # Extrai a extensão real
+                                        ext_real = get_extensao(nome_orig_pdf) or "pdf"
+                                        
                                         # Renomeia para o padrão da prestação de contas do mês
-                                        caminho_final = os.path.join(mes_dir, f"{chave_unica}_prestacao_contas.pdf")
+                                        caminho_final = os.path.join(mes_dir, f"{chave_unica}_prestacao_contas.{ext_real}")
                                         if os.path.exists(caminho_final):
                                             os.remove(caminho_final)
                                         os.rename(temp_path, caminho_final)
                                         
-                                        caminho_rel = f"anexos/{condo_id_extraido}/{chave_unica}/{chave_unica}_prestacao_contas.pdf"
-                                        extensao = "pdf"
+                                        caminho_rel = f"anexos/{condo_id_extraido}/{chave_unica}/{chave_unica}_prestacao_contas.{ext_real}"
+                                        extensao = ext_real
                                         
                                         # Avalia consistência da prestação de contas de forma centralizada
                                         pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=True)
