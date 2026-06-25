@@ -30,7 +30,7 @@ export class LayoutService {
     });
 
     layoutState = signal<LayoutState>({
-        staticMenuDesktopInactive: false,
+        staticMenuDesktopInactive: true,
         overlayMenuActive: false,
         configSidebarVisible: false,
         mobileMenuActive: false,
