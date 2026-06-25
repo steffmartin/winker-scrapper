@@ -53,9 +53,9 @@ import { OverlayBadgeModule } from 'primeng/overlaybadge';
                 <div class="layout-topbar-menu-content">
                     <button type="button" class="layout-topbar-action">
                         <p-overlayBadge [value]="inconsistenciesCount.toString()" badgeSize="small" *ngIf="inconsistenciesCount > 0">
-                            <i class="pi pi-bell"></i>
+                            <i class="pi pi-inbox"></i>
                         </p-overlayBadge>
-                        <i class="pi pi-bell" *ngIf="inconsistenciesCount === 0"></i>
+                        <i class="pi pi-inbox" *ngIf="inconsistenciesCount === 0"></i>
                         <span>Notificações</span>
                     </button>
                     <button type="button" class="layout-topbar-action">

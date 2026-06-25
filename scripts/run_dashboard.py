@@ -67,51 +67,45 @@ class Api:
             
             queries = {
                 "meses": """
-                    SELECT m.motivo_inconsistencia, COUNT(*) as qtd 
+                    SELECT COUNT(*) as qtd 
                     FROM meses m 
                     WHERE m.consistente = 0 AND m.revisado_usuario = 0 AND m.condominio_id = ? 
-                    GROUP BY m.motivo_inconsistencia
                 """,
                 "categorias": """
-                    SELECT c.motivo_inconsistencia, COUNT(*) as qtd 
+                    SELECT COUNT(*) as qtd 
                     FROM categorias c
                     INNER JOIN meses m ON c.mes_id = m.id
                     WHERE c.consistente = 0 AND c.revisado_usuario = 0 AND m.condominio_id = ? 
-                    GROUP BY c.motivo_inconsistencia
                 """,
                 "subcategorias": """
-                    SELECT s.motivo_inconsistencia, COUNT(*) as qtd 
+                    SELECT COUNT(*) as qtd 
                     FROM subcategorias s
                     INNER JOIN categorias c ON s.categoria_id = c.id
                     INNER JOIN meses m ON c.mes_id = m.id
                     WHERE s.consistente = 0 AND s.revisado_usuario = 0 AND m.condominio_id = ? 
-                    GROUP BY s.motivo_inconsistencia
                 """,
                 "transacoes": """
-                    SELECT t.motivo_inconsistencia, COUNT(*) as qtd 
+                    SELECT COUNT(*) as qtd 
                     FROM transacoes t
                     INNER JOIN subcategorias s ON t.subcategoria_id = s.id
                     INNER JOIN categorias c ON s.categoria_id = c.id
                     INNER JOIN meses m ON c.mes_id = m.id
                     WHERE t.consistente = 0 AND t.revisado_usuario = 0 AND m.condominio_id = ? 
-                    GROUP BY t.motivo_inconsistencia
                 """,
                 "anexos": """
-                    SELECT a.motivo_inconsistencia, COUNT(*) as qtd 
+                    SELECT COUNT(*) as qtd 
                     FROM anexos a
                     INNER JOIN transacoes t ON a.transacao_id = t.id
                     INNER JOIN subcategorias s ON t.subcategoria_id = s.id
                     INNER JOIN categorias c ON s.categoria_id = c.id
                     INNER JOIN meses m ON c.mes_id = m.id
                     WHERE a.consistente = 0 AND a.revisado_usuario = 0 AND m.condominio_id = ? 
-                    GROUP BY a.motivo_inconsistencia
                 """,
                 "prestacoes_contas": """
-                    SELECT p.motivo_inconsistencia, COUNT(*) as qtd 
+                    SELECT COUNT(*) as qtd 
                     FROM prestacoes_contas p
                     INNER JOIN meses m ON p.mes_id = m.id
                     WHERE p.consistente = 0 AND p.revisado_usuario = 0 AND m.condominio_id = ? 
-                    GROUP BY p.motivo_inconsistencia
                 """
             }
             
@@ -120,16 +114,11 @@ class Api:
             
             for table, query in queries.items():
                 cursor.execute(query, (self.condo_id,))
-                rows = cursor.fetchall()
-                if rows:
-                    table_details = {}
-                    for row in rows:
-                        motivo = row["motivo_inconsistencia"] or "Desconhecido"
-                        qtd = row["qtd"]
-                        table_details[motivo] = qtd
-                        total_count += qtd
-                    if table_details:
-                        details[table] = table_details
+                row = cursor.fetchone()
+                if row and row["qtd"] > 0:
+                    qtd = row["qtd"]
+                    details[table] = qtd
+                    total_count += qtd
             
             conn.close()
             
