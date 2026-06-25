@@ -4,6 +4,7 @@ import sqlite3
 import webview
 import subprocess
 import argparse
+from datetime import datetime
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
@@ -137,6 +138,87 @@ class Api:
                 "data": {
                     "count": total_count,
                     "details": details
+                }
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def get_dashboard_kpis(self):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # KPI Inadimplencia & Admin (from condominio)
+            cursor.execute("SELECT inadimplencia_valor, inadimplencia_unidades, inadimplencia_data_corte, administradora, telefone_administradora FROM condominio WHERE id = ?", (self.condo_id,))
+            condominio_row = cursor.fetchone()
+            
+            inadimplencia = {}
+            administradora = {}
+            if condominio_row:
+                inadimplencia = {
+                    "valor": condominio_row["inadimplencia_valor"] or 0,
+                    "unidades": condominio_row["inadimplencia_unidades"] or 0,
+                    "data_corte": condominio_row["inadimplencia_data_corte"]
+                }
+                administradora = {
+                    "nome": condominio_row["administradora"],
+                    "telefone": condominio_row["telefone_administradora"]
+                }
+            
+            # KPI Gestão (from membros_gestao)
+            cursor.execute("SELECT nome, cargo FROM membros_gestao WHERE condominio_id = ?", (self.condo_id,))
+            membros_gestao = [dict(row) for row in cursor.fetchall()]
+            
+            gestao = {
+                "membros": membros_gestao,
+                "administradora": administradora
+            }
+            
+            # KPI Saldo de Contas (Mock)
+            # TODO Implementar cálculo de saldo após criação da coluna 'saldo inicial' e contas
+            saldos = {
+                "saldo_total": 0,
+                "contas": [
+                    {"nome": "Conta Corrente Padrão", "saldo": 0},
+                    {"nome": "Fundo de Reserva", "saldo": 0}
+                ]
+            }
+            
+            # KPI Resumo do Mês Atual (competência mais atual)
+            current_date_str = datetime.now().strftime("%Y-%m")
+            cursor.execute("SELECT competencia, receita_total, despesa_total FROM meses WHERE condominio_id = ? AND competencia = ?", (self.condo_id, current_date_str))
+            mes_row = cursor.fetchone()
+            
+            if mes_row:
+                rec = mes_row["receita_total"] or 0
+                desp = mes_row["despesa_total"] or 0
+                resumo_mes = {
+                    "competencia": mes_row["competencia"],
+                    "receita_total": rec,
+                    "despesa_total": desp,
+                    "resultado": rec - desp
+                }
+            else:
+                resumo_mes = {
+                    "competencia": current_date_str,
+                    "receita_total": 0,
+                    "despesa_total": 0,
+                    "resultado": 0
+                }
+                
+            conn.close()
+            
+            return {
+                "status": "success",
+                "data": {
+                    "inadimplencia": inadimplencia,
+                    "gestao": gestao,
+                    "saldos": saldos,
+                    "resumo_mes": resumo_mes
                 }
             }
         except Exception as e:

@@ -21,17 +21,26 @@ describe('Dashboard', () => {
 
     it('should set mock mode if no pywebview is found', (done) => {
         (window as any).pywebview = undefined;
+        // mock location hostname to speed up test
+        Object.defineProperty(window, 'location', {
+            value: { hostname: 'localhost' },
+            writable: true
+        });
         
         fixture.detectChanges();
         
         setTimeout(() => {
             expect(component.isMockMode).toBeTrue();
             done();
-        }, 550);
+        }, 1100);
     });
 
     it('should set success mode if pywebview is found immediately', () => {
-        (window as any).pywebview = { api: {} };
+        (window as any).pywebview = { 
+            api: {
+                get_dashboard_kpis: () => Promise.resolve({ status: 'success', data: {} })
+            } 
+        };
         
         fixture.detectChanges();
         

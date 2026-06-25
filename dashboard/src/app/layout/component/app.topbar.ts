@@ -80,18 +80,27 @@ export class AppTopbar implements OnInit {
     }
 
     loadCondoData() {
-        if ((window as any).pywebview) {
+        if ((window as any).pywebview && (window as any).pywebview.api) {
             this.fetchFromApi();
         } else {
             window.addEventListener('pywebviewready', () => {
                 this.fetchFromApi();
             });
 
-            // Fallback caso não esteja no pywebview (ex: no navegador local)
             setTimeout(() => {
-                if (!(window as any).pywebview) {
-                    this.condoName = 'Condomínio';
-                    this.cdr.detectChanges();
+                if (!this.condoName) {
+                    if ((window as any).pywebview && (window as any).pywebview.api) {
+                        this.fetchFromApi();
+                    } else if (window.location.hostname === 'localhost') {
+                        this.condoName = 'Condomínio (Mock)';
+                        this.cdr.detectChanges();
+                    } else {
+                        setTimeout(() => {
+                            if (!this.condoName) {
+                                console.error('PyWebView falhou na Topbar. Mantendo skeleton de título.');
+                            }
+                        }, 5000);
+                    }
                 }
             }, 1000);
         }
@@ -101,12 +110,12 @@ export class AppTopbar implements OnInit {
         const pywebview = (window as any).pywebview;
         if (pywebview && pywebview.api) {
             pywebview.api.get_condominio().then((res: any) => {
-                if (res.status === 'success' && res.data) {
-                    this.condoName = res.data.nome || 'Condomínio';
-                } else {
-                    this.condoName = 'Condomínio';
+                if (res.status === 'success' && res.data && res.data.nome) {
+                    this.condoName = res.data.nome;
+                    this.cdr.detectChanges();
                 }
-                this.cdr.detectChanges();
+            }).catch(() => {
+                console.error('Falha ao buscar condomínio na Topbar.');
             });
             pywebview.api.get_inconsistencies_count().then((res: any) => {
                 if (res.status === 'success' && res.data) {

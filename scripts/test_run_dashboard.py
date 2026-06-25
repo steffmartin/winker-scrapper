@@ -21,8 +21,8 @@ class TestRunDashboard(unittest.TestCase):
         
         # Create tables needed for get_inconsistencies_count
         self.cursor.executescript('''
-            CREATE TABLE condominio (id TEXT PRIMARY KEY, nome TEXT);
-            CREATE TABLE meses (id INTEGER PRIMARY KEY, condominio_id TEXT, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
+            CREATE TABLE condominio (id TEXT PRIMARY KEY, nome TEXT, inadimplencia_valor REAL, inadimplencia_unidades INTEGER, inadimplencia_data_corte TEXT, administradora TEXT, telefone_administradora TEXT);
+            CREATE TABLE meses (id INTEGER PRIMARY KEY, condominio_id TEXT, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER, competencia TEXT, receita_total REAL, despesa_total REAL);
             CREATE TABLE categorias (id INTEGER PRIMARY KEY, mes_id INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
             CREATE TABLE subcategorias (id INTEGER PRIMARY KEY, categoria_id INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
             CREATE TABLE transacoes (id INTEGER PRIMARY KEY, subcategoria_id INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
@@ -32,9 +32,9 @@ class TestRunDashboard(unittest.TestCase):
         
         # Populate data
         self.condo_id = "condo_123"
-        self.cursor.execute("INSERT INTO condominio (id, nome) VALUES (?, ?)", (self.condo_id, "Condominio Teste"))
-        self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, ?, 0, 'Erro Mês', 0)", (self.condo_id,))
-        self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (2, ?, 1, NULL, 0)", (self.condo_id,))
+        self.cursor.execute("INSERT INTO condominio (id, nome, inadimplencia_valor, inadimplencia_unidades, inadimplencia_data_corte, administradora, telefone_administradora) VALUES (?, ?, 100.50, 2, '2023-01-01', 'Admin Teste', '12345678')", (self.condo_id, "Condominio Teste"))
+        self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario, competencia, receita_total, despesa_total) VALUES (1, ?, 0, 'Erro Mês', 0, '01/2023', 500.0, 300.0)", (self.condo_id,))
+        self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario, competencia, receita_total, despesa_total) VALUES (2, ?, 1, NULL, 0, '02/2023', 600.0, 400.0)", (self.condo_id,))
         self.cursor.execute("INSERT INTO categorias (id, mes_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Categoria', 0)")
         self.cursor.execute("INSERT INTO subcategorias (id, categoria_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Subcategoria', 0)")
         self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Transação', 0)")
@@ -82,6 +82,25 @@ class TestRunDashboard(unittest.TestCase):
         self.assertIn("transacoes", details)
         self.assertIn("anexos", details)
         self.assertIn("prestacoes_contas", details)
+
+    def test_get_dashboard_kpis(self):
+        # Insert test data into membros_gestao
+        self.cursor.execute("CREATE TABLE IF NOT EXISTS membros_gestao (id INTEGER PRIMARY KEY, condominio_id TEXT, nome TEXT, cargo TEXT);")
+        self.cursor.execute("INSERT INTO membros_gestao (id, condominio_id, nome, cargo) VALUES (1, ?, 'João', 'Síndico')", (self.condo_id,))
+        self.conn.commit()
+        
+        result = self.api.get_dashboard_kpis()
+        self.assertEqual(result["status"], "success")
+        
+        data = result["data"]
+        self.assertIn("inadimplencia", data)
+        self.assertIn("gestao", data)
+        self.assertIn("saldos", data)
+        self.assertIn("resumo_mes", data)
+        
+        self.assertEqual(data["gestao"]["membros"][0]["nome"], "João")
+        self.assertEqual(data["saldos"]["saldo_total"], 0)
+        self.assertEqual(data["resumo_mes"]["resultado"], 200.0) # rec 600 - desp 400
 
 if __name__ == '__main__':
     unittest.main()
