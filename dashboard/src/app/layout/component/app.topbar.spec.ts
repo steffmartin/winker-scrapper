@@ -26,10 +26,11 @@ describe('AppTopbar', () => {
         expect(component).toBeTruthy();
     });
 
-    it('should load condo data from pywebview when available', async () => {
+    it('should load condo data and inconsistencies from pywebview when available', async () => {
         (window as any).pywebview = {
             api: {
-                get_condominio: () => Promise.resolve({ status: 'success', data: { nome: 'Condominio Pywebview' } })
+                get_condominio: () => Promise.resolve({ status: 'success', data: { nome: 'Condominio Pywebview' } }),
+                get_inconsistencies_count: () => Promise.resolve({ status: 'success', data: { count: 5 } })
             }
         };
 
@@ -39,5 +40,6 @@ describe('AppTopbar', () => {
         await new Promise(resolve => setTimeout(resolve, 0));
 
         expect(component.condoName).toBe('Condominio Pywebview');
+        expect(component.inconsistenciesCount).toBe(5);
     });
 });

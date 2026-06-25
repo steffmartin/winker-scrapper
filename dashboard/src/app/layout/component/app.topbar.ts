@@ -6,11 +6,12 @@ import { StyleClassModule } from 'primeng/styleclass';
 import { AppConfigurator } from './app.configurator';
 import { LayoutService } from '@/app/layout/service/layout.service';
 import { SkeletonModule } from 'primeng/skeleton';
+import { OverlayBadgeModule } from 'primeng/overlaybadge';
 
 @Component({
     selector: 'app-topbar',
     standalone: true,
-    imports: [RouterModule, CommonModule, StyleClassModule, AppConfigurator, SkeletonModule],
+    imports: [RouterModule, CommonModule, StyleClassModule, AppConfigurator, SkeletonModule, OverlayBadgeModule],
     template: ` <div class="layout-topbar">
         <div class="layout-topbar-logo-container">
             <button class="layout-menu-button layout-topbar-action" (click)="layoutService.onMenuToggle()">
@@ -51,6 +52,13 @@ import { SkeletonModule } from 'primeng/skeleton';
             <div class="layout-topbar-menu hidden lg:block">
                 <div class="layout-topbar-menu-content">
                     <button type="button" class="layout-topbar-action">
+                        <p-overlayBadge [value]="inconsistenciesCount.toString()" badgeSize="small" *ngIf="inconsistenciesCount > 0">
+                            <i class="pi pi-bell"></i>
+                        </p-overlayBadge>
+                        <i class="pi pi-bell" *ngIf="inconsistenciesCount === 0"></i>
+                        <span>Notificações</span>
+                    </button>
+                    <button type="button" class="layout-topbar-action">
                         <i class="pi pi-user"></i>
                         <span>Profile</span>
                     </button>
@@ -62,6 +70,7 @@ import { SkeletonModule } from 'primeng/skeleton';
 export class AppTopbar implements OnInit {
     items!: MenuItem[];
     condoName: string | null = null;
+    inconsistenciesCount: number = 0;
 
     layoutService = inject(LayoutService);
     cdr = inject(ChangeDetectorRef);
@@ -96,6 +105,14 @@ export class AppTopbar implements OnInit {
                     this.condoName = res.data.nome || 'Condomínio';
                 } else {
                     this.condoName = 'Condomínio';
+                }
+                this.cdr.detectChanges();
+            });
+            pywebview.api.get_inconsistencies_count().then((res: any) => {
+                if (res.status === 'success' && res.data) {
+                    this.inconsistenciesCount = res.data.count || 0;
+                } else {
+                    this.inconsistenciesCount = 0;
                 }
                 this.cdr.detectChanges();
             });
