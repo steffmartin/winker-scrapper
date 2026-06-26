@@ -12,7 +12,7 @@ import { OverlayBadgeModule } from 'primeng/overlaybadge';
     selector: 'app-topbar',
     standalone: true,
     imports: [RouterModule, CommonModule, StyleClassModule, AppConfigurator, SkeletonModule, OverlayBadgeModule],
-    template: ` <div class="layout-topbar">
+    template: ` <div class="layout-topbar" [ngClass]="layoutService.isDarkTheme() ? '!bg-gradient-to-r !from-slate-900/50 !to-indigo-900/50 !border-b !border-slate-800' : '!bg-gradient-to-r !from-indigo-50/50 !to-blue-50/50 !border-b !border-indigo-100/50'">
         <div class="layout-topbar-logo-container">
             <button class="layout-menu-button layout-topbar-action" (click)="layoutService.onMenuToggle()">
                 <i class="pi pi-bars"></i>

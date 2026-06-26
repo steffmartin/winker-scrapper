@@ -4,12 +4,14 @@ import { filter, Subject, takeUntil } from 'rxjs';
 import { AppMenu } from './app.menu';
 import { LayoutService } from '@/app/layout/service/layout.service';
 
+import { CommonModule } from '@angular/common';
+
 @Component({
     selector: 'app-sidebar',
     standalone: true,
-    imports: [AppMenu, RouterModule],
+    imports: [AppMenu, RouterModule, CommonModule],
     template: `
-        <div class="layout-sidebar">
+        <div class="layout-sidebar" [ngClass]="layoutService.isDarkTheme() ? '!bg-gradient-to-b !from-slate-900/50 !to-indigo-900/50 !border-r !border-slate-800' : '!bg-gradient-to-b !from-indigo-50/50 !to-blue-50/50 !border-r !border-indigo-100/50'">
             <app-menu></app-menu>
         </div>
     `

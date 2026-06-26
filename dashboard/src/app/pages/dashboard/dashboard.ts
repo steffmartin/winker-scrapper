@@ -1,10 +1,12 @@
-import { Component, OnInit, ChangeDetectorRef, LOCALE_ID } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, LOCALE_ID, inject } from '@angular/core';
 import { CommonModule, CurrencyPipe, DatePipe, registerLocaleData } from '@angular/common';
 import { SkeletonModule } from 'primeng/skeleton';
 import { ChipModule } from 'primeng/chip';
 import localePt from '@angular/common/locales/pt';
 
 registerLocaleData(localePt);
+
+import { LayoutService } from '@/app/layout/service/layout.service';
 
 @Component({
     selector: 'app-dashboard',
@@ -33,7 +35,13 @@ export class Dashboard implements OnInit {
     sindicoName = 'Sem Síndico';
     conselheirosList: string[] = [];
 
+    layoutService = inject(LayoutService);
+
     constructor(private cdr: ChangeDetectorRef) {}
+
+    get isDarkTheme() {
+        return this.layoutService.isDarkTheme();
+    }
 
     ngOnInit() {
         this.detectEnvironmentAndLoad();
