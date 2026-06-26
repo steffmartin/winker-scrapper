@@ -841,11 +841,18 @@ def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor
     db_cursor = db_conn.cursor()
     try:
         db_cursor.execute("BEGIN")
-        # Garante registro único do condomínio no banco limpando dados anteriores
-        db_cursor.execute("DELETE FROM condominio")
+        # Faz um upsert para não apagar todo o banco (pois tem ON DELETE CASCADE)
         db_cursor.execute("""
             INSERT INTO condominio (id, nome, inadimplencia_data_corte, inadimplencia_unidades, inadimplencia_valor, administradora, telefone_administradora, ultima_atualizacao)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                nome=excluded.nome,
+                inadimplencia_data_corte=excluded.inadimplencia_data_corte,
+                inadimplencia_unidades=excluded.inadimplencia_unidades,
+                inadimplencia_valor=excluded.inadimplencia_valor,
+                administradora=excluded.administradora,
+                telefone_administradora=excluded.telefone_administradora,
+                ultima_atualizacao=excluded.ultima_atualizacao
         """, (condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone, datetime.now().isoformat()))
         
         # Limpa e reinsere membros da gestão vinculados ao condomínio

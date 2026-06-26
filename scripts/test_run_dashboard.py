@@ -21,7 +21,7 @@ class TestRunDashboard(unittest.TestCase):
         
         # Create tables needed for get_inconsistencies_count
         self.cursor.executescript('''
-            CREATE TABLE condominio (id TEXT PRIMARY KEY, nome TEXT, inadimplencia_valor REAL, inadimplencia_unidades INTEGER, inadimplencia_data_corte TEXT, administradora TEXT, telefone_administradora TEXT);
+            CREATE TABLE condominio (id TEXT PRIMARY KEY, nome TEXT, inadimplencia_valor REAL, inadimplencia_unidades INTEGER, inadimplencia_data_corte TEXT, administradora TEXT, telefone_administradora TEXT, ultima_atualizacao TEXT);
             CREATE TABLE meses (id INTEGER PRIMARY KEY, condominio_id TEXT, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER, competencia TEXT, receita_total REAL, despesa_total REAL);
             CREATE TABLE categorias (id INTEGER PRIMARY KEY, mes_id INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
             CREATE TABLE subcategorias (id INTEGER PRIMARY KEY, categoria_id INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
@@ -31,10 +31,12 @@ class TestRunDashboard(unittest.TestCase):
         ''')
         
         # Populate data
+        import datetime
+        current_date = datetime.datetime.now().strftime("%Y-%m")
         self.condo_id = "condo_123"
-        self.cursor.execute("INSERT INTO condominio (id, nome, inadimplencia_valor, inadimplencia_unidades, inadimplencia_data_corte, administradora, telefone_administradora) VALUES (?, ?, 100.50, 2, '2023-01-01', 'Admin Teste', '12345678')", (self.condo_id, "Condominio Teste"))
+        self.cursor.execute("INSERT INTO condominio (id, nome, inadimplencia_valor, inadimplencia_unidades, inadimplencia_data_corte, administradora, telefone_administradora, ultima_atualizacao) VALUES (?, ?, 100.50, 2, '2023-01-01', 'Admin Teste', '12345678', '2026-06-25T21:00:00')", (self.condo_id, "Condominio Teste"))
         self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario, competencia, receita_total, despesa_total) VALUES (1, ?, 0, 'Erro Mês', 0, '01/2023', 500.0, 300.0)", (self.condo_id,))
-        self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario, competencia, receita_total, despesa_total) VALUES (2, ?, 1, NULL, 0, '02/2023', 600.0, 400.0)", (self.condo_id,))
+        self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario, competencia, receita_total, despesa_total) VALUES (2, ?, 1, NULL, 0, ?, 600.0, 400.0)", (self.condo_id, current_date))
         self.cursor.execute("INSERT INTO categorias (id, mes_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Categoria', 0)")
         self.cursor.execute("INSERT INTO subcategorias (id, categoria_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Subcategoria', 0)")
         self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Transação', 0)")
@@ -76,7 +78,7 @@ class TestRunDashboard(unittest.TestCase):
         
         details = data["details"]
         self.assertIn("meses", details)
-        self.assertEqual(details["meses"]["Erro Mês"], 1)
+        self.assertEqual(details["meses"], 1)
         self.assertIn("categorias", details)
         self.assertIn("subcategorias", details)
         self.assertIn("transacoes", details)

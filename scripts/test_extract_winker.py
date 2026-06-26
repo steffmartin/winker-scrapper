@@ -293,7 +293,7 @@ class TestExtractWinker(unittest.TestCase):
             
             cursor.execute("SELECT * FROM condominio")
             condo_row = cursor.fetchone()
-            self.assertEqual(condo_row, ("12345", "Residencial Teste", "10/06/2026", 5, 2500.00, "Cobrança S/A", "3133334444"))
+            self.assertEqual(condo_row[:7], ("12345", "Residencial Teste", "10/06/2026", 5, 2500.00, "Cobrança S/A", "3133334444"))
             
             cursor.execute("SELECT condominio_id, nome, cargo FROM membros_gestao")
             membro_rows = cursor.fetchall()
