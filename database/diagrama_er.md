@@ -16,6 +16,7 @@ erDiagram
         REAL inadimplencia_valor
         TEXT administradora
         TEXT telefone_administradora
+        TEXT ultima_atualizacao
     }
 
     meses {
