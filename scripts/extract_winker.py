@@ -691,7 +691,8 @@ def init_db(db_path=None):
             inadimplencia_unidades INTEGER,
             inadimplencia_valor REAL,
             administradora TEXT,
-            telefone_administradora TEXT
+            telefone_administradora TEXT,
+            ultima_atualizacao TEXT
         )
     """)
     
@@ -843,9 +844,9 @@ def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor
         # Garante registro único do condomínio no banco limpando dados anteriores
         db_cursor.execute("DELETE FROM condominio")
         db_cursor.execute("""
-            INSERT INTO condominio (id, nome, inadimplencia_data_corte, inadimplencia_unidades, inadimplencia_valor, administradora, telefone_administradora)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone))
+            INSERT INTO condominio (id, nome, inadimplencia_data_corte, inadimplencia_unidades, inadimplencia_valor, administradora, telefone_administradora, ultima_atualizacao)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone, datetime.now().isoformat()))
         
         # Limpa e reinsere membros da gestão vinculados ao condomínio
         db_cursor.execute("DELETE FROM membros_gestao")

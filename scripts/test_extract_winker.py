@@ -253,7 +253,8 @@ class TestExtractWinker(unittest.TestCase):
                 inadimplencia_unidades INTEGER,
                 inadimplencia_valor REAL,
                 administradora TEXT,
-                telefone_administradora TEXT
+                telefone_administradora TEXT,
+                ultima_atualizacao TEXT
             )
         """)
         cursor.execute("""

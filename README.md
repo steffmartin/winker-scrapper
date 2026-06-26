@@ -8,6 +8,15 @@ v21 + PrimeNG v21 + Tailwind CSS v4).
 
 ---
 
+## 📊 Recursos Principais do Dashboard
+
+- **Indicadores de Gestão (KPIs):** Visualização rápida da Gestão atual, Resumo do Mês (receitas vs despesas), Inadimplência, Saldo de Contas e Estatísticas do Sistema.
+- **Tema Dinâmico (Light/Dark Mode):** O layout é totalmente responsivo e se adapta suavemente a temas claros e escuros usando classes dinâmicas e gradientes do Tailwind CSS.
+- **Monitoramento de Inconsistências:** O painel superior (Topbar) exibe um badge de notificação interativo sempre que existirem transações ou meses com divergência matemática pendentes de revisão.
+- **Design Premium:** Uso de Skeletons elegantes para carregamento, tipografia moderna e tolerância a dados faltantes (Zero-value fallbacks).
+
+---
+
 ## 📋 Pré-requisitos
 
 Para rodar e compilar este projeto em sua máquina local, você precisará de:

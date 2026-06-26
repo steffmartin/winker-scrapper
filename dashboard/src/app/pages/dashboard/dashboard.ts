@@ -29,7 +29,8 @@ export class Dashboard implements OnInit {
         inadimplencia: null,
         gestao: null,
         saldos: null,
-        resumo_mes: null
+        resumo_mes: null,
+        estatisticas: null
     };
 
     sindicoName = 'Sem Síndico';

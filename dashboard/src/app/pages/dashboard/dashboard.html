@@ -1,7 +1,7 @@
-<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 p-6">
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6 p-6">
     <!-- Skeletons para Loading Elegante -->
     <ng-container *ngIf="loadingKpis">
-        <div class="card mb-0 shadow-sm rounded-lg h-full flex flex-col justify-between" *ngFor="let i of [1,2,3,4]">
+        <div class="card mb-0 shadow-sm rounded-lg h-full flex flex-col justify-between" *ngFor="let i of [1,2,3,4,5]">
             <div class="flex justify-between items-start">
                 <p-skeleton width="8rem" height="1.5rem"></p-skeleton>
                 <p-skeleton shape="square" size="3.5rem" styleClass="rounded-lg"></p-skeleton>
@@ -86,6 +86,25 @@
             <div class="text-base mt-2" [ngClass]="isDarkTheme ? 'text-cyan-200/70' : 'text-cyan-900/70'">
                 <span class="font-bold" [ngClass]="isDarkTheme ? 'text-cyan-300' : 'text-cyan-600'">{{ kpis.saldos?.contas?.length || 0 }} </span>
                 contas
+            </div>
+        </div>
+
+        <!-- Estatísticas do Sistema -->
+        <div class="mb-0 shadow-sm rounded-xl h-full flex flex-col justify-between p-6 transform transition duration-300 hover:-translate-y-1 hover:shadow-lg border"
+             [ngClass]="isDarkTheme ? 'bg-gradient-to-br from-purple-900/40 to-fuchsia-900/40 border-purple-800' : 'bg-gradient-to-br from-purple-50 to-fuchsia-50 border-purple-100'">
+            <div class="flex justify-between items-center">
+                <span class="block font-medium text-xl" [ngClass]="isDarkTheme ? 'text-purple-100/70' : 'text-purple-900/70'">Atualizado em</span>
+                <div class="flex items-center justify-center rounded-xl w-14 h-14" [ngClass]="isDarkTheme ? 'bg-purple-500/20' : 'bg-purple-100'">
+                    <i class="pi pi-database" [ngClass]="isDarkTheme ? 'text-purple-400' : 'text-purple-500'" style="font-size: 2rem"></i>
+                </div>
+            </div>
+            <div class="font-bold text-xl my-2 leading-tight" [ngClass]="isDarkTheme ? 'text-purple-50' : 'text-purple-950'">
+                {{ kpis.estatisticas?.ultima_atualizacao ? (kpis.estatisticas?.ultima_atualizacao | date:"dd/MM/yyyy 'às' HH:mm") : 'N/A' }}
+            </div>
+            <div class="flex flex-wrap gap-2 mt-2">
+                <p-chip [label]="(kpis.estatisticas?.meses_lidos || 0) + ' meses'" [styleClass]="isDarkTheme ? '!bg-purple-500/20 !text-purple-200 text-xs font-medium' : '!bg-purple-200 !text-purple-900 text-xs font-medium'"></p-chip>
+                <p-chip [label]="(kpis.estatisticas?.transacoes_total || 0) + ' transações'" [styleClass]="isDarkTheme ? '!bg-purple-500/20 !text-purple-200 text-xs font-medium' : '!bg-purple-200 !text-purple-900 text-xs font-medium'"></p-chip>
+                <p-chip [label]="(kpis.estatisticas?.anexos_baixados || 0) + ' comprovantes'" [styleClass]="isDarkTheme ? '!bg-purple-500/20 !text-purple-200 text-xs font-medium' : '!bg-purple-200 !text-purple-900 text-xs font-medium'"></p-chip>
             </div>
         </div>
     </ng-container>

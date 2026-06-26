@@ -142,11 +142,18 @@ class Api:
             cursor = conn.cursor()
             
             # KPI Inadimplencia & Admin (from condominio)
-            cursor.execute("SELECT inadimplencia_valor, inadimplencia_unidades, inadimplencia_data_corte, administradora, telefone_administradora FROM condominio WHERE id = ?", (self.condo_id,))
+            cursor.execute("SELECT inadimplencia_valor, inadimplencia_unidades, inadimplencia_data_corte, administradora, telefone_administradora, ultima_atualizacao FROM condominio WHERE id = ?", (self.condo_id,))
             condominio_row = cursor.fetchone()
             
             inadimplencia = {}
             administradora = {}
+            estatisticas = {
+                "ultima_atualizacao": None,
+                "transacoes_total": 0,
+                "meses_lidos": 0,
+                "anexos_baixados": 0
+            }
+            
             if condominio_row:
                 inadimplencia = {
                     "valor": condominio_row["inadimplencia_valor"] or 0,
@@ -157,6 +164,50 @@ class Api:
                     "nome": condominio_row["administradora"],
                     "telefone": condominio_row["telefone_administradora"]
                 }
+                estatisticas["ultima_atualizacao"] = condominio_row["ultima_atualizacao"]
+            
+            # Estatísticas - total_transacoes
+            cursor.execute("""
+                SELECT COUNT(t.id) as count
+                FROM transacoes t
+                JOIN subcategorias s ON t.subcategoria_id = s.id
+                JOIN categorias c ON s.categoria_id = c.id
+                JOIN meses m ON c.mes_id = m.id
+                WHERE m.condominio_id = ?
+            """, (self.condo_id,))
+            transacoes_row = cursor.fetchone()
+            if transacoes_row:
+                estatisticas["transacoes_total"] = transacoes_row["count"]
+                
+            # Estatísticas - meses_lidos
+            cursor.execute("SELECT COUNT(id) as count FROM meses WHERE condominio_id = ?", (self.condo_id,))
+            meses_row = cursor.fetchone()
+            if meses_row:
+                estatisticas["meses_lidos"] = meses_row["count"]
+                
+            # Estatísticas - total_anexos
+            cursor.execute("""
+                SELECT COUNT(a.id) as count
+                FROM anexos a
+                JOIN transacoes t ON a.transacao_id = t.id
+                JOIN subcategorias s ON t.subcategoria_id = s.id
+                JOIN categorias c ON s.categoria_id = c.id
+                JOIN meses m ON c.mes_id = m.id
+                WHERE m.condominio_id = ?
+            """, (self.condo_id,))
+            anexos_row = cursor.fetchone()
+            anexos_count = anexos_row["count"] if anexos_row else 0
+            
+            cursor.execute("""
+                SELECT COUNT(p.id) as count
+                FROM prestacoes_contas p
+                JOIN meses m ON p.mes_id = m.id
+                WHERE m.condominio_id = ?
+            """, (self.condo_id,))
+            prestacoes_row = cursor.fetchone()
+            prestacoes_count = prestacoes_row["count"] if prestacoes_row else 0
+            
+            estatisticas["anexos_baixados"] = anexos_count + prestacoes_count
             
             # KPI Gestão (from membros_gestao)
             cursor.execute("SELECT nome, cargo FROM membros_gestao WHERE condominio_id = ?", (self.condo_id,))
@@ -207,7 +258,8 @@ class Api:
                     "inadimplencia": inadimplencia,
                     "gestao": gestao,
                     "saldos": saldos,
-                    "resumo_mes": resumo_mes
+                    "resumo_mes": resumo_mes,
+                    "estatisticas": estatisticas
                 }
             }
         except Exception as e:
