@@ -21,11 +21,7 @@ describe('Dashboard', () => {
 
     it('should set mock mode if no pywebview is found', (done) => {
         (window as any).pywebview = undefined;
-        // mock location hostname to speed up test
-        Object.defineProperty(window, 'location', {
-            value: { hostname: 'localhost' },
-            writable: true
-        });
+
         
         fixture.detectChanges();
         
