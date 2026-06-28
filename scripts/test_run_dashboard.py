@@ -20,13 +20,25 @@ class TestRunDashboard(unittest.TestCase):
         self.cursor = self.conn.cursor()
         
         # Create tables needed for get_inconsistencies_count
-        self.cursor.executescript('''
+        self.cursor.execute('''
             CREATE TABLE condominio (id TEXT PRIMARY KEY, nome TEXT, inadimplencia_valor REAL, inadimplencia_unidades INTEGER, inadimplencia_data_corte TEXT, administradora TEXT, telefone_administradora TEXT, ultima_atualizacao TEXT);
-            CREATE TABLE meses (id INTEGER PRIMARY KEY, condominio_id TEXT, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER, competencia TEXT, receita_total REAL, despesa_total REAL);
-            CREATE TABLE categorias (id INTEGER PRIMARY KEY, mes_id INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
-            CREATE TABLE subcategorias (id INTEGER PRIMARY KEY, categoria_id INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
-            CREATE TABLE transacoes (id INTEGER PRIMARY KEY, subcategoria_id INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
+        ''')
+        self.cursor.execute('''
+            CREATE TABLE meses (id INTEGER PRIMARY KEY, condominio_id TEXT, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER, competencia TEXT, exibicao TEXT, receita_total REAL, despesa_total REAL);
+        ''')
+        self.cursor.execute('''
+            CREATE TABLE categorias (id INTEGER PRIMARY KEY, mes_id INTEGER, tipo TEXT, nome TEXT, valor REAL, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
+        ''')
+        self.cursor.execute('''
+            CREATE TABLE subcategorias (id INTEGER PRIMARY KEY, categoria_id INTEGER, tipo TEXT, nome TEXT, valor REAL, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
+        ''')
+        self.cursor.execute('''
+            CREATE TABLE transacoes (id INTEGER PRIMARY KEY, subcategoria_id INTEGER, tipo TEXT, data TEXT, descricao TEXT, valor REAL, apartamento TEXT, competencia TEXT, fornecedor TEXT, conta TEXT, anexos INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
+        ''')
+        self.cursor.execute('''
             CREATE TABLE anexos (id INTEGER PRIMARY KEY, transacao_id INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
+        ''')
+        self.cursor.execute('''
             CREATE TABLE prestacoes_contas (id INTEGER PRIMARY KEY, mes_id INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
         ''')
         
@@ -35,11 +47,11 @@ class TestRunDashboard(unittest.TestCase):
         current_date = datetime.datetime.now().strftime("%Y-%m")
         self.condo_id = "condo_123"
         self.cursor.execute("INSERT INTO condominio (id, nome, inadimplencia_valor, inadimplencia_unidades, inadimplencia_data_corte, administradora, telefone_administradora, ultima_atualizacao) VALUES (?, ?, 100.50, 2, '2023-01-01', 'Admin Teste', '12345678', '2026-06-25T21:00:00')", (self.condo_id, "Condominio Teste"))
-        self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario, competencia, receita_total, despesa_total) VALUES (1, ?, 0, 'Erro Mês', 0, '01/2023', 500.0, 300.0)", (self.condo_id,))
-        self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario, competencia, receita_total, despesa_total) VALUES (2, ?, 1, NULL, 0, ?, 600.0, 400.0)", (self.condo_id, current_date))
-        self.cursor.execute("INSERT INTO categorias (id, mes_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Categoria', 0)")
-        self.cursor.execute("INSERT INTO subcategorias (id, categoria_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Subcategoria', 0)")
-        self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Transação', 0)")
+        self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario, competencia, exibicao, receita_total, despesa_total) VALUES (1, ?, 0, 'Erro Mês', 0, '01/2023', 'JAN/2023', 500.0, 300.0)", (self.condo_id,))
+        self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario, competencia, exibicao, receita_total, despesa_total) VALUES (2, ?, 1, NULL, 0, ?, ?, 600.0, 400.0)", (self.condo_id, current_date, 'MÊS ATUAL'))
+        self.cursor.execute("INSERT INTO categorias (id, mes_id, tipo, nome, valor, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 'Despesas', 'Cat 1', 100, 0, 'Erro Categoria', 0)")
+        self.cursor.execute("INSERT INTO subcategorias (id, categoria_id, tipo, nome, valor, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 'Despesas', 'Sub 1', 100, 0, 'Erro Subcategoria', 0)")
+        self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 'Despesas', '2023-01-10', 'Transação Teste', 100, '101', '01/2023', 'Fornecedor A', 1, 0, 'Erro Transação', 0)")
         self.cursor.execute("INSERT INTO anexos (id, transacao_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Anexo', 0)")
         self.cursor.execute("INSERT INTO prestacoes_contas (id, mes_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Prestação', 0)")
         self.conn.commit()
@@ -103,6 +115,36 @@ class TestRunDashboard(unittest.TestCase):
         self.assertEqual(data["gestao"]["membros"][0]["nome"], "João")
         self.assertEqual(data["saldos"]["saldo_total"], 0)
         self.assertEqual(data["resumo_mes"]["resultado"], 200.0) # rec 600 - desp 400
+
+    def test_get_transacoes(self):
+        result = self.api.get_transacoes()
+        if result["status"] != "success":
+            print("ERROR:", result)
+        self.assertEqual(result["status"], "success")
+        tree = result["data"]
+        
+        self.assertTrue(len(tree) > 0)
+        
+        mes_node = tree[0]
+        self.assertEqual(mes_node["data"]["tipo_node"], "mes")
+        self.assertEqual(mes_node["data"]["descricao"], "JAN/2023")
+        
+        tipo_node = mes_node["children"][0]
+        self.assertEqual(tipo_node["data"]["tipo_node"], "tipo")
+        self.assertEqual(tipo_node["data"]["descricao"], "Despesas")
+        
+        cat_node = tipo_node["children"][0]
+        self.assertEqual(cat_node["data"]["tipo_node"], "categoria")
+        self.assertEqual(cat_node["data"]["descricao"], "Cat 1")
+        
+        sub_node = cat_node["children"][0]
+        self.assertEqual(sub_node["data"]["tipo_node"], "subcategoria")
+        self.assertEqual(sub_node["data"]["descricao"], "Sub 1")
+        
+        trans_node = sub_node["children"][0]
+        self.assertEqual(trans_node["data"]["tipo_node"], "transacao")
+        self.assertEqual(trans_node["data"]["descricao"], "Transação Teste")
+        self.assertEqual(trans_node["data"]["valor"], 100)
 
 if __name__ == '__main__':
     unittest.main()

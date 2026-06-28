@@ -105,3 +105,110 @@
         </div>
     </ng-container>
 </div>
+
+<div class="px-6 pb-6">
+    <div class="card shadow-sm border rounded-xl bg-white dark:bg-slate-900">
+        <p-toolbar styleClass="border-none bg-transparent mb-4 flex-wrap gap-4">
+            <ng-template pTemplate="left">
+                <span class="text-xl font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">Detalhamento Mensal</span>
+            </ng-template>
+            <ng-template pTemplate="right">
+                <div class="flex flex-wrap lg:flex-nowrap items-center w-full lg:w-auto max-w-full justify-end gap-3" style="width: 100%; margin-left: auto;">
+                    <p-iconField iconPosition="left" class="flex-1 w-full lg:w-auto min-w-[200px]">
+                        <p-inputIcon>
+                            <i class="pi pi-search"></i>
+                        </p-inputIcon>
+                        <input
+                            pInputText
+                            type="text"
+                            class="w-full"
+                            [(ngModel)]="globalFilterValue"
+                            (input)="onGlobalFilter(tt, $event)"
+                            placeholder="Buscar..." />
+                    </p-iconField>
+
+                    <div class="flex gap-2 shrink-0">
+                        <p-button icon="pi pi-angle-double-down" (click)="expandAll()" pTooltip="Expandir" tooltipPosition="bottom" variant="outlined" severity="secondary" size="small"></p-button>
+                        <p-button icon="pi pi-angle-double-up" (click)="collapseAll()" pTooltip="Recolher" tooltipPosition="bottom" variant="outlined" severity="secondary" size="small"></p-button>
+                    </div>
+
+                    <p-datePicker
+                        #dp
+                        [(ngModel)]="dateRange"
+                        selectionMode="range"
+                        [readonlyInput]="true"
+                        (onSelect)="onDateRangeChange()"
+                        (onClear)="onDateRangeChange()"
+                        [showButtonBar]="true"
+                        [showIcon]="true"
+                        [maxDate]="maxDate"
+                        dateFormat="dd/mm/yy"
+                        styleClass="w-full lg:w-auto min-w-[230px]"
+                        inputStyleClass="w-full">
+                        <ng-template #buttonbar>
+                            <div class="flex gap-2 w-full justify-between items-center px-2 pb-2">
+                                <div class="flex gap-2">
+                                    <p-button size="small" label="Mês atual" (click)="setMesAtual(dp)" variant="outlined" />
+                                    <p-button size="small" label="Ano atual" (click)="setAnoAtual(dp)" variant="outlined" />
+                                </div>
+                                <p-button size="small" icon="pi pi-times" severity="danger" variant="text" (click)="setMesAtual(dp)" />
+                            </div>
+                        </ng-template>
+                    </p-datePicker>
+                </div>
+            </ng-template>
+        </p-toolbar>
+
+        <p-treeTable
+            #tt
+            [value]="nodes"
+            [columns]="[]"
+            [loading]="loadingTreeTable"
+            [globalFilterFields]="['data', 'descricao', 'valor', 'valor_total']"
+            styleClass="p-treetable-sm">
+            <ng-template pTemplate="colgroup">
+                <colgroup>
+                    <col />
+                    <col style="width: 100px;" />
+                    <col style="width: 160px;" />
+                    <col style="width: 90px;" />
+                </colgroup>
+            </ng-template>
+            <ng-template pTemplate="body" let-rowNode let-rowData="rowData">
+                <tr [ngClass]="getRowClass(rowData)">
+                    <td>
+                        <p-treeTableToggler [rowNode]="rowNode"></p-treeTableToggler>
+                        <span class="font-medium">
+                            <ng-container *ngIf="rowData.tipo_node === 'transacao'">{{ rowData.data }} - </ng-container>{{ rowData.descricao }}
+                        </span>
+                    </td>
+                    <td class="whitespace-nowrap text-center px-4" [ngClass]="getRowClass(rowData)">
+                        <ng-container *ngIf="rowNode.node.children === undefined">
+                            <i *ngIf="rowData.consistente" class="pi pi-check-circle text-primary-500 mr-3 text-lg" pTooltip="Lançamento consistente" tooltipPosition="left"></i>
+                            <i *ngIf="!rowData.consistente" class="pi pi-times-circle text-red-500 mr-3 text-lg" pTooltip="Lançamento inconsistente" tooltipPosition="left"></i>
+
+                            <i *ngIf="rowData.anexos > 0" class="pi pi-paperclip text-inherit text-lg cursor-pointer" [pTooltip]="rowData.anexos + ' comprovante(s)'" tooltipPosition="left"></i>
+                        </ng-container>
+                    </td>
+                    <td class="whitespace-nowrap font-medium px-4" [ngClass]="getRowClass(rowData)" [class.text-center]="rowData.tipo_node === 'mes'" [class.text-right]="rowData.tipo_node !== 'mes'">
+                        <ng-container *ngIf="rowData.tipo_node === 'mes'">Valor</ng-container>
+                        <ng-container *ngIf="rowData.tipo_node !== 'mes'">
+                            {{ (rowData.tipo_node === 'transacao' ? rowData.valor : rowData.valor_total) | currency:'BRL':'symbol':'1.2-2' }}
+                        </ng-container>
+                    </td>
+                    <td class="whitespace-nowrap text-sm px-4" [ngClass]="getRowClass(rowData)" [class.text-center]="true">
+                        <ng-container *ngIf="rowData.tipo_node === 'mes'">%</ng-container>
+                        <ng-container *ngIf="rowData.tipo_node !== 'mes'">
+                            {{ rowData.porcentagem | number:'1.2-2' }}%
+                        </ng-container>
+                    </td>
+                </tr>
+            </ng-template>
+            <ng-template pTemplate="emptymessage">
+                <tr>
+                    <td colspan="4" class="text-center p-4">Nenhuma transação encontrada no período.</td>
+                </tr>
+            </ng-template>
+        </p-treeTable>
+    </div>
+</div>

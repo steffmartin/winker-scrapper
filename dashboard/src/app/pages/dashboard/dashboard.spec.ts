@@ -34,7 +34,8 @@ describe('Dashboard', () => {
     it('should set success mode if pywebview is found immediately', () => {
         (window as any).pywebview = { 
             api: {
-                get_dashboard_kpis: () => Promise.resolve({ status: 'success', data: {} })
+                get_dashboard_kpis: () => Promise.resolve({ status: 'success', data: {} }),
+                get_transacoes: () => Promise.resolve({ status: 'success', data: [] })
             } 
         };
         
@@ -43,5 +44,28 @@ describe('Dashboard', () => {
         expect(component.isMockMode).toBeFalse();
         
         (window as any).pywebview = undefined;
+    });
+
+    it('should correctly expand 1 level (mes expanded, tipo collapsed)', () => {
+        component.nodes = [
+            {
+                data: { tipo_node: 'mes' },
+                expanded: false,
+                children: [
+                    {
+                        data: { tipo_node: 'tipo' },
+                        expanded: false,
+                        children: [
+                            { data: { tipo_node: 'categoria' }, expanded: false }
+                        ]
+                    }
+                ]
+            }
+        ];
+        
+        component.expandLevels(1);
+        
+        expect(component.nodes[0].expanded).toBeTrue(); // Mes expanded
+        expect(component.nodes[0].children![0].expanded).toBeFalse(); // Tipo collapsed
     });
 });

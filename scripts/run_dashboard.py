@@ -265,6 +265,167 @@ class Api:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    def get_transacoes(self, start_date=None, end_date=None):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+            
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            query = """
+                SELECT 
+                    m.competencia as mes_competencia,
+                    m.exibicao as mes_exibicao,
+                    c.nome as categoria_nome,
+                    c.tipo as categoria_tipo,
+                    s.nome as subcategoria_nome,
+                    t.id as transacao_id,
+                    t.descricao as transacao_descricao,
+                    t.data,
+                    t.valor,
+                    t.consistente,
+                    t.revisado_usuario,
+                    t.anexos as anexos_count
+                FROM transacoes t
+                JOIN subcategorias s ON t.subcategoria_id = s.id
+                JOIN categorias c ON s.categoria_id = c.id
+                JOIN meses m ON c.mes_id = m.id
+                WHERE m.condominio_id = ?
+            """
+            params = [self.condo_id]
+            
+            if start_date:
+                query += " AND substr(t.data, 7, 4) || '-' || substr(t.data, 4, 2) || '-' || substr(t.data, 1, 2) >= ?"
+                params.append(start_date)
+            if end_date:
+                query += " AND substr(t.data, 7, 4) || '-' || substr(t.data, 4, 2) || '-' || substr(t.data, 1, 2) <= ?"
+                params.append(end_date)
+                
+            query += " ORDER BY t.data ASC"
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            conn.close()
+            
+            meses_dict = {}
+            for row in rows:
+                mes = row["mes_competencia"]
+                mes_exibicao = row["mes_exibicao"]
+                tipo = "Receitas" if row["categoria_tipo"] == "R" else "Despesas"
+                categoria = row["categoria_nome"]
+                subcategoria = row["subcategoria_nome"]
+                
+                if mes not in meses_dict:
+                    meses_dict[mes] = {
+                        "data": {"descricao": mes_exibicao, "valor_total": 0, "tipo_node": "mes"},
+                        "expanded": False,
+                        "children_dict": {}
+                    }
+                
+                mes_node = meses_dict[mes]
+                if tipo not in mes_node["children_dict"]:
+                    mes_node["children_dict"][tipo] = {
+                        "data": {"descricao": tipo, "valor_total": 0, "porcentagem": 0.0, "tipo_node": "tipo"},
+                        "expanded": False,
+                        "children_dict": {}
+                    }
+                
+                tipo_node = mes_node["children_dict"][tipo]
+                if categoria not in tipo_node["children_dict"]:
+                    tipo_node["children_dict"][categoria] = {
+                        "data": {"descricao": categoria, "valor_total": 0, "porcentagem": 0.0, "tipo_node": "categoria"},
+                        "expanded": False,
+                        "children_dict": {}
+                    }
+                
+                categoria_node = tipo_node["children_dict"][categoria]
+                if subcategoria not in categoria_node["children_dict"]:
+                    categoria_node["children_dict"][subcategoria] = {
+                        "data": {"descricao": subcategoria, "valor_total": 0, "porcentagem": 0.0, "tipo_node": "subcategoria"},
+                        "expanded": False,
+                        "children": []
+                    }
+                
+                subcategoria_node = categoria_node["children_dict"][subcategoria]
+                
+                valor = row["valor"] or 0
+                
+                transacao_data = {
+                    "descricao": row["transacao_descricao"],
+                    "valor": valor,
+                    "data": row["data"],
+                    "consistente": row["consistente"],
+                    "revisado_usuario": row["revisado_usuario"],
+                    "anexos": row["anexos_count"],
+                    "tipo_node": "transacao"
+                }
+                
+                subcategoria_node["children"].append({
+                    "data": transacao_data
+                })
+                
+                subcategoria_node["data"]["valor_total"] += valor
+                categoria_node["data"]["valor_total"] += valor
+                tipo_node["data"]["valor_total"] += valor
+                mes_node["data"]["valor_total"] += valor
+                
+            tree = []
+            sorted_meses = sorted(meses_dict.keys(), reverse=True)
+            
+            for mes in sorted_meses:
+                mes_node = meses_dict[mes]
+                mes_node["children"] = []
+                
+                sorted_tipos = sorted(mes_node["children_dict"].keys(), key=lambda x: (x.lower() != 'receitas', x))
+                
+                for tipo in sorted_tipos:
+                    tipo_node = mes_node["children_dict"][tipo]
+                    tipo_node["children"] = []
+                    tipo_total = tipo_node["data"]["valor_total"]
+                    mes_total = mes_node["data"]["valor_total"]
+                    if mes_total > 0:
+                        tipo_node["data"]["porcentagem"] = round((tipo_total / mes_total) * 100, 2)
+                    
+                    sorted_categorias = sorted(tipo_node["children_dict"].values(), key=lambda x: x["data"]["valor_total"], reverse=True)
+                    
+                    for cat_node in sorted_categorias:
+                        cat_node["children"] = []
+                        cat_total = cat_node["data"]["valor_total"]
+                        if tipo_total > 0:
+                            cat_node["data"]["porcentagem"] = round((cat_total / tipo_total) * 100, 2)
+                        
+                        sorted_subcats = sorted(cat_node["children_dict"].values(), key=lambda x: x["data"]["valor_total"], reverse=True)
+                        for sub_node in sorted_subcats:
+                            sub_total = sub_node["data"]["valor_total"]
+                            if cat_total > 0:
+                                sub_node["data"]["porcentagem"] = round((sub_total / cat_total) * 100, 2)
+                            
+                            for trans_node in sub_node["children"]:
+                                if sub_total > 0:
+                                    trans_node["data"]["porcentagem"] = round((trans_node["data"]["valor"] / sub_total) * 100, 2)
+                                else:
+                                    trans_node["data"]["porcentagem"] = 0.0
+                            
+                            cat_node["children"].append(sub_node)
+                            
+                        del cat_node["children_dict"]
+                        tipo_node["children"].append(cat_node)
+                        
+                    del tipo_node["children_dict"]
+                    mes_node["children"].append(tipo_node)
+                    
+                del mes_node["children_dict"]
+                tree.append(mes_node)
+                
+            return {
+                "status": "success",
+                "data": tree
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     def _get_db_path(self):
         return os.path.join(project_root, "database", "winker_data.db")
 

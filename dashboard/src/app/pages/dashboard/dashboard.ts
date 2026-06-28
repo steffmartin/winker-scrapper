@@ -2,6 +2,17 @@ import { Component, OnInit, ChangeDetectorRef, LOCALE_ID, inject } from '@angula
 import { CommonModule, CurrencyPipe, DatePipe, registerLocaleData } from '@angular/common';
 import { SkeletonModule } from 'primeng/skeleton';
 import { ChipModule } from 'primeng/chip';
+import { TreeTableModule } from 'primeng/treetable';
+import { DatePickerModule } from 'primeng/datepicker';
+import { ToolbarModule } from 'primeng/toolbar';
+import { ButtonModule } from 'primeng/button';
+import { TagModule } from 'primeng/tag';
+import { TooltipModule } from 'primeng/tooltip';
+import { FormsModule } from '@angular/forms';
+import { TreeNode } from 'primeng/api';
+import { IconFieldModule } from 'primeng/iconfield';
+import { InputIconModule } from 'primeng/inputicon';
+import { InputTextModule } from 'primeng/inputtext';
 import localePt from '@angular/common/locales/pt';
 
 registerLocaleData(localePt);
@@ -15,7 +26,17 @@ import { LayoutService } from '@/app/layout/service/layout.service';
         CommonModule,
         CurrencyPipe,
         SkeletonModule,
-        ChipModule
+        ChipModule,
+        TreeTableModule,
+        DatePickerModule,
+        ToolbarModule,
+        ButtonModule,
+        TagModule,
+        TooltipModule,
+        FormsModule,
+        IconFieldModule,
+        InputIconModule,
+        InputTextModule
     ],
     providers: [
         { provide: LOCALE_ID, useValue: 'pt-BR' }
@@ -38,11 +59,20 @@ export class Dashboard implements OnInit {
 
     layoutService = inject(LayoutService);
 
+    // TreeTable State
+    nodes: TreeNode[] = [];
+    loadingTreeTable = true;
+    dateRange: Date[] = [];
+    globalFilterValue = '';
+    maxDate = new Date(new Date().setHours(23, 59, 59, 999));
+
     constructor(private cdr: ChangeDetectorRef) {}
 
-
-
     ngOnInit() {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        this.dateRange = [firstDay, today];
+
         this.detectEnvironmentAndLoad();
     }
 
@@ -50,23 +80,27 @@ export class Dashboard implements OnInit {
         if ((window as any).pywebview && (window as any).pywebview.api) {
             this.isMockMode = false;
             this.fetchKpis((window as any).pywebview.api);
+            this.fetchTransacoes((window as any).pywebview.api);
         } else {
             // Wait for the pywebviewready event
             window.addEventListener('pywebviewready', () => {
                 this.isMockMode = false;
                 this.fetchKpis((window as any).pywebview.api);
+                this.fetchTransacoes((window as any).pywebview.api);
             });
 
             // Fallback for local development (ng serve)
             setTimeout(() => {
-                if (this.loadingKpis) {
+                if (this.loadingKpis || this.loadingTreeTable) {
                     if ((window as any).pywebview && (window as any).pywebview.api) {
                         this.isMockMode = false;
                         this.fetchKpis((window as any).pywebview.api);
+                        this.fetchTransacoes((window as any).pywebview.api);
                     } else if (window.location.hostname === 'localhost') {
                         console.warn('Rodando localmente (ng serve). Entrando em Modo Simulação (Mocks).');
                         this.isMockMode = true;
                         this.loadMockKpis();
+                        this.loadMockTransacoes();
                     } else {
                         // Se não for localhost, espera mais tempo pelo pywebview
                         console.warn('Aguardando PyWebView carregar...');
@@ -154,5 +188,317 @@ export class Dashboard implements OnInit {
         this.processMembers();
         this.loadingKpis = false;
         this.cdr.detectChanges();
+    }
+
+
+
+    onDateRangeChange() {
+        if (this.dateRange && this.dateRange.length === 2 && this.dateRange[0] && this.dateRange[1]) {
+            this.loadingTreeTable = true;
+            if (this.isMockMode) {
+                this.loadMockTransacoes();
+            } else if ((window as any).pywebview && (window as any).pywebview.api) {
+                this.fetchTransacoes((window as any).pywebview.api);
+            }
+        }
+    }
+
+    setMesAtual(dp?: any) {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        this.dateRange = [firstDay, today];
+        this.dateRange = [...this.dateRange]; // Força o Angular a detectar a mudança do array
+        this.onDateRangeChange();
+        if (dp && dp.hide) dp.hide();
+    }
+
+    setAnoAtual(dp?: any) {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), 0, 1);
+        this.dateRange = [firstDay, today];
+        this.dateRange = [...this.dateRange]; // Força o Angular a detectar a mudança do array
+        this.onDateRangeChange();
+        if (dp && dp.hide) dp.hide();
+    }
+
+    fetchTransacoes(api: any) {
+        let startStr = null;
+        let endStr = null;
+
+        if (this.dateRange && this.dateRange.length === 2 && this.dateRange[0] && this.dateRange[1]) {
+            const tz1 = this.dateRange[0].getTimezoneOffset() * 60000;
+            const tz2 = this.dateRange[1].getTimezoneOffset() * 60000;
+            startStr = new Date(this.dateRange[0].getTime() - tz1).toISOString().split('T')[0];
+            endStr = new Date(this.dateRange[1].getTime() - tz2).toISOString().split('T')[0];
+        }
+
+        api.get_transacoes(startStr, endStr).then((response: any) => {
+            if (response.status === 'success') {
+                this.nodes = this.processNodes(response.data);
+                if (this.nodes.length === 1) {
+                    this.expandLevels(3);
+                } else if (this.nodes.length > 1) {
+                    this.expandLevels(1);
+                }
+            } else {
+                console.error('Erro ao buscar transacoes', response.message);
+                this.nodes = [];
+            }
+            this.loadingTreeTable = false;
+            this.cdr.detectChanges();
+        }).catch((err: any) => {
+            console.error('Erro na chamada da API get_transacoes', err);
+            this.loadingTreeTable = false;
+            this.cdr.detectChanges();
+        });
+    }
+
+    processNodes(nodes: TreeNode[], parentGrupo: string = ''): TreeNode[] {
+        return nodes.map(node => {
+            let grupo = parentGrupo;
+            if (node.data.tipo_node === 'tipo') {
+                grupo = node.data.descricao; // 'Receitas' ou 'Despesas'
+            }
+            node.data.grupo = grupo;
+
+            if (node.children) {
+                node.children = this.processNodes(node.children, grupo);
+            }
+            return node;
+        });
+    }
+
+    expandAll() {
+        let currentLevel = this.nodes;
+        while (currentLevel.length > 0) {
+            const hasCollapsed = currentLevel.some(n => n.children && n.children.length > 0 && !n.expanded);
+            if (hasCollapsed) {
+                currentLevel.forEach(n => {
+                    if (n.children && n.children.length > 0) {
+                        n.expanded = true;
+                    }
+                });
+                break;
+            }
+            let nextLevel: TreeNode[] = [];
+            currentLevel.forEach(n => {
+                if (n.children && n.expanded) {
+                    nextLevel.push(...n.children);
+                }
+            });
+            currentLevel = nextLevel;
+        }
+        this.nodes = [...this.nodes];
+    }
+
+    expandLevels(levelsToExpand: number) {
+        let currentLevel = this.nodes;
+        for (let i = 0; i < levelsToExpand; i++) {
+            let nextLevel: TreeNode[] = [];
+            currentLevel.forEach(n => {
+                if (n.children && n.children.length > 0) {
+                    n.expanded = true;
+                    nextLevel.push(...n.children);
+                }
+            });
+            currentLevel = nextLevel;
+        }
+    }
+
+    onGlobalFilter(tt: any, event: any) {
+        const val = event.target.value;
+        if (val && val.trim().length > 0) {
+            this.nodes.forEach(node => {
+                this.expandRecursive(node, true);
+            });
+            this.nodes = [...this.nodes];
+        }
+        tt.filterGlobal(val, 'contains');
+    }
+
+    collapseAll() {
+        let levels: TreeNode[][] = [this.nodes];
+        let currentLevel = this.nodes;
+
+        while (currentLevel.length > 0) {
+            let nextLevel: TreeNode[] = [];
+            currentLevel.forEach(n => {
+                if (n.children && n.expanded) {
+                    nextLevel.push(...n.children);
+                }
+            });
+            if (nextLevel.length > 0) {
+                levels.push(nextLevel);
+            }
+            currentLevel = nextLevel;
+        }
+
+        if (levels.length > 1) {
+            const levelToCollapse = levels[levels.length - 2];
+            levelToCollapse.forEach(n => {
+                n.expanded = false;
+            });
+        }
+        this.nodes = [...this.nodes];
+    }
+
+    private expandRecursive(node: TreeNode, isExpand: boolean) {
+        node.expanded = isExpand;
+        if (node.children) {
+            node.children.forEach(childNode => {
+                this.expandRecursive(childNode, isExpand);
+            });
+        }
+    }
+
+    getRowClass(rowData: any) {
+        if (!rowData) return '';
+        const t = rowData.tipo_node;
+        const g = rowData.grupo;
+        if (t === 'mes') return '[&>td]:!bg-primary-100 dark:[&>td]:!bg-primary-900/40 [&>td]:!text-primary-900 dark:[&>td]:!text-primary-100 font-bold [&>td]:!shadow-[inset_0_10px_0_0_var(--surface-card)] [&>td]:!pt-5';
+
+        if (g === 'Despesas') {
+            switch(t) {
+                case 'tipo': return '[&>td]:!bg-red-200/50 dark:[&>td]:!bg-red-900/40 text-red-900 dark:text-red-100 font-semibold';
+                case 'categoria': return '[&>td]:!bg-red-100/50 dark:[&>td]:!bg-red-900/30 text-red-800 dark:text-red-200';
+                case 'subcategoria': return '[&>td]:!bg-red-50/50 dark:[&>td]:!bg-red-900/20 text-red-700 dark:text-red-300';
+                case 'transacao': return '[&>td]:!bg-white/50 dark:[&>td]:!bg-red-900/10 text-slate-600 dark:text-slate-400 text-sm';
+            }
+        } else if (g === 'Receitas') {
+            switch(t) {
+                case 'tipo': return '[&>td]:!bg-green-200/50 dark:[&>td]:!bg-green-900/40 text-green-900 dark:text-green-100 font-semibold';
+                case 'categoria': return '[&>td]:!bg-green-100/50 dark:[&>td]:!bg-green-900/30 text-green-800 dark:text-green-200';
+                case 'subcategoria': return '[&>td]:!bg-green-50/50 dark:[&>td]:!bg-green-900/20 text-green-700 dark:text-green-300';
+                case 'transacao': return '[&>td]:!bg-white/50 dark:[&>td]:!bg-green-900/10 text-slate-600 dark:text-slate-400 text-sm';
+            }
+        }
+        return '';
+    }
+
+    loadMockTransacoes() {
+        setTimeout(() => {
+            this.nodes = [
+                {
+                    data: { descricao: 'Junho/2026', valor_total: 3500, tipo_node: 'mes' },
+                    expanded: true,
+                    children: [
+                        {
+                            data: { descricao: 'Receitas', valor_total: 2000, porcentagem: 57.14, tipo_node: 'tipo' },
+                            expanded: true,
+                            children: [
+                                {
+                                    data: { descricao: 'Taxa Condominial', valor_total: 2000, porcentagem: 100.0, tipo_node: 'categoria' },
+                                    expanded: true,
+                                    children: [
+                                        {
+                                            data: { descricao: 'Cotas Ordinárias', valor_total: 2000, porcentagem: 100.0, tipo_node: 'subcategoria' },
+                                            expanded: true,
+                                            children: [
+                                                {
+                                                    data: {
+                                                        descricao: 'Boleto',
+                                                        fornecedor: '-',
+                                                        apartamento: '101',
+                                                        competencia: '06/2026',
+                                                        valor: 1200,
+                                                        data: '2026-06-05',
+                                                        revisado: true,
+                                                        tipo_node: 'transacao',
+                                                        anexos: 1
+                                                    }
+                                                },
+                                                {
+                                                    data: {
+                                                        descricao: 'Boleto',
+                                                        fornecedor: '-',
+                                                        apartamento: '102',
+                                                        competencia: '06/2026',
+                                                        valor: 800,
+                                                        data: '2026-06-07',
+                                                        revisado: true,
+                                                        tipo_node: 'transacao',
+                                                        anexos: 0
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            data: { descricao: 'Despesas', valor_total: 1500, porcentagem: 42.86, tipo_node: 'tipo' },
+                            expanded: true,
+                            children: [
+                                {
+                                    data: { descricao: 'Despesas Ordinárias', valor_total: 1500, porcentagem: 100.0, tipo_node: 'categoria' },
+                                    expanded: true,
+                                    children: [
+                                        {
+                                            data: { descricao: 'Limpeza', valor_total: 1500, porcentagem: 100.0, tipo_node: 'subcategoria' },
+                                    expanded: true,
+                                            children: [
+                                                {
+                                                    data: {
+                                                        descricao: 'Compra de produtos',
+                                                        fornecedor: 'Mercado X',
+                                                        apartamento: 'Condomínio',
+                                                        competencia: '06/2026',
+                                                        valor: 1500,
+                                                        data: '2026-06-15',
+                                                        revisado: false,
+                                                        tipo_node: 'transacao',
+                                                        anexos: 2
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    data: { descricao: 'Maio/2026', valor_total: 1000, tipo_node: 'mes' },
+                    expanded: false,
+                    children: [
+                        {
+                            data: { descricao: 'Despesas', valor_total: 1000, porcentagem: 100.0, tipo_node: 'tipo' },
+                            expanded: true,
+                            children: [
+                                {
+                                    data: { descricao: 'Despesas Ordinárias', valor_total: 1000, porcentagem: 100.0, tipo_node: 'categoria' },
+                                    expanded: false,
+                                    children: [
+                                        {
+                                            data: { descricao: 'Manutenção', valor_total: 1000, porcentagem: 100.0, tipo_node: 'subcategoria' },
+                                            children: [
+                                                {
+                                                    data: {
+                                                        descricao: 'Conserto Elevador',
+                                                        fornecedor: 'Elevadores SA',
+                                                        apartamento: '-',
+                                                        competencia: '05/2026',
+                                                        valor: 1000,
+                                                        data: '2026-05-20',
+                                                        revisado: true,
+                                                        tipo_node: 'transacao',
+                                                        anexos: 1
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ];
+            this.nodes = this.processNodes(this.nodes);
+            this.loadingTreeTable = false;
+            this.cdr.detectChanges();
+        }, 800);
     }
 }
