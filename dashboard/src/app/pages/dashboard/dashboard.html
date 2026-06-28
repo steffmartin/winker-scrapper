@@ -18,93 +18,89 @@
     <!-- Cards Principais Pós-Loading -->
     <ng-container *ngIf="!loadingKpis">
         <!-- Gestão -->
-        <div class="mb-0 shadow-sm rounded-xl h-full flex flex-col justify-between p-6 transform transition duration-300 hover:-translate-y-1 hover:shadow-lg border"
-             [ngClass]="isDarkTheme ? 'bg-gradient-to-br from-indigo-900/40 to-blue-900/40 border-indigo-800' : 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100'">
+        <div class="mb-0 shadow-sm rounded-xl h-full flex flex-col justify-between p-6 transform transition duration-300 hover:-translate-y-1 hover:shadow-lg border bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100 dark:from-indigo-900/40 dark:to-blue-900/40 dark:border-indigo-800">
             <div class="flex justify-between items-center">
-                <span class="block font-medium text-xl" [ngClass]="isDarkTheme ? 'text-blue-100/70' : 'text-blue-900/70'">Gestão</span>
-                <div class="flex items-center justify-center rounded-xl w-14 h-14" [ngClass]="isDarkTheme ? 'bg-blue-500/20' : 'bg-blue-100'">
-                    <i class="pi pi-users" [ngClass]="isDarkTheme ? 'text-blue-400' : 'text-blue-500'" style="font-size: 2rem"></i>
+                <span class="block font-medium text-xl text-blue-900/70 dark:text-blue-100/70">Gestão</span>
+                <div class="flex items-center justify-center rounded-xl w-14 h-14 bg-blue-100 dark:bg-blue-500/20">
+                    <i class="pi pi-users text-blue-500 dark:text-blue-400" style="font-size: 2rem"></i>
                 </div>
             </div>
-            <div class="font-bold text-3xl my-2" [ngClass]="isDarkTheme ? 'text-blue-50' : 'text-blue-950'">
+            <div class="font-bold text-3xl my-2 text-blue-950 dark:text-blue-50">
                 {{ sindicoName }}
             </div>
             <div class="flex flex-wrap gap-2 text-base mt-2">
-                <span *ngIf="conselheirosList.length === 0" [ngClass]="isDarkTheme ? 'text-blue-200/60' : 'text-blue-900/60'">Nenhum conselheiro</span>
-                <p-chip *ngFor="let conselheiro of conselheirosList" [label]="conselheiro" [styleClass]="isDarkTheme ? '!bg-blue-500/20 !text-blue-200 text-sm font-medium' : '!bg-blue-200 !text-blue-900 text-sm font-medium'"></p-chip>
+                <span *ngIf="conselheirosList.length === 0" class="text-blue-900/60 dark:text-blue-200/60">Nenhum conselheiro</span>
+                <p-chip *ngFor="let conselheiro of conselheirosList" [label]="conselheiro" styleClass="!bg-blue-200 !text-blue-900 text-sm font-medium dark:!bg-blue-500/20 dark:!text-blue-200"></p-chip>
             </div>
         </div>
 
         <!-- Resumo do Mês Atual -->
         <div class="mb-0 shadow-sm rounded-xl h-full flex flex-col justify-between p-6 transform transition duration-300 hover:-translate-y-1 hover:shadow-lg border"
-             [ngClass]="(kpis.resumo_mes?.resultado || 0) < 0 ? (isDarkTheme ? 'bg-gradient-to-br from-red-900/40 to-rose-900/40 border-red-800/50' : 'bg-gradient-to-br from-red-50 to-rose-50 border-red-100') : (isDarkTheme ? 'bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-800/50' : 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-100')">
+             [ngClass]="(kpis.resumo_mes?.resultado || 0) < 0 ? 'bg-gradient-to-br from-red-50 to-rose-50 border-red-100 dark:from-red-900/40 dark:to-rose-900/40 dark:border-red-800/50' : 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-100 dark:from-green-900/40 dark:to-emerald-900/40 dark:border-green-800/50'">
             <div class="flex justify-between items-center">
-                <span class="block font-medium text-xl" [ngClass]="(kpis.resumo_mes?.resultado || 0) < 0 ? (isDarkTheme ? 'text-red-100/70' : 'text-red-900/70') : (isDarkTheme ? 'text-green-100/70' : 'text-green-900/70')">Resumo do mês</span>
-                <div class="flex items-center justify-center rounded-xl w-14 h-14" [ngClass]="(kpis.resumo_mes?.resultado || 0) < 0 ? (isDarkTheme ? 'bg-red-500/20' : 'bg-red-100') : (isDarkTheme ? 'bg-green-500/20' : 'bg-green-100')">
-                    <i class="pi pi-calendar" [ngClass]="(kpis.resumo_mes?.resultado || 0) < 0 ? (isDarkTheme ? 'text-red-400' : 'text-red-500') : (isDarkTheme ? 'text-green-400' : 'text-green-500')" style="font-size: 2rem"></i>
+                <span class="block font-medium text-xl" [ngClass]="(kpis.resumo_mes?.resultado || 0) < 0 ? 'text-red-900/70 dark:text-red-100/70' : 'text-green-900/70 dark:text-green-100/70'">Resumo do mês</span>
+                <div class="flex items-center justify-center rounded-xl w-14 h-14" [ngClass]="(kpis.resumo_mes?.resultado || 0) < 0 ? 'bg-red-100 dark:bg-red-500/20' : 'bg-green-100 dark:bg-green-500/20'">
+                    <i class="pi pi-calendar" [ngClass]="(kpis.resumo_mes?.resultado || 0) < 0 ? 'text-red-500 dark:text-red-400' : 'text-green-500 dark:text-green-400'" style="font-size: 2rem"></i>
                 </div>
             </div>
-            <div class="font-bold text-3xl my-2" [ngClass]="(kpis.resumo_mes?.resultado || 0) < 0 ? (isDarkTheme ? 'text-red-50' : 'text-red-950') : (isDarkTheme ? 'text-green-50' : 'text-green-950')">
+            <div class="font-bold text-3xl my-2" [ngClass]="(kpis.resumo_mes?.resultado || 0) < 0 ? 'text-red-950 dark:text-red-50' : 'text-green-950 dark:text-green-50'">
                 {{ kpis.resumo_mes?.resultado | currency:'BRL':'symbol':'1.2-2' }}
             </div>
-            <div class="flex flex-wrap justify-between text-base gap-2 mt-2" [ngClass]="(kpis.resumo_mes?.resultado || 0) < 0 ? (isDarkTheme ? 'text-red-100/70' : 'text-red-900/70') : (isDarkTheme ? 'text-green-100/70' : 'text-green-900/70')">
-                <span class="whitespace-nowrap"><i class="pi pi-arrow-up mr-1 opacity-80" [ngClass]="isDarkTheme ? 'text-green-400' : 'text-green-600'"></i> {{ kpis.resumo_mes?.receita_total | currency:'BRL':'symbol':'1.2-2' }}</span>
-                <span class="whitespace-nowrap"><i class="pi pi-arrow-down mr-1 opacity-80" [ngClass]="isDarkTheme ? 'text-red-400' : 'text-red-600'"></i> {{ kpis.resumo_mes?.despesa_total | currency:'BRL':'symbol':'1.2-2' }}</span>
+            <div class="flex flex-wrap justify-between text-base gap-2 mt-2" [ngClass]="(kpis.resumo_mes?.resultado || 0) < 0 ? 'text-red-900/70 dark:text-red-100/70' : 'text-green-900/70 dark:text-green-100/70'">
+                <span class="whitespace-nowrap"><i class="pi pi-arrow-up mr-1 opacity-80 text-green-600 dark:text-green-400"></i> {{ kpis.resumo_mes?.receita_total | currency:'BRL':'symbol':'1.2-2' }}</span>
+                <span class="whitespace-nowrap"><i class="pi pi-arrow-down mr-1 opacity-80 text-red-600 dark:text-red-400"></i> {{ kpis.resumo_mes?.despesa_total | currency:'BRL':'symbol':'1.2-2' }}</span>
             </div>
         </div>
 
         <!-- Inadimplência -->
-        <div class="mb-0 shadow-sm rounded-xl h-full flex flex-col justify-between p-6 transform transition duration-300 hover:-translate-y-1 hover:shadow-lg border"
-             [ngClass]="isDarkTheme ? 'bg-gradient-to-br from-orange-900/40 to-amber-900/40 border-orange-800' : 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-100'">
+        <div class="mb-0 shadow-sm rounded-xl h-full flex flex-col justify-between p-6 transform transition duration-300 hover:-translate-y-1 hover:shadow-lg border bg-gradient-to-br from-orange-50 to-amber-50 border-orange-100 dark:from-orange-900/40 dark:to-amber-900/40 dark:border-orange-800">
             <div class="flex justify-between items-center">
-                <span class="block font-medium text-xl" [ngClass]="isDarkTheme ? 'text-orange-100/70' : 'text-orange-900/70'">Inadimplência</span>
-                <div class="flex items-center justify-center rounded-xl w-14 h-14" [ngClass]="isDarkTheme ? 'bg-orange-500/20' : 'bg-orange-100'">
-                    <i class="pi pi-money-bill" [ngClass]="isDarkTheme ? 'text-orange-400' : 'text-orange-500'" style="font-size: 2rem"></i>
+                <span class="block font-medium text-xl text-orange-900/70 dark:text-orange-100/70">Inadimplência</span>
+                <div class="flex items-center justify-center rounded-xl w-14 h-14 bg-orange-100 dark:bg-orange-500/20">
+                    <i class="pi pi-money-bill text-orange-500 dark:text-orange-400" style="font-size: 2rem"></i>
                 </div>
             </div>
-            <div class="font-bold text-3xl my-2" [ngClass]="isDarkTheme ? 'text-orange-50' : 'text-orange-950'">
+            <div class="font-bold text-3xl my-2 text-orange-950 dark:text-orange-50">
                 {{ kpis.inadimplencia?.valor | currency:'BRL':'symbol':'1.2-2' }}
             </div>
-            <div class="text-base mt-2" [ngClass]="isDarkTheme ? 'text-orange-200/70' : 'text-orange-900/70'">
-                <span class="font-bold" [ngClass]="isDarkTheme ? 'text-orange-300' : 'text-orange-600'">{{ kpis.inadimplencia?.unidades || 0 }} </span>
+            <div class="text-base mt-2 text-orange-900/70 dark:text-orange-200/70">
+                <span class="font-bold text-orange-600 dark:text-orange-300">{{ kpis.inadimplencia?.unidades || 0 }} </span>
                 unid. devedoras até {{ kpis.inadimplencia?.data_corte || 'N/A' }}
             </div>
         </div>
 
         <!-- Saldo de Contas -->
-        <div class="mb-0 shadow-sm rounded-xl h-full flex flex-col justify-between p-6 transform transition duration-300 hover:-translate-y-1 hover:shadow-lg border"
-             [ngClass]="isDarkTheme ? 'bg-gradient-to-br from-cyan-900/40 to-sky-900/40 border-cyan-800' : 'bg-gradient-to-br from-cyan-50 to-sky-50 border-cyan-100'">
+        <div class="mb-0 shadow-sm rounded-xl h-full flex flex-col justify-between p-6 transform transition duration-300 hover:-translate-y-1 hover:shadow-lg border bg-gradient-to-br from-cyan-50 to-sky-50 border-cyan-100 dark:from-cyan-900/40 dark:to-sky-900/40 dark:border-cyan-800">
             <div class="flex justify-between items-center">
-                <span class="block font-medium text-xl" [ngClass]="isDarkTheme ? 'text-cyan-100/70' : 'text-cyan-900/70'">Saldo em conta</span>
-                <div class="flex items-center justify-center rounded-xl w-14 h-14" [ngClass]="isDarkTheme ? 'bg-cyan-500/20' : 'bg-cyan-100'">
-                    <i class="pi pi-wallet" [ngClass]="isDarkTheme ? 'text-cyan-400' : 'text-cyan-500'" style="font-size: 2rem"></i>
+                <span class="block font-medium text-xl text-cyan-900/70 dark:text-cyan-100/70">Saldo em conta</span>
+                <div class="flex items-center justify-center rounded-xl w-14 h-14 bg-cyan-100 dark:bg-cyan-500/20">
+                    <i class="pi pi-wallet text-cyan-500 dark:text-cyan-400" style="font-size: 2rem"></i>
                 </div>
             </div>
-            <div class="font-bold text-3xl my-2" [ngClass]="isDarkTheme ? 'text-cyan-50' : 'text-cyan-950'">
+            <div class="font-bold text-3xl my-2 text-cyan-950 dark:text-cyan-50">
                 {{ kpis.saldos?.saldo_total | currency:'BRL':'symbol':'1.2-2' }}
             </div>
-            <div class="text-base mt-2" [ngClass]="isDarkTheme ? 'text-cyan-200/70' : 'text-cyan-900/70'">
-                <span class="font-bold" [ngClass]="isDarkTheme ? 'text-cyan-300' : 'text-cyan-600'">{{ kpis.saldos?.contas?.length || 0 }} </span>
+            <div class="text-base mt-2 text-cyan-900/70 dark:text-cyan-200/70">
+                <span class="font-bold text-cyan-600 dark:text-cyan-300">{{ kpis.saldos?.contas?.length || 0 }} </span>
                 contas
             </div>
         </div>
 
         <!-- Estatísticas do Sistema -->
-        <div class="mb-0 shadow-sm rounded-xl h-full flex flex-col justify-between p-6 transform transition duration-300 hover:-translate-y-1 hover:shadow-lg border"
-             [ngClass]="isDarkTheme ? 'bg-gradient-to-br from-purple-900/40 to-fuchsia-900/40 border-purple-800' : 'bg-gradient-to-br from-purple-50 to-fuchsia-50 border-purple-100'">
+        <div class="mb-0 shadow-sm rounded-xl h-full flex flex-col justify-between p-6 transform transition duration-300 hover:-translate-y-1 hover:shadow-lg border bg-gradient-to-br from-purple-50 to-fuchsia-50 border-purple-100 dark:from-purple-900/40 dark:to-fuchsia-900/40 dark:border-purple-800">
             <div class="flex justify-between items-center">
-                <span class="block font-medium text-xl" [ngClass]="isDarkTheme ? 'text-purple-100/70' : 'text-purple-900/70'">Atualizado em</span>
-                <div class="flex items-center justify-center rounded-xl w-14 h-14" [ngClass]="isDarkTheme ? 'bg-purple-500/20' : 'bg-purple-100'">
-                    <i class="pi pi-database" [ngClass]="isDarkTheme ? 'text-purple-400' : 'text-purple-500'" style="font-size: 2rem"></i>
+                <span class="block font-medium text-xl text-purple-900/70 dark:text-purple-100/70">Atualizado em</span>
+                <div class="flex items-center justify-center rounded-xl w-14 h-14 bg-purple-100 dark:bg-purple-500/20">
+                    <i class="pi pi-database text-purple-500 dark:text-purple-400" style="font-size: 2rem"></i>
                 </div>
             </div>
-            <div class="font-bold text-xl my-2 leading-tight" [ngClass]="isDarkTheme ? 'text-purple-50' : 'text-purple-950'">
+            <div class="font-bold text-xl my-2 leading-tight text-purple-950 dark:text-purple-50">
                 {{ kpis.estatisticas?.ultima_atualizacao ? (kpis.estatisticas?.ultima_atualizacao | date:"dd/MM/yyyy 'às' HH:mm") : 'N/A' }}
             </div>
             <div class="flex flex-wrap gap-2 mt-2">
-                <p-chip [label]="(kpis.estatisticas?.meses_lidos || 0) + ' meses'" [styleClass]="isDarkTheme ? '!bg-purple-500/20 !text-purple-200 text-xs font-medium' : '!bg-purple-200 !text-purple-900 text-xs font-medium'"></p-chip>
-                <p-chip [label]="(kpis.estatisticas?.transacoes_total || 0) + ' transações'" [styleClass]="isDarkTheme ? '!bg-purple-500/20 !text-purple-200 text-xs font-medium' : '!bg-purple-200 !text-purple-900 text-xs font-medium'"></p-chip>
-                <p-chip [label]="(kpis.estatisticas?.anexos_baixados || 0) + ' comprovantes'" [styleClass]="isDarkTheme ? '!bg-purple-500/20 !text-purple-200 text-xs font-medium' : '!bg-purple-200 !text-purple-900 text-xs font-medium'"></p-chip>
+                <p-chip [label]="(kpis.estatisticas?.meses_lidos || 0) + ' meses'" styleClass="!bg-purple-200 !text-purple-900 text-xs font-medium dark:!bg-purple-500/20 dark:!text-purple-200"></p-chip>
+                <p-chip [label]="(kpis.estatisticas?.transacoes_total || 0) + ' transações'" styleClass="!bg-purple-200 !text-purple-900 text-xs font-medium dark:!bg-purple-500/20 dark:!text-purple-200"></p-chip>
+                <p-chip [label]="(kpis.estatisticas?.anexos_baixados || 0) + ' comprovantes'" styleClass="!bg-purple-200 !text-purple-900 text-xs font-medium dark:!bg-purple-500/20 dark:!text-purple-200"></p-chip>
             </div>
         </div>
     </ng-container>

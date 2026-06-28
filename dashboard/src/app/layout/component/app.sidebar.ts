@@ -11,7 +11,7 @@ import { CommonModule } from '@angular/common';
     standalone: true,
     imports: [AppMenu, RouterModule, CommonModule],
     template: `
-        <div class="layout-sidebar" [ngClass]="layoutService.isDarkTheme() ? '!bg-gradient-to-b !from-slate-900/50 !to-indigo-900/50 !border-r !border-slate-800' : '!bg-gradient-to-b !from-indigo-50/50 !to-blue-50/50 !border-r !border-indigo-100/50'">
+        <div class="layout-sidebar !bg-gradient-to-b !from-indigo-50/50 !to-blue-50/50 !border-r !border-indigo-100/50 dark:!from-slate-900/50 dark:!to-indigo-900/50 dark:!border-slate-800">
             <app-menu></app-menu>
         </div>
     `

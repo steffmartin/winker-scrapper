@@ -12,7 +12,7 @@ import { OverlayBadgeModule } from 'primeng/overlaybadge';
     selector: 'app-topbar',
     standalone: true,
     imports: [RouterModule, CommonModule, StyleClassModule, AppConfigurator, SkeletonModule, OverlayBadgeModule],
-    template: ` <div class="layout-topbar" [ngClass]="layoutService.isDarkTheme() ? '!bg-gradient-to-r !from-slate-900/50 !to-indigo-900/50 !border-b !border-slate-800' : '!bg-gradient-to-r !from-indigo-50/50 !to-blue-50/50 !border-b !border-indigo-100/50'">
+    template: ` <div class="layout-topbar !bg-gradient-to-r !from-indigo-50/50 !to-blue-50/50 !border-b !border-indigo-100/50 dark:!from-slate-900/50 dark:!to-indigo-900/50 dark:!border-slate-800">
         <div class="layout-topbar-logo-container">
             <button class="layout-menu-button layout-topbar-action" (click)="layoutService.onMenuToggle()">
                 <i class="pi pi-bars"></i>
@@ -27,7 +27,8 @@ import { OverlayBadgeModule } from 'primeng/overlaybadge';
         <div class="layout-topbar-actions">
             <div class="layout-config-menu">
                 <button type="button" class="layout-topbar-action" (click)="toggleDarkMode()">
-                    <i [ngClass]="{ 'pi ': true, 'pi-moon': layoutService.isDarkTheme(), 'pi-sun': !layoutService.isDarkTheme() }"></i>
+                    <i class="pi pi-sun dark:!hidden"></i>
+                    <i class="pi pi-moon !hidden dark:!inline-block"></i>
                 </button>
                 <div class="relative">
                     <button

@@ -40,9 +40,7 @@ export class Dashboard implements OnInit {
 
     constructor(private cdr: ChangeDetectorRef) {}
 
-    get isDarkTheme() {
-        return this.layoutService.isDarkTheme();
-    }
+
 
     ngOnInit() {
         this.detectEnvironmentAndLoad();
