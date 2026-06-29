@@ -13,6 +13,8 @@ import { TreeNode } from 'primeng/api';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
+import { InputGroupModule } from 'primeng/inputgroup';
+import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { ChartModule } from 'primeng/chart';
 import localePt from '@angular/common/locales/pt';
 
@@ -38,6 +40,8 @@ import { LayoutService } from '@/app/layout/service/layout.service';
         IconFieldModule,
         InputIconModule,
         InputTextModule,
+        InputGroupModule,
+        InputGroupAddonModule,
         ChartModule
     ],
     providers: [
@@ -81,7 +85,7 @@ export class Dashboard implements OnInit {
         this.dateRange = [firstDay, today];
 
         this.detectEnvironmentAndLoad();
-        
+
         // Listen to theme changes to update chart colors
         if ((this.layoutService as any).configUpdate$) {
             (this.layoutService as any).configUpdate$.subscribe(() => {
@@ -251,7 +255,7 @@ export class Dashboard implements OnInit {
             if (response.status === 'success') {
                 this.nodes = this.processNodes(response.data);
                 if (this.nodes.length === 1) {
-                    this.expandLevels(3);
+                    this.expandLevels(2);
                 } else if (this.nodes.length > 1) {
                     this.expandLevels(1);
                 }
@@ -321,18 +325,19 @@ export class Dashboard implements OnInit {
         }
     }
 
-    onGlobalFilter(tt: any, event: any) {
-        const val = event.target.value;
+    applyGlobalFilter(tt: any) {
+        const val = this.globalFilterValue;
         if (val && val.trim().length > 0) {
             this.nodes.forEach(node => {
                 this.expandRecursive(node, true);
             });
             this.nodes = [...this.nodes];
+            tt.filterGlobal(val, 'contains');
+            setTimeout(() => this.updateChart(tt.filteredNodes || this.nodes));
+        } else {
+            tt.filterGlobal('', 'contains');
+            setTimeout(() => this.updateChart(this.nodes));
         }
-        tt.filterGlobal(val, 'contains');
-        
-        // Wait for TreeTable to filter, then update chart
-        setTimeout(() => this.updateChart(tt.filteredNodes || this.nodes));
     }
 
     collapseAll() {
@@ -524,7 +529,7 @@ export class Dashboard implements OnInit {
 
     updateChart(nodes: TreeNode[]) {
         let allLeaves: any[] = [];
-        
+
         const traverse = (node: TreeNode, context: any) => {
             const newContext = { ...context };
             if (node.data.tipo_node === 'mes') newContext.mes = node.data.descricao;
@@ -547,24 +552,9 @@ export class Dashboard implements OnInit {
 
         const mesesSet = new Set<string>();
         allLeaves.forEach(item => mesesSet.add(item.mes));
-        
-        // Sort months in order (ascending)
-        const monthNames: {[key: string]: number} = {
-            'janeiro': 1, 'fevereiro': 2, 'março': 3, 'marco': 3, 'abril': 4,
-            'maio': 5, 'junho': 6, 'julho': 7, 'agosto': 8, 'setembro': 9,
-            'outubro': 10, 'novembro': 11, 'dezembro': 12
-        };
-        const mesesArr = Array.from(mesesSet).sort((a, b) => {
-            const [mA_str, yA] = a.split('/');
-            const [mB_str, yB] = b.split('/');
-            let mA = Number(mA_str);
-            if (isNaN(mA)) mA = monthNames[mA_str.toLowerCase()] || 0;
-            let mB = Number(mB_str);
-            if (isNaN(mB)) mB = monthNames[mB_str.toLowerCase()] || 0;
-            
-            if (yA !== yB) return Number(yA) - Number(yB);
-            return mA - mB;
-        });
+
+        // A ordem dos meses já vem corretamente ordenada (crescente) do backend
+        const mesesArr = Array.from(mesesSet);
 
         this.isSingleMonth = mesesArr.length <= 1;
 
@@ -584,7 +574,7 @@ export class Dashboard implements OnInit {
                 const color = this.getCategoryColor(index, grupo || 'Receitas');
                 let receitaSum = 0;
                 let despesaSum = 0;
-                
+
                 allLeaves.filter(i => i.categoria === cat).forEach(item => {
                     if (item.grupo === 'Receitas') receitaSum += (item.leaf.valor || 0);
                     if (item.grupo === 'Despesas') despesaSum += (item.leaf.valor || 0);
@@ -635,7 +625,7 @@ export class Dashboard implements OnInit {
                 ]
             };
         }
-        
+
         this.initChartOptions();
         this.cdr.detectChanges();
     }
@@ -644,7 +634,7 @@ export class Dashboard implements OnInit {
         // Colors from Tailwind green/red scale
         const receitasColors = ['#10b981', '#34d399', '#059669', '#047857', '#6ee7b7'];
         const despesasColors = ['#ef4444', '#f87171', '#dc2626', '#b91c1c', '#fca5a5', '#f97316', '#fb923c'];
-        
+
         if (grupo === 'Receitas') return receitasColors[index % receitasColors.length];
         return despesasColors[index % despesasColors.length];
     }

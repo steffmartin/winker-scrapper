@@ -114,18 +114,19 @@
             </ng-template>
             <ng-template pTemplate="right">
                 <div class="flex flex-wrap lg:flex-nowrap items-center w-full lg:w-auto max-w-full justify-end gap-3" style="width: 100%; margin-left: auto;">
-                    <p-iconField iconPosition="left" class="flex-1 w-full lg:w-auto min-w-[200px]">
-                        <p-inputIcon>
+                    <p-inputGroup class="flex-1 w-full lg:w-auto min-w-[200px]">
+                        <p-inputGroupAddon>
                             <i class="pi pi-search"></i>
-                        </p-inputIcon>
+                        </p-inputGroupAddon>
                         <input
                             pInputText
                             type="text"
                             class="w-full"
                             [(ngModel)]="globalFilterValue"
-                            (input)="onGlobalFilter(tt, $event)"
-                            placeholder="Buscar..." />
-                    </p-iconField>
+                            (keydown.enter)="applyGlobalFilter(tt)"
+                            placeholder="Filtrar..." />
+                        <button type="button" pButton icon="pi pi-reply rotate-90" (click)="applyGlobalFilter(tt)"></button>
+                    </p-inputGroup>
 
                     <div class="flex gap-2 shrink-0">
                         <p-button icon="pi pi-angle-double-down" (click)="expandAll()" pTooltip="Expandir" tooltipPosition="bottom" variant="outlined" severity="secondary" size="small"></p-button>
@@ -167,6 +168,8 @@
             [columns]="[]"
             [loading]="loadingTreeTable"
             [globalFilterFields]="['data', 'descricao', 'valor', 'valor_total']"
+            [scrollable]="true"
+            scrollHeight="400px"
             styleClass="p-treetable-sm">
             <ng-template pTemplate="colgroup">
                 <colgroup>
