@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef, LOCALE_ID, inject } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, LOCALE_ID, inject, ViewChild } from '@angular/core';
 import { CommonModule, CurrencyPipe, DatePipe, registerLocaleData } from '@angular/common';
 import { SkeletonModule } from 'primeng/skeleton';
 import { ChipModule } from 'primeng/chip';
@@ -79,11 +79,18 @@ export class Dashboard implements OnInit {
     layoutService = inject(LayoutService);
 
     // TreeTable State
+    @ViewChild('tt') treeTable: any;
     nodes: TreeNode[] = [];
     loadingTreeTable = true;
-    dateRange: Date[] = [];
     globalFilterValue = '';
+    currentYear = new Date().getFullYear().toString();
+    dateRange: Date[] | undefined;
     maxDate = new Date(new Date().setHours(23, 59, 59, 999));
+
+    skeletonNodes: TreeNode[] = Array.from({ length: 12 }).map((_, i) => ({
+        key: `skeleton-${i}`,
+        data: { tipo_node: 'skeleton' }
+    }));
 
     // Chart State
     chartData: any;
@@ -225,14 +232,49 @@ export class Dashboard implements OnInit {
 
 
     onDateRangeChange() {
-        if (this.dateRange && this.dateRange.length === 2 && this.dateRange[0] && this.dateRange[1]) {
+        if (this.dateRange && this.dateRange.length === 2 && (this.dateRange[0] || this.dateRange[1])) {
             this.loadingTreeTable = true;
+            
+            // Limpa qualquer filtro global ativo antes de buscar novos dados
+            if (this.globalFilterValue && this.treeTable) {
+                this.globalFilterValue = '';
+                this.treeTable.reset();
+            }
+
             if (this.isMockMode) {
                 this.loadMockTransacoes();
             } else if ((window as any).pywebview && (window as any).pywebview.api) {
                 this.fetchTransacoes((window as any).pywebview.api);
             }
         }
+    }
+
+    setDesdeOComeco(dp?: any) {
+        const today = new Date();
+        this.dateRange = [null as any, today];
+        this.dateRange = [...this.dateRange]; // Força o Angular a detectar a mudança do array
+        this.onDateRangeChange();
+        if (dp && dp.hide) dp.hide();
+    }
+
+    getDatePickerLabel(): string {
+        if (!this.dateRange || this.dateRange.length === 0) return '';
+        if (!this.dateRange[0] && !this.dateRange[1]) return '';
+        
+        let start = this.dateRange[0] ? this.formatDate(this.dateRange[0]) : '*';
+        let end = this.dateRange[1] ? this.formatDate(this.dateRange[1]) : '';
+        
+        if (end) {
+            return `${start} - ${end}`;
+        }
+        return start;
+    }
+
+    formatDate(date: Date): string {
+        const d = String(date.getDate()).padStart(2, '0');
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const y = date.getFullYear();
+        return `${d}/${m}/${y}`;
     }
 
     setMesAtual(dp?: any) {
@@ -257,11 +299,15 @@ export class Dashboard implements OnInit {
         let startStr = null;
         let endStr = null;
 
-        if (this.dateRange && this.dateRange.length === 2 && this.dateRange[0] && this.dateRange[1]) {
-            const tz1 = this.dateRange[0].getTimezoneOffset() * 60000;
-            const tz2 = this.dateRange[1].getTimezoneOffset() * 60000;
-            startStr = new Date(this.dateRange[0].getTime() - tz1).toISOString().split('T')[0];
-            endStr = new Date(this.dateRange[1].getTime() - tz2).toISOString().split('T')[0];
+        if (this.dateRange && this.dateRange.length === 2) {
+            if (this.dateRange[0]) {
+                const tz1 = this.dateRange[0].getTimezoneOffset() * 60000;
+                startStr = new Date(this.dateRange[0].getTime() - tz1).toISOString().split('T')[0];
+            }
+            if (this.dateRange[1]) {
+                const tz2 = this.dateRange[1].getTimezoneOffset() * 60000;
+                endStr = new Date(this.dateRange[1].getTime() - tz2).toISOString().split('T')[0];
+            }
         }
 
         api.get_transacoes(startStr, endStr).then((response: any) => {
