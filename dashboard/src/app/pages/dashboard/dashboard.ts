@@ -6,6 +6,7 @@ import { TreeTableModule } from 'primeng/treetable';
 import { DatePickerModule } from 'primeng/datepicker';
 import { ToolbarModule } from 'primeng/toolbar';
 import { ButtonModule } from 'primeng/button';
+import { ButtonGroupModule } from 'primeng/buttongroup';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { FormsModule } from '@angular/forms';
@@ -34,6 +35,7 @@ import { LayoutService } from '@/app/layout/service/layout.service';
         DatePickerModule,
         ToolbarModule,
         ButtonModule,
+        ButtonGroupModule,
         TagModule,
         TooltipModule,
         FormsModule,
@@ -47,11 +49,23 @@ import { LayoutService } from '@/app/layout/service/layout.service';
     providers: [
         { provide: LOCALE_ID, useValue: 'pt-BR' }
     ],
-    templateUrl: './dashboard.html'
+    templateUrl: './dashboard.html',
+    styles: [`
+        :host ::ng-deep .primary-datepicker-btn button.p-datepicker-dropdown {
+            background-color: var(--p-primary-color, var(--primary-color)) !important;
+            border-color: var(--p-primary-color, var(--primary-color)) !important;
+            color: var(--p-primary-contrast-color, var(--primary-color-text)) !important;
+        }
+        :host ::ng-deep .primary-datepicker-btn button.p-datepicker-dropdown:hover {
+            background-color: var(--p-primary-hover-color, var(--primary-600)) !important;
+            border-color: var(--p-primary-hover-color, var(--primary-600)) !important;
+        }
+    `]
 })
 export class Dashboard implements OnInit {
     isMockMode = false;
     loadingKpis = true;
+    originalExpandLevels: number = 0;
     kpis: any = {
         inadimplencia: null,
         gestao: null,
@@ -255,9 +269,13 @@ export class Dashboard implements OnInit {
             if (response.status === 'success') {
                 this.nodes = this.processNodes(response.data);
                 if (this.nodes.length === 1) {
+                    this.originalExpandLevels = 2;
                     this.expandLevels(2);
                 } else if (this.nodes.length > 1) {
+                    this.originalExpandLevels = 1;
                     this.expandLevels(1);
+                } else {
+                    this.originalExpandLevels = 0;
                 }
                 this.updateChart(this.nodes);
             } else {
@@ -336,8 +354,18 @@ export class Dashboard implements OnInit {
             setTimeout(() => this.updateChart(tt.filteredNodes || this.nodes));
         } else {
             tt.filterGlobal('', 'contains');
+            this.collapseAll();
+            if (this.originalExpandLevels > 0) {
+                this.expandLevels(this.originalExpandLevels);
+            }
+            this.nodes = [...this.nodes];
             setTimeout(() => this.updateChart(this.nodes));
         }
+    }
+
+    clearFilter(tt: any) {
+        this.globalFilterValue = '';
+        this.applyGlobalFilter(tt);
     }
 
     collapseAll() {
@@ -650,10 +678,7 @@ export class Dashboard implements OnInit {
             aspectRatio: 0.8,
             plugins: {
                 legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: textColor
-                    }
+                    display: false
                 },
                 tooltip: {
                     callbacks: {
