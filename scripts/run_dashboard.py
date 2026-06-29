@@ -372,7 +372,7 @@ class Api:
                 mes_node["data"]["valor_total"] += valor
                 
             tree = []
-            sorted_meses = sorted(meses_dict.keys(), reverse=True)
+            sorted_meses = sorted(meses_dict.keys())
             
             for mes in sorted_meses:
                 mes_node = meses_dict[mes]

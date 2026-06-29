@@ -270,13 +270,12 @@ export class Dashboard implements OnInit {
                 this.nodes = this.processNodes(response.data);
                 if (this.nodes.length === 1) {
                     this.originalExpandLevels = 2;
-                    this.expandLevels(2);
                 } else if (this.nodes.length > 1) {
                     this.originalExpandLevels = 1;
-                    this.expandLevels(1);
                 } else {
                     this.originalExpandLevels = 0;
                 }
+                this.expandLevels(this.originalExpandLevels);
                 this.updateChart(this.nodes);
             } else {
                 console.error('Erro ao buscar transacoes', response.message);
@@ -353,13 +352,16 @@ export class Dashboard implements OnInit {
             tt.filterGlobal(val, 'contains');
             setTimeout(() => this.updateChart(tt.filteredNodes || this.nodes));
         } else {
-            tt.filterGlobal('', 'contains');
             this.collapseAll();
             if (this.originalExpandLevels > 0) {
                 this.expandLevels(this.originalExpandLevels);
             }
             this.nodes = [...this.nodes];
-            setTimeout(() => this.updateChart(this.nodes));
+            tt.filterGlobal('', 'contains');
+            setTimeout(() => {
+                this.updateChart(this.nodes);
+                this.cdr.detectChanges();
+            });
         }
     }
 
