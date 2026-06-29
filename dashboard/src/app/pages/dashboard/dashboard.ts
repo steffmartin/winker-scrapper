@@ -548,12 +548,22 @@ export class Dashboard implements OnInit {
         const mesesSet = new Set<string>();
         allLeaves.forEach(item => mesesSet.add(item.mes));
         
-        // Sort months in order (they are MM/YYYY, we can sort by YYYY-MM roughly or just keep order of appearance)
+        // Sort months in order (ascending)
+        const monthNames: {[key: string]: number} = {
+            'janeiro': 1, 'fevereiro': 2, 'março': 3, 'marco': 3, 'abril': 4,
+            'maio': 5, 'junho': 6, 'julho': 7, 'agosto': 8, 'setembro': 9,
+            'outubro': 10, 'novembro': 11, 'dezembro': 12
+        };
         const mesesArr = Array.from(mesesSet).sort((a, b) => {
-            const [mA, yA] = a.split('/');
-            const [mB, yB] = b.split('/');
+            const [mA_str, yA] = a.split('/');
+            const [mB_str, yB] = b.split('/');
+            let mA = Number(mA_str);
+            if (isNaN(mA)) mA = monthNames[mA_str.toLowerCase()] || 0;
+            let mB = Number(mB_str);
+            if (isNaN(mB)) mB = monthNames[mB_str.toLowerCase()] || 0;
+            
             if (yA !== yB) return Number(yA) - Number(yB);
-            return Number(mA) - Number(mB);
+            return mA - mB;
         });
 
         this.isSingleMonth = mesesArr.length <= 1;
@@ -650,6 +660,7 @@ export class Dashboard implements OnInit {
             aspectRatio: 0.8,
             plugins: {
                 legend: {
+                    position: 'bottom',
                     labels: {
                         color: textColor
                     }
