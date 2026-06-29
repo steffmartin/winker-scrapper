@@ -13,6 +13,7 @@ import { TreeNode } from 'primeng/api';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
+import { ChartModule } from 'primeng/chart';
 import localePt from '@angular/common/locales/pt';
 
 registerLocaleData(localePt);
@@ -36,7 +37,8 @@ import { LayoutService } from '@/app/layout/service/layout.service';
         FormsModule,
         IconFieldModule,
         InputIconModule,
-        InputTextModule
+        InputTextModule,
+        ChartModule
     ],
     providers: [
         { provide: LOCALE_ID, useValue: 'pt-BR' }
@@ -66,6 +68,11 @@ export class Dashboard implements OnInit {
     globalFilterValue = '';
     maxDate = new Date(new Date().setHours(23, 59, 59, 999));
 
+    // Chart State
+    chartData: any;
+    chartOptions: any;
+    isSingleMonth = false;
+
     constructor(private cdr: ChangeDetectorRef) {}
 
     ngOnInit() {
@@ -74,6 +81,14 @@ export class Dashboard implements OnInit {
         this.dateRange = [firstDay, today];
 
         this.detectEnvironmentAndLoad();
+        
+        // Listen to theme changes to update chart colors
+        if ((this.layoutService as any).configUpdate$) {
+            (this.layoutService as any).configUpdate$.subscribe(() => {
+                this.initChartOptions();
+                this.cdr.detectChanges();
+            });
+        }
     }
 
     detectEnvironmentAndLoad() {
@@ -240,6 +255,7 @@ export class Dashboard implements OnInit {
                 } else if (this.nodes.length > 1) {
                     this.expandLevels(1);
                 }
+                this.updateChart(this.nodes);
             } else {
                 console.error('Erro ao buscar transacoes', response.message);
                 this.nodes = [];
@@ -314,6 +330,9 @@ export class Dashboard implements OnInit {
             this.nodes = [...this.nodes];
         }
         tt.filterGlobal(val, 'contains');
+        
+        // Wait for TreeTable to filter, then update chart
+        setTimeout(() => this.updateChart(tt.filteredNodes || this.nodes));
     }
 
     collapseAll() {
@@ -497,8 +516,187 @@ export class Dashboard implements OnInit {
                 }
             ];
             this.nodes = this.processNodes(this.nodes);
+            this.updateChart(this.nodes);
             this.loadingTreeTable = false;
             this.cdr.detectChanges();
         }, 800);
+    }
+
+    updateChart(nodes: TreeNode[]) {
+        let allLeaves: any[] = [];
+        
+        const traverse = (node: TreeNode, context: any) => {
+            const newContext = { ...context };
+            if (node.data.tipo_node === 'mes') newContext.mes = node.data.descricao;
+            if (node.data.tipo_node === 'categoria') newContext.categoria = node.data.descricao;
+            if (node.data.grupo) newContext.grupo = node.data.grupo;
+
+            if (node.data.tipo_node === 'transacao') {
+                allLeaves.push({
+                    leaf: node.data,
+                    mes: newContext.mes,
+                    categoria: newContext.categoria,
+                    grupo: newContext.grupo
+                });
+            }
+            if (node.children) {
+                node.children.forEach(child => traverse(child, newContext));
+            }
+        };
+        (nodes || []).forEach(n => traverse(n, {}));
+
+        const mesesSet = new Set<string>();
+        allLeaves.forEach(item => mesesSet.add(item.mes));
+        
+        // Sort months in order (they are MM/YYYY, we can sort by YYYY-MM roughly or just keep order of appearance)
+        const mesesArr = Array.from(mesesSet).sort((a, b) => {
+            const [mA, yA] = a.split('/');
+            const [mB, yB] = b.split('/');
+            if (yA !== yB) return Number(yA) - Number(yB);
+            return Number(mA) - Number(mB);
+        });
+
+        this.isSingleMonth = mesesArr.length <= 1;
+
+        if (this.isSingleMonth) {
+            // Stacked Bar Chart by Categoria
+            const categoriasSet = new Set<string>();
+            const catGrupoMap = new Map<string, string>();
+
+            allLeaves.forEach(item => {
+                categoriasSet.add(item.categoria);
+                catGrupoMap.set(item.categoria, item.grupo);
+            });
+            const categoriasArr = Array.from(categoriasSet);
+
+            const datasets = categoriasArr.map((cat, index) => {
+                const grupo = catGrupoMap.get(cat);
+                const color = this.getCategoryColor(index, grupo || 'Receitas');
+                let receitaSum = 0;
+                let despesaSum = 0;
+                
+                allLeaves.filter(i => i.categoria === cat).forEach(item => {
+                    if (item.grupo === 'Receitas') receitaSum += (item.leaf.valor || 0);
+                    if (item.grupo === 'Despesas') despesaSum += (item.leaf.valor || 0);
+                });
+
+                return {
+                    label: cat,
+                    data: [receitaSum, despesaSum],
+                    backgroundColor: color,
+                };
+            });
+
+            this.chartData = {
+                labels: ['Receitas', 'Despesas'],
+                datasets: datasets
+            };
+        } else {
+            // Line chart for multiple months
+            const receitasData = mesesArr.map(mes => {
+                let sum = 0;
+                allLeaves.filter(i => i.mes === mes && i.grupo === 'Receitas').forEach(i => sum += (i.leaf.valor || 0));
+                return sum;
+            });
+            const despesasData = mesesArr.map(mes => {
+                let sum = 0;
+                allLeaves.filter(i => i.mes === mes && i.grupo === 'Despesas').forEach(i => sum += (i.leaf.valor || 0));
+                return sum;
+            });
+
+            const documentStyle = getComputedStyle(document.documentElement);
+            this.chartData = {
+                labels: mesesArr,
+                datasets: [
+                    {
+                        label: 'Receitas',
+                        data: receitasData,
+                        fill: false,
+                        borderColor: documentStyle.getPropertyValue('--p-green-500') || '#22c55e',
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Despesas',
+                        data: despesasData,
+                        fill: false,
+                        borderColor: documentStyle.getPropertyValue('--p-red-500') || '#ef4444',
+                        tension: 0.4
+                    }
+                ]
+            };
+        }
+        
+        this.initChartOptions();
+        this.cdr.detectChanges();
+    }
+
+    getCategoryColor(index: number, grupo: string) {
+        // Colors from Tailwind green/red scale
+        const receitasColors = ['#10b981', '#34d399', '#059669', '#047857', '#6ee7b7'];
+        const despesasColors = ['#ef4444', '#f87171', '#dc2626', '#b91c1c', '#fca5a5', '#f97316', '#fb923c'];
+        
+        if (grupo === 'Receitas') return receitasColors[index % receitasColors.length];
+        return despesasColors[index % despesasColors.length];
+    }
+
+    initChartOptions() {
+        const documentStyle = getComputedStyle(document.documentElement);
+        const textColor = documentStyle.getPropertyValue('--text-color') || '#495057';
+        const textColorSecondary = documentStyle.getPropertyValue('--text-color-secondary') || '#6c757d';
+        const surfaceBorder = documentStyle.getPropertyValue('--surface-border') || '#dfe7ef';
+
+        this.chartOptions = {
+            maintainAspectRatio: false,
+            aspectRatio: 0.8,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: textColor
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context: any) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed.y);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: this.isSingleMonth,
+                    ticks: {
+                        color: textColorSecondary,
+                        font: {
+                            weight: 500
+                        }
+                    },
+                    grid: {
+                        color: surfaceBorder,
+                        drawBorder: false
+                    }
+                },
+                y: {
+                    stacked: this.isSingleMonth,
+                    ticks: {
+                        color: textColorSecondary,
+                        callback: function(value: any) {
+                            return 'R$ ' + value;
+                        }
+                    },
+                    grid: {
+                        color: surfaceBorder,
+                        drawBorder: false
+                    }
+                }
+            }
+        };
     }
 }

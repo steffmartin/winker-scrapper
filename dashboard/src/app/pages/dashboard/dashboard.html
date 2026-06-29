@@ -159,7 +159,9 @@
             </ng-template>
         </p-toolbar>
 
-        <p-treeTable
+        <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
+            <div class="xl:col-span-3">
+                <p-treeTable
             #tt
             [value]="nodes"
             [columns]="[]"
@@ -210,5 +212,14 @@
                 </tr>
             </ng-template>
         </p-treeTable>
+            </div>
+            
+            <div class="xl:col-span-2">
+                <div class="h-[400px] w-full mt-4 xl:mt-0 sticky top-4">
+                    <p-chart type="line" [data]="chartData" [options]="chartOptions" *ngIf="!isSingleMonth" height="400px"></p-chart>
+                    <p-chart type="bar" [data]="chartData" [options]="chartOptions" *ngIf="isSingleMonth" height="400px"></p-chart>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
