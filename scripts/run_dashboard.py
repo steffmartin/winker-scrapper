@@ -1,23 +1,34 @@
-import os
-import sys
-import sqlite3
-import webview
-import subprocess
 import argparse
+import os
+import subprocess
+import sys
 from datetime import datetime
+
+# Módulos internos independentes
+from utils import logger
+
+# Garantir dependências antes de importar libs externas
+from setup_deps import install_dependencies
+install_dependencies()
+
+# Dependências externas e modelos
+import webview
+
+import models
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 
 class Api:
-    def __init__(self, condo_id=None):
+    def __init__(self, condo_id=None, db_path=None):
         self.condo_id = condo_id
-        self.db_path = self._get_db_path()
+        self.db_path = db_path or self._get_db_path()
         self.init_error = None
         
         if not os.path.exists(self.db_path):
             self.init_error = "Banco de dados não encontrado."
         else:
+            models.init_models(self.db_path)
             if not self.condo_id:
                 self._initialize_default_condo_id()
                 
@@ -26,31 +37,21 @@ class Api:
 
     def _initialize_default_condo_id(self):
         try:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("SELECT id FROM condominio LIMIT 1")
-            row = cursor.fetchone()
-            if row:
-                self.condo_id = row[0]
-            conn.close()
+            condo = models.Condominio.select().first()
+            if condo:
+                self.condo_id = condo.id
         except Exception:
             pass
 
     def get_condominio(self):
         if self.init_error:
             return {"status": "error", "message": self.init_error}
-            
+
         try:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            
-            cursor.execute("SELECT * FROM condominio WHERE id = ?", (self.condo_id,))
-            row = cursor.fetchone()
-            conn.close()
-            
-            if row:
-                return {"status": "success", "data": dict(row)}
+            condo = models.Condominio.get_or_none(id=self.condo_id)
+            if condo:
+                data = condo.__data__
+                return {"status": "success", "data": data}
             else:
                 return {"status": "error", "message": "Condomínio não encontrado."}
         except Exception as e:
@@ -61,71 +62,32 @@ class Api:
             return {"status": "error", "message": self.init_error}
         
         try:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            m = models.Meses
+            c = models.Categorias
+            s = models.Subcategorias
+            t = models.Transacoes
+            a = models.Anexos
+            p = models.PrestacoesContas
             
-            queries = {
-                "meses": """
-                    SELECT COUNT(*) as qtd 
-                    FROM meses m 
-                    WHERE m.consistente = 0 AND m.revisado_usuario = 0 AND m.condominio_id = ? 
-                """,
-                "categorias": """
-                    SELECT COUNT(*) as qtd 
-                    FROM categorias c
-                    INNER JOIN meses m ON c.mes_id = m.id
-                    WHERE c.consistente = 0 AND c.revisado_usuario = 0 AND m.condominio_id = ? 
-                """,
-                "subcategorias": """
-                    SELECT COUNT(*) as qtd 
-                    FROM subcategorias s
-                    INNER JOIN categorias c ON s.categoria_id = c.id
-                    INNER JOIN meses m ON c.mes_id = m.id
-                    WHERE s.consistente = 0 AND s.revisado_usuario = 0 AND m.condominio_id = ? 
-                """,
-                "transacoes": """
-                    SELECT COUNT(*) as qtd 
-                    FROM transacoes t
-                    INNER JOIN subcategorias s ON t.subcategoria_id = s.id
-                    INNER JOIN categorias c ON s.categoria_id = c.id
-                    INNER JOIN meses m ON c.mes_id = m.id
-                    WHERE t.consistente = 0 AND t.revisado_usuario = 0 AND m.condominio_id = ? 
-                """,
-                "anexos": """
-                    SELECT COUNT(*) as qtd 
-                    FROM anexos a
-                    INNER JOIN transacoes t ON a.transacao_id = t.id
-                    INNER JOIN subcategorias s ON t.subcategoria_id = s.id
-                    INNER JOIN categorias c ON s.categoria_id = c.id
-                    INNER JOIN meses m ON c.mes_id = m.id
-                    WHERE a.consistente = 0 AND a.revisado_usuario = 0 AND m.condominio_id = ? 
-                """,
-                "prestacoes_contas": """
-                    SELECT COUNT(*) as qtd 
-                    FROM prestacoes_contas p
-                    INNER JOIN meses m ON p.mes_id = m.id
-                    WHERE p.consistente = 0 AND p.revisado_usuario = 0 AND m.condominio_id = ? 
-                """
-            }
+            c_m = m.select().where((m.consistente == 0) & (m.revisado_usuario == 0) & (m.condominio_id == self.condo_id)).count()
+            c_c = c.select().join(m).where((c.consistente == 0) & (c.revisado_usuario == 0) & (m.condominio_id == self.condo_id)).count()
+            c_s = s.select().join(c).join(m).where((s.consistente == 0) & (s.revisado_usuario == 0) & (m.condominio_id == self.condo_id)).count()
+            c_t = t.select().join(s).join(c).join(m).where((t.consistente == 0) & (t.revisado_usuario == 0) & (m.condominio_id == self.condo_id)).count()
+            c_a = a.select().join(t).join(s).join(c).join(m).where((a.consistente == 0) & (a.revisado_usuario == 0) & (m.condominio_id == self.condo_id)).count()
+            c_p = p.select().join(m).where((p.consistente == 0) & (p.revisado_usuario == 0) & (m.condominio_id == self.condo_id)).count()
             
-            total_count = 0
             details = {}
-            
-            for table, query in queries.items():
-                cursor.execute(query, (self.condo_id,))
-                row = cursor.fetchone()
-                if row and row["qtd"] > 0:
-                    qtd = row["qtd"]
-                    details[table] = qtd
-                    total_count += qtd
-            
-            conn.close()
+            if c_m > 0: details["meses"] = c_m
+            if c_c > 0: details["categorias"] = c_c
+            if c_s > 0: details["subcategorias"] = c_s
+            if c_t > 0: details["transacoes"] = c_t
+            if c_a > 0: details["anexos"] = c_a
+            if c_p > 0: details["prestacoes_contas"] = c_p
             
             return {
                 "status": "success",
                 "data": {
-                    "count": total_count,
+                    "count": sum(details.values()),
                     "details": details
                 }
             }
@@ -137,13 +99,7 @@ class Api:
             return {"status": "error", "message": self.init_error}
         
         try:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            
-            # KPI Inadimplencia & Admin (from condominio)
-            cursor.execute("SELECT inadimplencia_valor, inadimplencia_unidades, inadimplencia_data_corte, administradora, telefone_administradora, ultima_atualizacao FROM condominio WHERE id = ?", (self.condo_id,))
-            condominio_row = cursor.fetchone()
+            condo = models.Condominio.get_or_none(id=self.condo_id)
             
             inadimplencia = {}
             administradora = {}
@@ -154,72 +110,39 @@ class Api:
                 "anexos_baixados": 0
             }
             
-            if condominio_row:
+            if condo:
                 inadimplencia = {
-                    "valor": condominio_row["inadimplencia_valor"] or 0,
-                    "unidades": condominio_row["inadimplencia_unidades"] or 0,
-                    "data_corte": condominio_row["inadimplencia_data_corte"]
+                    "valor": condo.inadimplencia_valor or 0,
+                    "unidades": condo.inadimplencia_unidades or 0,
+                    "data_corte": condo.inadimplencia_data_corte
                 }
                 administradora = {
-                    "nome": condominio_row["administradora"],
-                    "telefone": condominio_row["telefone_administradora"]
+                    "nome": condo.administradora,
+                    "telefone": condo.telefone_administradora
                 }
-                estatisticas["ultima_atualizacao"] = condominio_row["ultima_atualizacao"]
+                estatisticas["ultima_atualizacao"] = condo.ultima_atualizacao
             
-            # Estatísticas - total_transacoes
-            cursor.execute("""
-                SELECT COUNT(t.id) as count
-                FROM transacoes t
-                JOIN subcategorias s ON t.subcategoria_id = s.id
-                JOIN categorias c ON s.categoria_id = c.id
-                JOIN meses m ON c.mes_id = m.id
-                WHERE m.condominio_id = ?
-            """, (self.condo_id,))
-            transacoes_row = cursor.fetchone()
-            if transacoes_row:
-                estatisticas["transacoes_total"] = transacoes_row["count"]
-                
-            # Estatísticas - meses_lidos
-            cursor.execute("SELECT COUNT(id) as count FROM meses WHERE condominio_id = ?", (self.condo_id,))
-            meses_row = cursor.fetchone()
-            if meses_row:
-                estatisticas["meses_lidos"] = meses_row["count"]
-                
-            # Estatísticas - total_anexos
-            cursor.execute("""
-                SELECT COUNT(a.id) as count
-                FROM anexos a
-                JOIN transacoes t ON a.transacao_id = t.id
-                JOIN subcategorias s ON t.subcategoria_id = s.id
-                JOIN categorias c ON s.categoria_id = c.id
-                JOIN meses m ON c.mes_id = m.id
-                WHERE m.condominio_id = ?
-            """, (self.condo_id,))
-            anexos_row = cursor.fetchone()
-            anexos_count = anexos_row["count"] if anexos_row else 0
+            m = models.Meses
+            c = models.Categorias
+            s = models.Subcategorias
+            t = models.Transacoes
+            a = models.Anexos
+            p = models.PrestacoesContas
             
-            cursor.execute("""
-                SELECT COUNT(p.id) as count
-                FROM prestacoes_contas p
-                JOIN meses m ON p.mes_id = m.id
-                WHERE m.condominio_id = ?
-            """, (self.condo_id,))
-            prestacoes_row = cursor.fetchone()
-            prestacoes_count = prestacoes_row["count"] if prestacoes_row else 0
+            estatisticas["transacoes_total"] = t.select().join(s).join(c).join(m).where(m.condominio_id == self.condo_id).count()
+            estatisticas["meses_lidos"] = m.select().where(m.condominio_id == self.condo_id).count()
             
+            anexos_count = a.select().join(t).join(s).join(c).join(m).where(m.condominio_id == self.condo_id).count()
+            prestacoes_count = p.select().join(m).where(m.condominio_id == self.condo_id).count()
             estatisticas["anexos_baixados"] = anexos_count + prestacoes_count
             
-            # KPI Gestão (from membros_gestao)
-            cursor.execute("SELECT nome, cargo FROM membros_gestao WHERE condominio_id = ?", (self.condo_id,))
-            membros_gestao = [dict(row) for row in cursor.fetchall()]
+            membros_gestao = list(models.MembrosGestao.select().where(models.MembrosGestao.condominio_id == self.condo_id).dicts())
             
             gestao = {
                 "membros": membros_gestao,
                 "administradora": administradora
             }
             
-            # KPI Saldo de Contas (Mock)
-            # TODO Implementar cálculo de saldo após criação da coluna 'saldo inicial' e contas
             saldos = {
                 "saldo_total": 0,
                 "contas": [
@@ -228,16 +151,14 @@ class Api:
                 ]
             }
             
-            # KPI Resumo do Mês Atual (competência mais atual)
             current_date_str = datetime.now().strftime("%Y-%m")
-            cursor.execute("SELECT competencia, receita_total, despesa_total FROM meses WHERE condominio_id = ? AND competencia = ?", (self.condo_id, current_date_str))
-            mes_row = cursor.fetchone()
+            mes = m.get_or_none((m.condominio_id == self.condo_id) & (m.competencia == current_date_str))
             
-            if mes_row:
-                rec = mes_row["receita_total"] or 0
-                desp = mes_row["despesa_total"] or 0
+            if mes:
+                rec = mes.receita_total or 0
+                desp = mes.despesa_total or 0
                 resumo_mes = {
-                    "competencia": mes_row["competencia"],
+                    "competencia": mes.competencia,
                     "receita_total": rec,
                     "despesa_total": desp,
                     "resultado": rec - desp
@@ -250,8 +171,6 @@ class Api:
                     "resultado": 0
                 }
                 
-            conn.close()
-            
             return {
                 "status": "success",
                 "data": {
@@ -270,44 +189,38 @@ class Api:
             return {"status": "error", "message": self.init_error}
             
         try:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            m = models.Meses
+            c = models.Categorias
+            s = models.Subcategorias
+            t = models.Transacoes
             
-            query = """
-                SELECT 
-                    m.competencia as mes_competencia,
-                    m.exibicao as mes_exibicao,
-                    c.nome as categoria_nome,
-                    c.tipo as categoria_tipo,
-                    s.nome as subcategoria_nome,
-                    t.id as transacao_id,
-                    t.descricao as transacao_descricao,
-                    t.data,
-                    t.valor,
-                    t.consistente,
-                    t.revisado_usuario,
-                    t.anexos as anexos_count
-                FROM transacoes t
-                JOIN subcategorias s ON t.subcategoria_id = s.id
-                JOIN categorias c ON s.categoria_id = c.id
-                JOIN meses m ON c.mes_id = m.id
-                WHERE m.condominio_id = ?
-            """
-            params = [self.condo_id]
-            
+            query = (t.select(
+                        m.competencia.alias('mes_competencia'),
+                        m.exibicao.alias('mes_exibicao'),
+                        c.nome.alias('categoria_nome'),
+                        c.tipo.alias('categoria_tipo'),
+                        s.nome.alias('subcategoria_nome'),
+                        t.id.alias('transacao_id'),
+                        t.descricao.alias('transacao_descricao'),
+                        t.data,
+                        t.valor,
+                        t.consistente,
+                        t.revisado_usuario,
+                        t.anexos.alias('anexos_count')
+                     )
+                     .join(s)
+                     .join(c)
+                     .join(m)
+                     .where(m.condominio_id == self.condo_id))
+                     
             if start_date:
-                query += " AND substr(t.data, 7, 4) || '-' || substr(t.data, 4, 2) || '-' || substr(t.data, 1, 2) >= ?"
-                params.append(start_date)
+                query = query.where(models.fn.substr(t.data, 7, 4).concat('-').concat(models.fn.substr(t.data, 4, 2)).concat('-').concat(models.fn.substr(t.data, 1, 2)) >= start_date)
             if end_date:
-                query += " AND substr(t.data, 7, 4) || '-' || substr(t.data, 4, 2) || '-' || substr(t.data, 1, 2) <= ?"
-                params.append(end_date)
+                query = query.where(models.fn.substr(t.data, 7, 4).concat('-').concat(models.fn.substr(t.data, 4, 2)).concat('-').concat(models.fn.substr(t.data, 1, 2)) <= end_date)
                 
-            query += " ORDER BY t.data ASC"
+            query = query.order_by(t.data.asc())
             
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
-            conn.close()
+            rows = query.dicts()
             
             meses_dict = {}
             for row in rows:
@@ -353,9 +266,10 @@ class Api:
                 valor = row["valor"] or 0
                 
                 transacao_data = {
+                    "id": row["transacao_id"],
+                    "data": row["data"],
                     "descricao": row["transacao_descricao"],
                     "valor": valor,
-                    "data": row["data"],
                     "consistente": row["consistente"],
                     "revisado_usuario": row["revisado_usuario"],
                     "anexos": row["anexos_count"],
@@ -430,56 +344,61 @@ class Api:
         return os.path.join(project_root, "database", "winker_data.db")
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--condo-id', help='ID do condomínio a ser carregado', default=None)
+    parser.add_argument('--dev', action='store_true', help='Modo de desenvolvimento')
+    args = parser.parse_args()
+
     html_content = None
     html_path = None
     
     # 1. Verifica se a base de dados SQLite existe
     db_path = os.path.join(project_root, "database", "winker_data.db")
-    if not os.path.exists(db_path):
-        print("AVISO: Banco de dados não encontrado em database/winker_data.db!")
+    if not args.dev and not os.path.exists(db_path):
+        logger.warning("AVISO: Banco de dados não encontrado em database/winker_data.db!")
         html_content = "<html><head><meta charset='utf-8'/><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:40px;background:#1e293b;color:#f8fafc;}h2{color:#eab308;}code{background:#334155;padding:2px 6px;border-radius:4px;font-family:monospace;}ol{line-height:1.6;}</style></head><body><h2>Banco de Dados Não Encontrado</h2><p>Não foi possível localizar o banco de dados local em <code>database/winker_data.db</code>.</p><p><b>Como resolver:</b> Você precisa realizar a extração inicial de dados para criar e popular o banco de dados antes de abrir o painel. Por favor:</p><ol><li>Dê um duplo clique no atalho <b><code>Extrair_Dados.lnk</code></b> (ou <b><code>Extrair_Dados_Headless.lnk</code></b>) na raiz do projeto.</li><li>Aguarde o extrator concluir o processamento de pelo menos um período de transações.</li><li>Após o término da extração com sucesso, abra novamente o dashboard.</li></ol></body></html>"
-        print("Carregando aviso de banco de dados ausente...")
+        logger.info("Carregando aviso de banco de dados ausente...")
     else:
         # 2. Se o banco de dados existe, verifica a existência do frontend compilado
-        angular_index = os.path.join(project_root, "compilados", "browser", "index.html")
+        angular_dist_dir = os.path.join(project_root, "compilados", "browser")
+        angular_index = os.path.join(angular_dist_dir, "index.html")
+        angular_src_dir = os.path.join(project_root, "dashboard")
+        
         if not os.path.exists(angular_index):
-            print("Compilados do frontend não encontrados na pasta 'compilados/'.")
-            print("Iniciando montagem automática do frontend...")
+            logger.warning("Compilados do frontend não encontrados na pasta 'compilados/'.")
+            logger.info("Iniciando montagem automática do frontend...")
             
-            dashboard_dir = os.path.join(project_root, "dashboard")
-            node_modules_dir = os.path.join(dashboard_dir, "node_modules")
+            node_modules_dir = os.path.join(angular_src_dir, "node_modules")
             
             # 1. Verifica se node_modules existe, senão instala
             if not os.path.exists(node_modules_dir):
-                print("Pasta node_modules não encontrada. Executando 'npm install'...")
+                logger.info("Pasta node_modules não encontrada. Executando 'npm install'...")
                 try:
-                    subprocess.run("npm install", cwd=dashboard_dir, shell=True, check=True)
-                    print("Instalação das dependências concluída com sucesso!")
-                except Exception as e:
-                    print(f"Erro ao instalar dependências via npm install: {e}")
+                    subprocess.check_call(["npm", "install"], cwd=angular_src_dir, shell=True)
+                    logger.info("Instalação das dependências concluída com sucesso!")
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"Erro ao instalar dependências via npm install: {e}")
+                    sys.exit(1)
                     
             # 2. Executa a compilação de produção
-            print("Executando compilação do Angular ('npm run build')...")
+            logger.info("Executando compilação do Angular ('npm run build')...")
             try:
-                subprocess.run("npm run build", cwd=dashboard_dir, shell=True, check=True)
-                print("Compilação concluída com sucesso!")
-            except Exception as e:
-                print(f"Erro ao compilar o frontend: {e}")
+                subprocess.check_call(["npm", "run", "build"], cwd=angular_src_dir, shell=True)
+                logger.info("Compilação concluída com sucesso!")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Erro ao compilar o frontend: {e}")
                 
         # Verifica novamente se o build foi criado
         if os.path.exists(angular_index):
             html_path = angular_index
-            print(f"Carregando interface Angular compilada de: {html_path}")
+            logger.info(f"Carregando interface Angular compilada de: {html_path}")
         else:
             html_path = os.path.join(project_root, "dashboard.html")
             if not os.path.exists(html_path):
-                # Fallback inline amigável em HTML para exibir instruções se o Node.js não estiver no PATH
                 html_content = "<html><head><meta charset='utf-8'/><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:40px;background:#1e293b;color:#f8fafc;}h2{color:#f43f5e;}code{background:#334155;padding:2px 6px;border-radius:4px;font-family:monospace;}</style></head><body><h2>Erro de Inicialização do Dashboard</h2><p>Não foi possível encontrar ou compilar a interface do dashboard.</p><p><b>Possível Solução:</b> O sistema precisa do <b>Node.js</b> instalado para compilar o frontend Angular pela primeira vez. Por favor:</p><ol><li>Instale o Node.js (recomendado v18 ou superior).</li><li>Abra um terminal na pasta <code>dashboard/</code> do projeto e execute:</li><pre><code>npm install<br/>npm run build</code></pre><li>Após a compilação, reinicie este aplicativo.</li></ol></body></html>"
-            print(f"Interface Angular não disponível. Carregando fallback: {html_path}")
+            logger.warning(f"Interface Angular não disponível. Carregando fallback: {html_path}")
         
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--condo-id', help='ID do condomínio a ser carregado', default=None)
-    args = parser.parse_args()
+
 
     api = Api(condo_id=args.condo_id)
     

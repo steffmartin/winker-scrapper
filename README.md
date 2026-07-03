@@ -97,8 +97,11 @@ O projeto está organizado da seguinte maneira:
 
 * **[`scripts/`](file:///D:/projects/winker/scripts)**: Contém o código-fonte das automações Python.
     * `extract_winker.py`: O robô Playwright de extração.
-    * `test_extract_winker.py`: Suíte de testes unitários da extração e lógica de consistência.
     * `run_dashboard.py`: O backend Python exposto à interface gráfica via `pywebview`.
+    * `models.py`: Declaração do modelo do banco de dados (Tabelas) mapeadas através do ORM Peewee.
+    * `setup_deps.py`: Utilitário central de verificação e instalação dinâmica de dependências.
+    * `utils.py`: Funções utilitárias compartilhadas, como a configuração e centralização de logs do sistema.
+    * `test_*.py`: Suíte de testes unitários de cada arquivo Python.
 * **[`database/`](file:///D:/projects/winker/database)**: Contém o arquivo do banco de dados SQLite local (
   `winker_data.db`) utilizado pelo extrator e lido pelo dashboard. Consulte o
   [`database/diagrama_er.md`](database/diagrama_er.md) para visualizar o diagrama de entidade-relacionamento completo

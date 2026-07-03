@@ -14,39 +14,23 @@ from scripts.run_dashboard import Api
 class TestRunDashboard(unittest.TestCase):
 
     def setUp(self):
-        # Create an in-memory database
-        self.conn = sqlite3.connect(':memory:')
-        # Note: setting row_factory is handled in the method being tested, but the mock connection will receive it.
-        self.cursor = self.conn.cursor()
+        import tempfile
+        import models
+        self.temp_db_fd, self.temp_db_path = tempfile.mkstemp(suffix='_test_rd.db')
         
-        # Create tables needed for get_inconsistencies_count
-        self.cursor.execute('''
-            CREATE TABLE condominio (id TEXT PRIMARY KEY, nome TEXT, inadimplencia_valor REAL, inadimplencia_unidades INTEGER, inadimplencia_data_corte TEXT, administradora TEXT, telefone_administradora TEXT, ultima_atualizacao TEXT);
-        ''')
-        self.cursor.execute('''
-            CREATE TABLE meses (id INTEGER PRIMARY KEY, condominio_id TEXT, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER, competencia TEXT, exibicao TEXT, receita_total REAL, despesa_total REAL);
-        ''')
-        self.cursor.execute('''
-            CREATE TABLE categorias (id INTEGER PRIMARY KEY, mes_id INTEGER, tipo TEXT, nome TEXT, valor REAL, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
-        ''')
-        self.cursor.execute('''
-            CREATE TABLE subcategorias (id INTEGER PRIMARY KEY, categoria_id INTEGER, tipo TEXT, nome TEXT, valor REAL, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
-        ''')
-        self.cursor.execute('''
-            CREATE TABLE transacoes (id INTEGER PRIMARY KEY, subcategoria_id INTEGER, tipo TEXT, data TEXT, descricao TEXT, valor REAL, apartamento TEXT, competencia TEXT, fornecedor TEXT, conta TEXT, anexos INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
-        ''')
-        self.cursor.execute('''
-            CREATE TABLE anexos (id INTEGER PRIMARY KEY, transacao_id INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
-        ''')
-        self.cursor.execute('''
-            CREATE TABLE prestacoes_contas (id INTEGER PRIMARY KEY, mes_id INTEGER, consistente INTEGER, motivo_inconsistencia TEXT, revisado_usuario INTEGER);
-        ''')
+        # Initialize ORM with this temp db
+        models.init_models(self.temp_db_path)
+        
+        # Connect raw sqlite to populate data easily
+        self.conn = sqlite3.connect(self.temp_db_path)
+        self.cursor = self.conn.cursor()
         
         # Populate data
         import datetime
         current_date = datetime.datetime.now().strftime("%Y-%m")
         self.condo_id = "condo_123"
         self.cursor.execute("INSERT INTO condominio (id, nome, inadimplencia_valor, inadimplencia_unidades, inadimplencia_data_corte, administradora, telefone_administradora, ultima_atualizacao) VALUES (?, ?, 100.50, 2, '2023-01-01', 'Admin Teste', '12345678', '2026-06-25T21:00:00')", (self.condo_id, "Condominio Teste"))
+        self.cursor.execute("INSERT INTO membros_gestao (condominio_id, nome, cargo) VALUES (?, ?, ?)", (self.condo_id, "João", "Síndico"))
         self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario, competencia, exibicao, receita_total, despesa_total) VALUES (1, ?, 0, 'Erro Mês', 0, '01/2023', 'JAN/2023', 500.0, 300.0)", (self.condo_id,))
         self.cursor.execute("INSERT INTO meses (id, condominio_id, consistente, motivo_inconsistencia, revisado_usuario, competencia, exibicao, receita_total, despesa_total) VALUES (2, ?, 1, NULL, 0, ?, ?, 600.0, 400.0)", (self.condo_id, current_date, 'MÊS ATUAL'))
         self.cursor.execute("INSERT INTO categorias (id, mes_id, tipo, nome, valor, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 'Despesas', 'Cat 1', 100, 0, 'Erro Categoria', 0)")
@@ -56,34 +40,30 @@ class TestRunDashboard(unittest.TestCase):
         self.cursor.execute("INSERT INTO prestacoes_contas (id, mes_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Prestação', 0)")
         self.conn.commit()
         
-        # We need to mock the connect behavior for Api instances
-        self.original_connect = sqlite3.connect
-        sqlite3.connect = self._mock_connect
-        
         # Avoid file check failing by patching os.path.exists during init
         self.original_exists = os.path.exists
-        os.path.exists = lambda path: True if path.endswith('winker_data.db') else self.original_exists(path)
+        os.path.exists = lambda path: True if path.endswith('winker_data.db') or path.endswith('.db') else self.original_exists(path)
         
         try:
-            self.api = Api(condo_id=self.condo_id)
+            self.api = Api(condo_id=self.condo_id, db_path=self.temp_db_path)
         finally:
             os.path.exists = self.original_exists
             
         self.api.init_error = None
-        self.api.db_path = ":memory:"
-
-    def _mock_connect(self, *args, **kwargs):
-        if args and args[0] == self.api.db_path:
-            return self.conn
-        return self.original_connect(*args, **kwargs)
 
     def tearDown(self):
-        sqlite3.connect = self.original_connect
-        pass
+        self.conn.close()
+        import models
+        models.db.close()
+        try:
+            os.close(self.temp_db_fd)
+            os.unlink(self.temp_db_path)
+        except:
+            pass
 
     def test_get_inconsistencies_count(self):
         result = self.api.get_inconsistencies_count()
-        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["status"], "success", result.get("message"))
         
         data = result["data"]
         self.assertEqual(data["count"], 6)
@@ -98,13 +78,8 @@ class TestRunDashboard(unittest.TestCase):
         self.assertIn("prestacoes_contas", details)
 
     def test_get_dashboard_kpis(self):
-        # Insert test data into membros_gestao
-        self.cursor.execute("CREATE TABLE IF NOT EXISTS membros_gestao (id INTEGER PRIMARY KEY, condominio_id TEXT, nome TEXT, cargo TEXT);")
-        self.cursor.execute("INSERT INTO membros_gestao (id, condominio_id, nome, cargo) VALUES (1, ?, 'João', 'Síndico')", (self.condo_id,))
-        self.conn.commit()
-        
         result = self.api.get_dashboard_kpis()
-        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["status"], "success", result.get("message"))
         
         data = result["data"]
         self.assertIn("inadimplencia", data)
@@ -120,7 +95,7 @@ class TestRunDashboard(unittest.TestCase):
         result = self.api.get_transacoes()
         if result["status"] != "success":
             print("ERROR:", result)
-        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["status"], "success", result.get("message"))
         tree = result["data"]
         
         self.assertTrue(len(tree) > 0)

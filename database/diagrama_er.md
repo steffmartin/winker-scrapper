@@ -1,8 +1,7 @@
 # Diagrama de Relacionamento do Banco de Dados
 
 > [!NOTE]
-> Banco de dados SQLite do projeto **Winker Scrapper**. As relações foram inferidas a partir das chaves estrangeiras
-> presentes nos campos de cada tabela.
+> Banco de dados SQLite do projeto **Winker Scrapper**. O modelo relacional é gerenciado pelo ORM **Peewee** através da declaração de classes no arquivo `scripts/models.py`. O `ON DELETE CASCADE` garante integridade nativa nas chaves estrangeiras.
 
 ## Diagrama ER (Entidade-Relacionamento)
 
