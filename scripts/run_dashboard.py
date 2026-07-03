@@ -220,9 +220,42 @@ class Api:
                 
             query = query.order_by(t.data.asc())
             
-            rows = query.dicts()
+            rows = list(query.dicts())
             
             meses_dict = {}
+            if len(rows) == 0 and start_date and end_date:
+                from datetime import datetime
+                try:
+                    s_date = datetime.strptime(start_date, '%Y-%m-%d')
+                    e_date = datetime.strptime(end_date, '%Y-%m-%d')
+                    y, m = s_date.year, s_date.month
+                    while (y < e_date.year) or (y == e_date.year and m <= e_date.month):
+                        mes_exibicao = f"{m:02d}/{y}"
+                        mes_competencia = f"{y}-{m:02d}"
+                        meses_dict[mes_competencia] = {
+                            "data": {"descricao": mes_exibicao, "valor_total": 0, "tipo_node": "mes"},
+                            "expanded": False,
+                            "children_dict": {
+                                "Receitas": {
+                                    "data": {"descricao": "Receitas", "valor_total": 0, "porcentagem": 0.0, "tipo_node": "tipo"},
+                                    "expanded": False,
+                                    "children_dict": {}
+                                },
+                                "Despesas": {
+                                    "data": {"descricao": "Despesas", "valor_total": 0, "porcentagem": 0.0, "tipo_node": "tipo"},
+                                    "expanded": False,
+                                    "children_dict": {}
+                                }
+                            }
+                        }
+                        if m == 12:
+                            m = 1
+                            y += 1
+                        else:
+                            m += 1
+                except ValueError:
+                    pass
+            
             for row in rows:
                 mes = row["mes_competencia"]
                 mes_exibicao = row["mes_exibicao"]

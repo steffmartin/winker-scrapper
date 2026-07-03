@@ -232,7 +232,7 @@ export class Dashboard implements OnInit {
 
 
     onDateRangeChange() {
-        if (this.dateRange && this.dateRange.length === 2 && (this.dateRange[0] || this.dateRange[1])) {
+        if (this.dateRange && this.dateRange.length === 2 && this.dateRange[1]) {
             this.loadingTreeTable = true;
             
             // Limpa qualquer filtro global ativo antes de buscar novos dados
@@ -401,7 +401,8 @@ export class Dashboard implements OnInit {
 
     clearFilter(tt: any) {
         this.globalFilterValue = '';
-        this.applyGlobalFilter(tt);
+        tt.reset();
+        this.onDateRangeChange();
     }
 
     collapseAll() {

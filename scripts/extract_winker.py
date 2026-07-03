@@ -158,8 +158,8 @@ def extract_inadimplencia_from_pdf(pdf_path):
     Retorna uma tupla (data_corte, unidades, valor).
     """
     data_corte = None
-    unidades = 0
-    valor = 0.0
+    unidades = None
+    valor = None
     
     try:
         reader = pypdf.PdfReader(pdf_path)
@@ -591,14 +591,14 @@ def extract_inadimplencia_boleto(page, context):
         page.wait_for_selector(".list-group-item", timeout=15000)
     except Exception:
         logger.warning("Aviso: Nenhum boleto listado na página de boletos.")
-        return None, 0, 0.0, administradora, telefone
+        return None, None, None, administradora, telefone
         
     first_item = page.locator(".list-group-item").first
     badge_btn = first_item.locator("a.badge")
     
     if badge_btn.count() == 0:
         logger.warning("Aviso: Botão de download/visualização do boleto não encontrado.")
-        return None, 0, 0.0, administradora, telefone
+        return None, None, None, administradora, telefone
         
     temp_dir = os.path.join(project_root, "anexos", "temp")
     os.makedirs(temp_dir, exist_ok=True)
@@ -613,7 +613,7 @@ def extract_inadimplencia_boleto(page, context):
             confirm_btn.wait_for(state="visible", timeout=5000)
         except Exception:
             logger.warning("Aviso: Botão de confirmação swal2-confirm não apareceu em 5s.")
-            return None, 0, 0.0, administradora, telefone
+            return None, None, None, administradora, telefone
             
         # Clica no botão de confirmação esperando a abertura da nova página (PDF)
         prefix = f"boleto_{int(time.time())}_"
@@ -634,7 +634,7 @@ def extract_inadimplencia_boleto(page, context):
             
     except Exception as e:
         logger.error(f"Erro durante a extração de inadimplência do boleto: {e}")
-        return None, 0, 0.0, administradora, telefone
+        return None, None, None, administradora, telefone
 
 # ==========================================
 # 3. Regras de Negócio e Persistência Banco de Dados (SQLite)
