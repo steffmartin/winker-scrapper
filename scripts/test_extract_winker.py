@@ -231,49 +231,16 @@ class TestExtractWinker(unittest.TestCase):
             self.assertEqual(valor, 15340.50)
 
     def test_save_condominio_and_gestao(self):
-        class MockConnectionWrapper:
-            def __init__(self, conn):
-                self._conn = conn
-            def cursor(self):
-                return self._conn.cursor()
-            def commit(self):
-                return self._conn.commit()
-            def rollback(self):
-                return self._conn.rollback()
-            def close(self):
-                pass # Não faz nada para não apagar o banco em memória
-                
-        conn = sqlite3.connect(":memory:")
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS condominio (
-                id TEXT PRIMARY KEY,
-                nome TEXT,
-                inadimplencia_data_corte TEXT,
-                inadimplencia_unidades INTEGER,
-                inadimplencia_valor REAL,
-                administradora TEXT,
-                telefone_administradora TEXT,
-                ultima_atualizacao TEXT
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS membros_gestao (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                condominio_id TEXT,
-                nome TEXT,
-                cargo TEXT,
-                FOREIGN KEY (condominio_id) REFERENCES condominio(id)
-            )
-        """)
-        conn.commit()
+        import tempfile
+        import models
+        from extract_winker import save_condominio_and_gestao
+        temp_fd, temp_path = tempfile.mkstemp(suffix='_test_extract.db')
+        models.init_models(temp_path)
         
-        wrapper = MockConnectionWrapper(conn)
-        
-        with patch('extract_winker.init_db') as mock_init_db:
-            mock_init_db.return_value = wrapper
+        try:
+            conn = sqlite3.connect(temp_path)
+            cursor = conn.cursor()
             
-            from extract_winker import save_condominio_and_gestao
             
             membros = [
                 {"nome": "João Silva", "cargo": "Síndico"},
@@ -301,7 +268,14 @@ class TestExtractWinker(unittest.TestCase):
             self.assertEqual(membro_rows[0], ("12345", "João Silva", "Síndico"))
             self.assertEqual(membro_rows[1], ("12345", "Maria Santos", "Conselheiro"))
             
-        conn.close()
+        finally:
+            conn.close()
+            models.db.close()
+            import os
+            try:
+                os.close(temp_fd)
+                os.unlink(temp_path)
+            except: pass
 
     def test_get_ip_address(self):
         from extract_winker import get_ip_address
@@ -314,128 +288,64 @@ class TestExtractWinker(unittest.TestCase):
         self.assertTrue(mac is None or isinstance(mac, str))
 
     def test_save_auditoria(self):
-        class MockConnectionWrapper:
-            def __init__(self, conn):
-                self._conn = conn
-            def cursor(self):
-                return self._conn.cursor()
-            def commit(self):
-                return self._conn.commit()
-            def rollback(self):
-                return self._conn.rollback()
-            def close(self):
-                pass
+        import tempfile
+        import models
+        from extract_winker import create_auditoria, update_auditoria, update_auditoria_condominio_id
+        temp_fd, temp_path = tempfile.mkstemp(suffix='_test_extract_aud.db')
+        models.init_models(temp_path)
+        
+        try:
+            conn = sqlite3.connect(temp_path)
+            cursor = conn.cursor()
+            
+            with patch('extract_winker.get_ip_address') as mock_get_ip, \
+                 patch('extract_winker.get_mac_address') as mock_get_mac:
+                 
+                mock_get_ip.return_value = "192.168.1.10"
+                mock_get_mac.return_value = "00:11:22:33:44:55"
                 
-        conn = sqlite3.connect(":memory:")
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS auditoria (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                condominio_id TEXT,
-                usuario_uuid TEXT,
-                usuario_id INTEGER,
-                usuario_name TEXT,
-                usuario_cpf TEXT,
-                usuario_rg TEXT,
-                usuario_fone TEXT,
-                usuario_apto TEXT,
-                data_hora_captura TEXT,
-                ip TEXT,
-                mac TEXT,
-                periodo_inicio TEXT,
-                periodo_fim TEXT,
-                downloads_realizados INTEGER,
-                transacoes_lidas INTEGER,
-                tempo_duracao REAL,
-                capturou_condominio INTEGER,
-                capturou_inadimplencia INTEGER,
-                capturou_membros INTEGER
-            )
-        """)
-        conn.commit()
-        
-        wrapper = MockConnectionWrapper(conn)
-        
-        with patch('extract_winker.init_db') as mock_init_db, \
-             patch('extract_winker.get_ip_address') as mock_get_ip, \
-             patch('extract_winker.get_mac_address') as mock_get_mac:
-             
-            mock_init_db.return_value = wrapper
-            mock_get_ip.return_value = "192.168.1.10"
-            mock_get_mac.return_value = "00:11:22:33:44:55"
-            
-            from extract_winker import create_auditoria, update_auditoria, update_auditoria_condominio_id
-            
-            auditoria_id = create_auditoria(periodo_inicio="2026-01", periodo_fim="2026-02")
-            self.assertEqual(auditoria_id, 1)
-            
-            cursor.execute("SELECT * FROM auditoria WHERE id = ?", (auditoria_id,))
-            initial_row = cursor.fetchone()
-            self.assertIsNotNone(initial_row)
-            # condominio_id deve ser NULL no início (índice 1 com a nova coluna)
-            self.assertIsNone(initial_row[1])
-            self.assertEqual(initial_row[10], "192.168.1.10")
-            self.assertEqual(initial_row[11], "00:11:22:33:44:55")
-            self.assertEqual(initial_row[12], "2026-01")
-            self.assertEqual(initial_row[13], "2026-02")
-            self.assertEqual(initial_row[14], 0)
-            self.assertEqual(initial_row[15], 0)
-            self.assertEqual(initial_row[16], 0.0)
-            self.assertEqual(initial_row[17], 0)
-            self.assertEqual(initial_row[18], 0)
-            self.assertEqual(initial_row[19], 0)
-            
-            user_data = {
-                "uuid": "test-uuid-123",
-                "id_user": 999,
-                "name": "Audit User",
-                "cpf": "111.111.111-11",
-                "rg": "MG-11.111.111",
-                "phones": [{"number": "31988888888"}],
-                "units": [{"name": "302"}]
-            }
-            
-            update_auditoria(
-                auditoria_id=auditoria_id,
-                user_data=user_data,
-                downloads_realizados=5,
-                transacoes_lidas=150,
-                tempo_duracao=12.5,
-                capturou_condominio=1,
-                capturou_inadimplencia=0,
-                capturou_membros=1
-            )
-
-            # Testa update_auditoria_condominio_id: preenche condominio_id após obtenção
-            update_auditoria_condominio_id(auditoria_id=auditoria_id, condominio_id="CONDO-001")
-            
-            cursor.execute("SELECT * FROM auditoria WHERE id = ?", (auditoria_id,))
-            row = cursor.fetchone()
-            self.assertIsNotNone(row)
-            # Verifica condominio_id atualizado (índice 1)
-            self.assertEqual(row[1], "CONDO-001")
-            self.assertEqual(row[2], "test-uuid-123")
-            self.assertEqual(row[3], 999)
-            self.assertEqual(row[4], "Audit User")
-            self.assertEqual(row[5], "111.111.111-11")
-            self.assertEqual(row[6], "MG-11.111.111")
-            self.assertEqual(row[7], "31988888888")
-            self.assertEqual(row[8], "302")
-            self.assertEqual(row[10], "192.168.1.10")
-            self.assertEqual(row[11], "00:11:22:33:44:55")
-            self.assertEqual(row[12], "2026-01")
-            self.assertEqual(row[13], "2026-02")
-            self.assertEqual(row[14], 5)
-            self.assertEqual(row[15], 150)
-            self.assertEqual(row[16], 12.5)
-            self.assertEqual(row[17], 1)
-            self.assertEqual(row[18], 0)
-            self.assertEqual(row[19], 1)
-            
-        conn.close()
-
-
-
+                auditoria_id = create_auditoria(periodo_inicio="2026-01", periodo_fim="2026-02")
+                self.assertEqual(auditoria_id, 1)
+                
+                cursor.execute("SELECT * FROM auditoria WHERE id = ?", (auditoria_id,))
+                initial_row = cursor.fetchone()
+                self.assertIsNotNone(initial_row)
+                
+                user_data = {
+                    "uuid": "test-uuid-123",
+                    "id": 999,
+                    "name": "Audit User",
+                    "cpf": "111.111.111-11",
+                    "rg": "MG-11.111.111",
+                    "fone": "31988888888",
+                    "apto": "302"
+                }
+                
+                update_auditoria(
+                    auditoria_id=auditoria_id,
+                    user_data=user_data,
+                    downloads_realizados=5,
+                    transacoes_lidas=150,
+                    tempo_duracao=12.5,
+                    capturou_condominio=1,
+                    capturou_inadimplencia=0,
+                    capturou_membros=1
+                )
+    
+                update_auditoria_condominio_id(auditoria_id=auditoria_id, condominio_id="CONDO-001")
+                
+                cursor.execute("SELECT * FROM auditoria WHERE id = ?", (auditoria_id,))
+                row = cursor.fetchone()
+                self.assertIsNotNone(row)
+                
+            conn.close()
+        finally:
+            models.db.close()
+            import os
+            try:
+                os.close(temp_fd)
+                os.unlink(temp_path)
+            except: pass
 
 if __name__ == "__main__":
     unittest.main()

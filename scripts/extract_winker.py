@@ -1,65 +1,32 @@
-import os
-import sys
-import subprocess
 import argparse
-import time
-from datetime import datetime, timedelta
-import sqlite3
+import json
+import logging
+import os
 import re
 import shutil
-import json
 import socket
-import uuid
-import logging
-from urllib.parse import urlparse, unquote, parse_qs
+import sqlite3
+import subprocess
+import sys
+import time
 import urllib.request
+import uuid
+from datetime import datetime, timedelta
+from urllib.parse import parse_qs, unquote, urlparse
 
+# Módulos internos independentes
+from utils import logger, setup_logging
 
-def setup_logging(level_name="INFO"):
-    level = getattr(logging, level_name.upper(), logging.INFO)
-    log = logging.getLogger("winker")
-    log.setLevel(level)
-    for h in list(log.handlers):
-        log.removeHandler(h)
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter('%(message)s'))
-    log.addHandler(handler)
-    return log
-
-logger = setup_logging(os.environ.get("LOG_LEVEL", "INFO"))
-
-def install_dependencies():
-    """
-    Verifica e instala as dependências necessárias (playwright, python-dotenv).
-    Também garante que os binários do navegador Playwright estejam instalados.
-    """
-    logger.info("Verificando dependências...")
-    
-    packages = ["playwright", "python-dotenv", "pypdf"]
-    
-    for package in packages:
-        try:
-            if package == "playwright":
-                import playwright
-            elif package == "python-dotenv":
-                import dotenv
-            elif package == "pypdf":
-                import pypdf
-        except ImportError:
-            logger.info(f"Instalando pacote: {package}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package, "--quiet"])
-    
-    try:
-        subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"Aviso: Erro ao tentar instalar navegadores Playwright: {e}")
-
-# Instala as dependências antes de realizar os imports principais
+# Garantir dependências antes de importar libs externas
+from setup_deps import install_dependencies
 install_dependencies()
 
-from playwright.sync_api import sync_playwright
-from dotenv import load_dotenv
+# Dependências externas e modelos
 import pypdf
+from dotenv import load_dotenv
+from playwright.sync_api import sync_playwright
+
+import models
 
 # Carrega variáveis de ambiente do .env localizado na raiz do projeto
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -675,221 +642,47 @@ def extract_inadimplencia_boleto(page, context):
 
 def init_db(db_path=None):
     """
-    Inicializa o banco de dados SQLite com a estrutura hierárquica e tipos reais.
+    Inicializa o banco de dados SQLite com a estrutura hierárquica e tipos reais através do ORM Peewee.
     """
     if db_path is None:
         db_path = os.path.join(project_root, "database", "winker_data.db")
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA foreign_keys = ON")
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS condominio (
-            id TEXT PRIMARY KEY,
-            nome TEXT,
-            inadimplencia_data_corte TEXT,
-            inadimplencia_unidades INTEGER,
-            inadimplencia_valor REAL,
-            administradora TEXT,
-            telefone_administradora TEXT,
-            ultima_atualizacao TEXT
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS membros_gestao (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            condominio_id TEXT,
-            nome TEXT,
-            cargo TEXT,
-            FOREIGN KEY (condominio_id) REFERENCES condominio(id) ON DELETE CASCADE
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS meses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            condominio_id TEXT,
-            exibicao TEXT,
-            competencia TEXT,
-            receita_total REAL,
-            despesa_total REAL,
-            consistente INTEGER DEFAULT 1,
-            motivo_inconsistencia TEXT,
-            revisado_usuario INTEGER DEFAULT 0,
-            FOREIGN KEY (condominio_id) REFERENCES condominio(id) ON DELETE CASCADE
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS categorias (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            mes_id INTEGER,
-            tipo TEXT, 
-            nome TEXT,
-            valor REAL,
-            consistente INTEGER DEFAULT 1,
-            motivo_inconsistencia TEXT,
-            revisado_usuario INTEGER DEFAULT 0,
-            FOREIGN KEY (mes_id) REFERENCES meses(id) ON DELETE CASCADE
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS subcategorias (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            categoria_id INTEGER,
-            tipo TEXT, 
-            nome TEXT,
-            valor REAL,
-            consistente INTEGER DEFAULT 1,
-            motivo_inconsistencia TEXT,
-            revisado_usuario INTEGER DEFAULT 0,
-            FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE CASCADE
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS transacoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            subcategoria_id INTEGER,
-            tipo TEXT, 
-            data TEXT,
-            descricao TEXT,
-            valor REAL,
-            apartamento TEXT,
-            competencia TEXT,
-            fornecedor TEXT,
-            conta TEXT,
-            anexos INTEGER DEFAULT 0,
-            consistente INTEGER DEFAULT 1,
-            motivo_inconsistencia TEXT,
-            revisado_usuario INTEGER DEFAULT 0,
-            FOREIGN KEY (subcategoria_id) REFERENCES subcategorias(id) ON DELETE CASCADE
-        )
-    """)
-    
-    # Garante que a coluna 'conta' existe na tabela transacoes para bancos existentes
-    cursor.execute("PRAGMA table_info(transacoes)")
-    colunas = [col[1] for col in cursor.fetchall()]
-    if colunas and "conta" not in colunas:
-        cursor.execute("ALTER TABLE transacoes ADD COLUMN conta TEXT")
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS anexos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            transacao_id INTEGER,
-            caminho_local TEXT,
-            nome_original TEXT,
-            extensao TEXT,
-            consistente INTEGER DEFAULT 1,
-            motivo_inconsistencia TEXT,
-            revisado_usuario INTEGER DEFAULT 0,
-            FOREIGN KEY (transacao_id) REFERENCES transacoes(id) ON DELETE CASCADE
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS prestacoes_contas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            mes_id INTEGER,
-            caminho_local TEXT,
-            nome_original TEXT,
-            extensao TEXT,
-            consistente INTEGER DEFAULT 1,
-            motivo_inconsistencia TEXT,
-            revisado_usuario INTEGER DEFAULT 0,
-            FOREIGN KEY (mes_id) REFERENCES meses(id) ON DELETE CASCADE
-        )
-    """)
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS auditoria (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            condominio_id TEXT,
-            usuario_uuid TEXT,
-            usuario_id INTEGER,
-            usuario_name TEXT,
-            usuario_cpf TEXT,
-            usuario_rg TEXT,
-            usuario_fone TEXT,
-            usuario_apto TEXT,
-            data_hora_captura TEXT,
-            ip TEXT,
-            mac TEXT,
-            periodo_inicio TEXT,
-            periodo_fim TEXT,
-            downloads_realizados INTEGER,
-            transacoes_lidas INTEGER,
-            tempo_duracao REAL,
-            capturou_condominio INTEGER,
-            capturou_inadimplencia INTEGER,
-            capturou_membros INTEGER,
-            FOREIGN KEY (condominio_id) REFERENCES condominio(id) ON DELETE CASCADE
-        )
-    """)
-    
-    conn.commit()
-    return conn
+    models.init_models(db_path)
+    return models.db
 
 def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone, membros):
     """
-    Salva ou atualiza as informações do condomínio e de seus membros de gestão no banco.
-    Todos os membros da gestão são vinculados ao condomínio via condominio_id.
+    Salva ou atualiza os dados raiz do condomínio e sua gestão (síndico, conselheiros).
     """
-    db_conn = init_db()
-    db_cursor = db_conn.cursor()
+
     try:
-        db_cursor.execute("BEGIN")
-        # Faz um upsert para não apagar todo o banco (pois tem ON DELETE CASCADE)
-        db_cursor.execute("""
-            INSERT INTO condominio (id, nome, inadimplencia_data_corte, inadimplencia_unidades, inadimplencia_valor, administradora, telefone_administradora, ultima_atualizacao)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                nome=excluded.nome,
-                inadimplencia_data_corte=excluded.inadimplencia_data_corte,
-                inadimplencia_unidades=excluded.inadimplencia_unidades,
-                inadimplencia_valor=excluded.inadimplencia_valor,
-                administradora=excluded.administradora,
-                telefone_administradora=excluded.telefone_administradora,
-                ultima_atualizacao=excluded.ultima_atualizacao
-        """, (condo_id, condo_nome, data_corte, unidades, valor, administradora, telefone, datetime.now().isoformat()))
+        cond, created = models.Condominio.get_or_create(id=condo_id)
+        cond.nome = condo_nome
+        if data_corte: cond.inadimplencia_data_corte = data_corte
+        if unidades is not None: cond.inadimplencia_unidades = unidades
+        if valor is not None: cond.inadimplencia_valor = valor
+        if administradora: cond.administradora = administradora
+        if telefone: cond.telefone_administradora = telefone
+        cond.ultima_atualizacao = datetime.now().isoformat()
+        cond.save()
         
-        # Limpa e reinsere membros da gestão vinculados ao condomínio
-        db_cursor.execute("DELETE FROM membros_gestao")
-        for membro in membros:
-            db_cursor.execute("""
-                INSERT INTO membros_gestao (condominio_id, nome, cargo)
-                VALUES (?, ?, ?)
-            """, (condo_id, membro["nome"], membro["cargo"]))
-            
-        db_conn.commit()
+        models.MembrosGestao.delete().where(models.MembrosGestao.condominio_id == condo_id).execute()
+        for m in membros:
+            models.MembrosGestao.create(condominio_id=condo_id, nome=m['nome'], cargo=m['cargo'])
     except Exception as e:
-        db_conn.rollback()
-        logger.error(f"Erro ao salvar dados do condomínio e gestão no banco: {e}")
-    finally:
-        db_conn.close()
+        logger.error(f"Erro ao salvar dados do condomínio: {e}")
 
 def save_prestacao_contas(mes_id, caminho_local, nome_original, extensao, consistente, motivo_inconsistencia):
     """
-    Salva ou atualiza os dados da prestação de contas de um determinado mês.
-    Recebe o mes_id inteiro (PK de meses) para vincular o registro.
+    Salva o registro do PDF da prestação de contas mensal no banco.
     """
-    db_conn = init_db()
-    db_cursor = db_conn.cursor()
     try:
-        db_cursor.execute("BEGIN")
-        
-        db_cursor.execute("""
-            INSERT INTO prestacoes_contas (mes_id, caminho_local, nome_original, extensao, consistente, motivo_inconsistencia, revisado_usuario)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (mes_id, caminho_local, nome_original, extensao, consistente, motivo_inconsistencia, consistente))
-        db_conn.commit()
+        models.PrestacoesContas.create(
+            mes_id=mes_id, caminho_local=caminho_local, nome_original=nome_original,
+            extensao=extensao, consistente=consistente, motivo_inconsistencia=motivo_inconsistencia
+        )
     except Exception as e:
-        db_conn.rollback()
-        logger.error(f"Erro ao salvar prestação de contas no banco para mes_id={mes_id}: {e}")
-    finally:
-        db_conn.close()
+        logger.error(f"Erro ao salvar prestação de contas no banco: {e}")
 
 def get_ip_address():
     url_list = ["https://api.ipify.org", "https://www.meuip.com/api/meuip.php", "https://ipinfo.io/ip"]
@@ -940,109 +733,54 @@ def get_mac_address():
 
 def create_auditoria(periodo_inicio, periodo_fim):
     """
-    Cria uma nova linha de auditoria no início da execução e retorna o seu ID.
-    O campo condominio_id é inicialmente NULL pois o log começa antes da extração do condomínio;
-    deve ser atualizado via update_auditoria_condominio_id() após a obtenção do id.
+    Cria o registro inicial de auditoria da sessão de scraping.
     """
-    db_conn = init_db()
-    db_cursor = db_conn.cursor()
-    
-    ip = get_ip_address()
-    mac = get_mac_address()
-    data_hora_captura = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
     try:
-        db_cursor.execute("BEGIN")
-        db_cursor.execute("""
-            INSERT INTO auditoria (
-                condominio_id, data_hora_captura, ip, mac, periodo_inicio, periodo_fim,
-                downloads_realizados, transacoes_lidas, tempo_duracao,
-                capturou_condominio, capturou_inadimplencia, capturou_membros
-            ) VALUES (NULL, ?, ?, ?, ?, ?, 0, 0, 0.0, 0, 0, 0)
-        """, (data_hora_captura, ip, mac, periodo_inicio, periodo_fim))
-        auditoria_id = db_cursor.lastrowid
-        db_conn.commit()
-        return auditoria_id
+        aud = models.Auditoria.create(
+            periodo_inicio=periodo_inicio,
+            periodo_fim=periodo_fim,
+            data_hora_captura=datetime.now().isoformat()
+        )
+        return aud.id
     except Exception as e:
-        db_conn.rollback()
+        logger.error(f"Erro ao iniciar registro de auditoria: {e}")
         return None
-    finally:
-        db_conn.close()
 
 def update_auditoria_condominio_id(auditoria_id, condominio_id):
     """
-    Atualiza o condominio_id do registro de auditoria após a obtenção do ID do condomínio.
-    Chamada imediatamente após a extração bem-sucedida dos dados do condomínio.
+    Atualiza o registro de auditoria com o ID do condomínio logo após descobri-lo.
     """
-    if auditoria_id is None or condominio_id is None:
-        return
-
-    db_conn = init_db()
-    db_cursor = db_conn.cursor()
+    if not auditoria_id or not condominio_id: return
     try:
-        db_cursor.execute("BEGIN")
-        db_cursor.execute(
-            "UPDATE auditoria SET condominio_id = ? WHERE id = ?",
-            (condominio_id, auditoria_id)
-        )
-        db_conn.commit()
+        models.Auditoria.update(condominio_id=condominio_id).where(models.Auditoria.id == auditoria_id).execute()
     except Exception as e:
-        db_conn.rollback()
-        logger.error(f"Erro ao atualizar condominio_id na auditoria: {e}")
-    finally:
-        db_conn.close()
+        logger.error(f"Erro ao atualizar condominio na auditoria: {e}")
 
 def update_auditoria(auditoria_id, user_data, downloads_realizados, transacoes_lidas, tempo_duracao, capturou_condominio, capturou_inadimplencia, capturou_membros):
     """
-    Atualiza uma linha de auditoria existente com dados mais recentes da execução.
+    Finaliza o registro de auditoria adicionando dados do usuário e métricas de execução.
     """
-    if auditoria_id is None:
-        return
-        
-    db_conn = init_db()
-    db_cursor = db_conn.cursor()
-    
-    usuario_uuid = user_data.get("uuid") if user_data else None
-    usuario_id = user_data.get("id_user") if user_data else None
-    usuario_name = user_data.get("name") if user_data else None
-    usuario_cpf = user_data.get("cpf") if user_data else None
-    usuario_rg = user_data.get("rg") if user_data else None
-    
-    phones = user_data.get("phones", []) if user_data else []
-    usuario_fone = phones[0].get("number") if phones else None
-    
-    units = user_data.get("units", []) if user_data else []
-    usuario_apto = units[0].get("name") if units else None
-    
+    if not auditoria_id: return
     try:
-        db_cursor.execute("BEGIN")
-        db_cursor.execute("""
-            UPDATE auditoria SET
-                usuario_uuid = ?,
-                usuario_id = ?,
-                usuario_name = ?,
-                usuario_cpf = ?,
-                usuario_rg = ?,
-                usuario_fone = ?,
-                usuario_apto = ?,
-                downloads_realizados = ?,
-                transacoes_lidas = ?,
-                tempo_duracao = ?,
-                capturou_condominio = ?,
-                capturou_inadimplencia = ?,
-                capturou_membros = ?
-            WHERE id = ?
-        """, (
-            usuario_uuid, usuario_id, usuario_name, usuario_cpf, usuario_rg, usuario_fone, usuario_apto,
-            downloads_realizados, transacoes_lidas, tempo_duracao,
-            capturou_condominio, capturou_inadimplencia, capturou_membros,
-            auditoria_id
-        ))
-        db_conn.commit()
+        models.Auditoria.update(
+            usuario_uuid=user_data.get("uuid"),
+            usuario_id=user_data.get("id"),
+            usuario_name=user_data.get("name"),
+            usuario_cpf=user_data.get("cpf"),
+            usuario_rg=user_data.get("rg"),
+            usuario_fone=user_data.get("fone"),
+            usuario_apto=user_data.get("apto"),
+            ip=get_ip_address(),
+            mac=get_mac_address(),
+            downloads_realizados=downloads_realizados,
+            transacoes_lidas=transacoes_lidas,
+            tempo_duracao=tempo_duracao,
+            capturou_condominio=int(capturou_condominio),
+            capturou_inadimplencia=int(capturou_inadimplencia),
+            capturou_membros=int(capturou_membros)
+        ).where(models.Auditoria.id == auditoria_id).execute()
     except Exception as e:
-        db_conn.rollback()
-    finally:
-        db_conn.close()
+        logger.error(f"Erro ao finalizar auditoria: {e}")
 
 def evaluate_entity_consistency(entity_type, **kwargs):
     """
@@ -1173,165 +911,118 @@ def evaluate_entity_consistency(entity_type, **kwargs):
         raise ValueError(f"Tipo de entidade desconhecido para validação de consistência: {entity_type}")
 
 def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root, condominio_id=None):
-    """
-    Insere todos os dados extraídos do mês no banco de dados SQLite, executando as análises
-    de consistência e retornando uma tupla (mes_id, anexos_para_mover) onde mes_id é o
-    INTEGER gerado para o registro de meses, usado para vincular prestações de contas.
-    chave_unica (YYYYMM) é mantido apenas para nomear diretórios de anexos.
-    """
-    db_conn = init_db()
-    db_cursor = db_conn.cursor()
+    db_conn = models.db
     anexos_para_mover = []
     exibicao = f"{nome_mes_abbr}/{ano_item}"
     
     try:
-        db_cursor.execute("BEGIN")
-        # Remove registros antigos do mesmo mês/condomínio para evitar duplicados.
-        # Usa exibicao + condominio_id como identificador natural, pois id agora é AUTOINCREMENT.
-        db_cursor.execute(
-            "DELETE FROM meses WHERE exibicao = ? AND condominio_id = ?",
-            (exibicao, condominio_id)
-        )
-        
-        # 1. Análise de consistência do mês
-        soma_cat_rec = sum(parse_currency(cat['valor']) for cat in detalhes_mes["receitas"])
-        soma_cat_desp = sum(parse_currency(cat['valor']) for cat in detalhes_mes["despesas"])
-        
-        mes_consistente, mes_motivo = evaluate_entity_consistency(
-            'mes',
-            rec_total_mes=rec_total_mes,
-            soma_cat_rec=soma_cat_rec,
-            desp_total_mes=des_total_mes,
-            soma_cat_desp=soma_cat_desp
-        )
-        
-        if not mes_consistente:
-            logger.debug(f"    [AVISO CONSISTÊNCIA] Inconsistência no Mês {nome_mes_abbr}/{ano_item}:")
-            logger.debug(f"      - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
-            logger.debug(f"      - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
+        with db_conn.atomic():
+            models.Meses.delete().where((models.Meses.exibicao == exibicao) & (models.Meses.condominio_id == condominio_id)).execute()
             
-        competencia = get_competencia(exibicao)
+            soma_cat_rec = sum(parse_currency(cat['valor']) for cat in detalhes_mes["receitas"])
+            soma_cat_desp = sum(parse_currency(cat['valor']) for cat in detalhes_mes["despesas"])
+            
+            mes_consistente, mes_motivo = evaluate_entity_consistency(
+                'mes', rec_total_mes=rec_total_mes, soma_cat_rec=soma_cat_rec,
+                desp_total_mes=des_total_mes, soma_cat_desp=soma_cat_desp
+            )
+            
+            if not mes_consistente:
+                logger.debug(f"    [AVISO CONSISTÊNCIA] Inconsistência no Mês {nome_mes_abbr}/{ano_item}:")
+                logger.debug(f"      - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
+                logger.debug(f"      - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
 
-        db_cursor.execute(
-            "INSERT INTO meses (condominio_id, exibicao, competencia, receita_total, despesa_total, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (condominio_id, exibicao, competencia, rec_total_mes, des_total_mes, mes_consistente, mes_motivo, mes_consistente)
-        )
-        mes_id = db_cursor.lastrowid
-        
-        # 2. Processa categorias, subcategorias, transações e anexos
-        for t_key in ["receitas", "despesas"]:
-            tipo_flag = "R" if t_key == "receitas" else "D"
-            for cat in detalhes_mes[t_key]:
-                cat_val_num = parse_currency(cat['valor'])
-                soma_sub = sum(parse_currency(sub['valor']) for sub in cat['subcategorias'])
-                
-                cat_consistente, cat_motivo = evaluate_entity_consistency(
-                    'categoria',
-                    cat_nome=cat['nome'],
-                    cat_val_num=cat_val_num,
-                    soma_sub=soma_sub
-                )
+            competencia = get_competencia(exibicao)
+            
+            mes = models.Meses.create(
+                condominio_id=condominio_id, exibicao=exibicao, competencia=competencia,
+                receita_total=rec_total_mes, despesa_total=des_total_mes,
+                consistente=mes_consistente, motivo_inconsistencia=mes_motivo, revisado_usuario=mes_consistente
+            )
+            mes_id = mes.id
+            
+            for t_key in ["receitas", "despesas"]:
+                tipo_flag = "R" if t_key == "receitas" else "D"
+                for cat in detalhes_mes[t_key]:
+                    cat_val_num = parse_currency(cat['valor'])
+                    soma_sub = sum(parse_currency(sub['valor']) for sub in cat['subcategorias'])
                     
-                db_cursor.execute(
-                    "INSERT INTO categorias (mes_id, tipo, nome, valor, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (mes_id, tipo_flag, cat['nome'], cat_val_num, cat_consistente, cat_motivo, cat_consistente)
-                )
-                cat_id = db_cursor.lastrowid
-                
-                for sub in cat['subcategorias']:
-                    sub_val_num = parse_currency(sub['valor'])
-                    soma_itens = sum(parse_currency(item['valor']) for item in sub['itens'])
+                    cat_consistente, cat_motivo = evaluate_entity_consistency('categoria', cat_nome=cat['nome'], cat_val_num=cat_val_num, soma_sub=soma_sub)
                     
-                    sub_consistente, sub_motivo = evaluate_entity_consistency(
-                        'subcategoria',
-                        sub_nome=sub['nome'],
-                        sub_val_num=sub_val_num,
-                        soma_itens=soma_itens
+                    cat_obj = models.Categorias.create(
+                        mes_id=mes_id, tipo=tipo_flag, nome=cat['nome'], valor=cat_val_num,
+                        consistente=cat_consistente, motivo_inconsistencia=cat_motivo, revisado_usuario=cat_consistente
                     )
-                        
-                    db_cursor.execute(
-                        "INSERT INTO subcategorias (categoria_id, tipo, nome, valor, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (cat_id, tipo_flag, sub['nome'], sub_val_num, sub_consistente, sub_motivo, sub_consistente)
-                    )
-                    sub_id = db_cursor.lastrowid
+                    cat_id = cat_obj.id
                     
-                    for item in sub['itens']:
-                        desc_completa = item['nome']
-                        data_t = None
-                        if "(" in desc_completa and ")" in desc_completa:
-                            partes = desc_completa.rsplit(" (", 1)
-                            desc_f, data_t = partes[0], partes[1].replace(")", "")
-                        else:
-                            desc_f = desc_completa
-                            
-                        anexos_esperados = item.get("anexos_count", 0)
-                        anexos_baixados = len(item.get("anexos", []))
+                    for sub in cat['subcategorias']:
+                        sub_val_num = parse_currency(sub['valor'])
+                        soma_itens = sum(parse_currency(item['valor']) for item in sub['itens'])
                         
-                        despesa_anexo_valido = not (tipo_flag == "D" and anexos_esperados == 0)
+                        sub_consistente, sub_motivo = evaluate_entity_consistency('subcategoria', sub_nome=sub['nome'], sub_val_num=sub_val_num, soma_itens=soma_itens)
                         
-                        # Avalia a consistência da transação de forma isolada
-                        trans_consistente, trans_motivo, apto, comp, fornecedor, conta = evaluate_entity_consistency(
-                            'transacao',
-                            tipo_flag=tipo_flag,
-                            desc_completa=desc_completa,
-                            desc_f=desc_f,
-                            anexos_esperados=anexos_esperados,
-                            anexos_baixados=anexos_baixados,
-                            despesa_anexo_valido=despesa_anexo_valido
+                        sub_obj = models.Subcategorias.create(
+                            categoria_id=cat_id, tipo=tipo_flag, nome=sub['nome'], valor=sub_val_num,
+                            consistente=sub_consistente, motivo_inconsistencia=sub_motivo, revisado_usuario=sub_consistente
                         )
+                        sub_id = sub_obj.id
                         
-                        if not trans_consistente:
-                            logger.debug(f"    [AVISO CONSISTÊNCIA] Transação '{desc_f}' [{tipo_flag}]: Inconsistente ({trans_motivo})")
+                        for item in sub['itens']:
+                            desc_completa = item['nome']
+                            data_t = None
+                            if "(" in desc_completa and ")" in desc_completa:
+                                partes = desc_completa.rsplit(" (", 1)
+                                desc_f, data_t = partes[0], partes[1].replace(")", "")
+                            else:
+                                desc_f = desc_completa
+                                
+                            anexos_esperados = item.get("anexos_count", 0)
+                            anexos_baixados = len(item.get("anexos", []))
+                            despesa_anexo_valido = not (tipo_flag == "D" and anexos_esperados == 0)
                             
-                        db_cursor.execute(
-                            """
-                            INSERT INTO transacoes (subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, conta, anexos, consistente, motivo_inconsistencia, revisado_usuario)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """,
-                            (sub_id, tipo_flag, data_t, desc_f, parse_currency(item['valor']), apto, comp, fornecedor, conta, anexos_esperados, trans_consistente, trans_motivo, trans_consistente)
-                        )
-                        transacao_id = db_cursor.lastrowid
-                        
-                        for anexo in item.get("anexos", []):
-                            temp_path = anexo["temp_path"]
-                            nome_orig = anexo["nome_original"]
-                            extensao = get_extensao(nome_orig)
+                            trans_consistente, trans_motivo, apto, comp, fornecedor, conta = evaluate_entity_consistency(
+                                'transacao', tipo_flag=tipo_flag, desc_completa=desc_completa, desc_f=desc_f,
+                                anexos_esperados=anexos_esperados, anexos_baixados=anexos_baixados, despesa_anexo_valido=despesa_anexo_valido
+                            )
+
+                            if not trans_consistente:
+                                logger.debug(f"    [AVISO CONSISTÊNCIA] Transação '{desc_f}' [{tipo_flag}]: Inconsistente ({trans_motivo})")
                             
-                            if os.path.exists(temp_path):
-                                # Análise do anexo centralizada
-                                anexo_consistente, anexo_motivo = evaluate_entity_consistency(
-                                    'anexo',
-                                    extensao=extensao
-                                )
+                            trans_obj = models.Transacoes.create(
+                                subcategoria_id=sub_id, tipo=tipo_flag, data=data_t, descricao=desc_f,
+                                valor=parse_currency(item['valor']), apartamento=apto, competencia=comp,
+                                fornecedor=fornecedor, conta=conta, anexos=anexos_esperados,
+                                consistente=trans_consistente, motivo_inconsistencia=trans_motivo, revisado_usuario=trans_consistente
+                            )
+                            transacao_id = trans_obj.id
+
+                            for anexo in item.get("anexos", []):
+                                temp_path = anexo["temp_path"]
+                                nome_orig = anexo["nome_original"]
+                                extensao = get_extensao(nome_orig)
+                                
+                                if os.path.exists(temp_path):
+                                    anexo_consistente, anexo_motivo = evaluate_entity_consistency('anexo', extensao=extensao)
                                     
-                                db_cursor.execute(
-                                    "INSERT INTO anexos (transacao_id, caminho_local, nome_original, extensao, consistente, motivo_inconsistencia, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                    (transacao_id, "", nome_orig, extensao, anexo_consistente, anexo_motivo, anexo_consistente)
-                                )
-                                anexo_id = db_cursor.lastrowid
-                                
-                                nome_final = f"{chave_unica}_{cat_id}_{sub_id}_{transacao_id}_{anexo_id}_{nome_orig}"
-                                caminho_relativo = f"anexos/{condominio_id}/{chave_unica}/{nome_final}"
-                                
-                                db_cursor.execute(
-                                    "UPDATE anexos SET caminho_local = ? WHERE id = ?",
-                                    (caminho_relativo, anexo_id)
-                                )
-                                
-                                mes_dir = os.path.join(project_root, "anexos", str(condominio_id), chave_unica)
-                                caminho_final = os.path.join(mes_dir, nome_final)
-                                
-                                anexos_para_mover.append({
-                                    "temp_path": temp_path,
-                                    "caminho_final": caminho_final
-                                })
-        db_conn.commit()
+                                    anexo_obj = models.Anexos.create(
+                                        transacao_id=transacao_id, caminho_local="", nome_original=nome_orig, extensao=extensao,
+                                        consistente=anexo_consistente, motivo_inconsistencia=anexo_motivo, revisado_usuario=anexo_consistente
+                                    )
+                                    anexo_id = anexo_obj.id
+                                    
+                                    nome_final = f"{chave_unica}_{cat_id}_{sub_id}_{transacao_id}_{anexo_id}_{nome_orig}"
+                                    caminho_relativo = f"anexos/{condominio_id}/{chave_unica}/{nome_final}"
+                                    
+                                    anexo_obj.caminho_local = caminho_relativo
+                                    anexo_obj.save()
+                                    
+                                    mes_dir = os.path.join(project_root, "anexos", str(condominio_id), chave_unica)
+                                    caminho_final = os.path.join(mes_dir, nome_final)
+                                    
+                                    anexos_para_mover.append({"temp_path": temp_path, "caminho_final": caminho_final})
     except Exception as e:
-        db_conn.rollback()
         logger.error(f"Erro DB {chave_unica}: {e}")
         raise e
-    finally:
-        db_conn.close()
         
     return mes_id, anexos_para_mover
 
@@ -1704,7 +1395,7 @@ if __name__ == "__main__":
     parser.add_argument('--log-level', default=os.environ.get("LOG_LEVEL", "INFO"), choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
     args = parser.parse_args()
     
-    logger = setup_logging(args.log_level)
+    setup_logging(args.log_level)
     
     # Prioridade para os argumentos de linha de comando, caindo para as env vars
     user = args.user or os.environ.get("WINKER_USER")
