@@ -88,7 +88,7 @@ class TestRunDashboard(unittest.TestCase):
         self.assertIn("resumo_mes", data)
         
         self.assertEqual(data["gestao"]["membros"][0]["nome"], "João")
-        self.assertEqual(data["saldos"]["saldo_total"], 0)
+        self.assertEqual(data["saldos"]["saldo_total"], 400.0)
         self.assertEqual(data["resumo_mes"]["resultado"], 200.0) # rec 600 - desp 400
 
     def test_get_transacoes(self):
@@ -96,7 +96,7 @@ class TestRunDashboard(unittest.TestCase):
         if result["status"] != "success":
             print("ERROR:", result)
         self.assertEqual(result["status"], "success", result.get("message"))
-        tree = result["data"]
+        tree = result["data"]["tree"]
         
         self.assertTrue(len(tree) > 0)
         

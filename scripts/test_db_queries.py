@@ -109,8 +109,9 @@ class TestDBQueries(unittest.TestCase):
             self.assertEqual(kpis["data"]["resumo_mes"]["receita_total"], 5000.0)
             
             transacoes = api.get_transacoes()
-            self.assertTrue(len(transacoes["data"]) > 0)
-            self.assertEqual(transacoes["data"][0]["data"]["valor_total"], 4000.0)
+            tree = transacoes["data"]["tree"]
+            self.assertTrue(len(tree) > 0)
+            self.assertEqual(tree[0]["data"]["valor_total"], 4000.0)
         finally:
             run_dashboard.project_root = original_rd_root
 
