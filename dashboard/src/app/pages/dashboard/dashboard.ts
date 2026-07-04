@@ -97,6 +97,7 @@ export class Dashboard implements OnInit {
     // Chart State
     chartData: any;
     chartOptions: any;
+    chartPlugins: any[] = [];
     isSingleMonth = false;
 
     // Attachments Popover State
@@ -109,6 +110,7 @@ export class Dashboard implements OnInit {
         const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
         this.dateRange = [firstDay, today];
 
+        this.initChartPlugins();
         this.detectEnvironmentAndLoad();
 
         // Listen to theme changes to update chart colors
@@ -118,6 +120,52 @@ export class Dashboard implements OnInit {
                 this.cdr.detectChanges();
             });
         }
+    }
+
+    initChartPlugins() {
+        this.chartPlugins = [
+            {
+                id: 'yearLinePlugin',
+                afterDraw: (chart: any) => {
+                    if (!chart.chartArea || !chart.data || !chart.data.labels) return;
+                    const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
+
+                    chart.data.labels.forEach((label: string, index: number) => {
+                        if (index > 0 && index < chart.data.labels.length - 1 && label && label.toString().toUpperCase().startsWith('JAN/')) {
+                            // Using getPixelForValue or meta data to avoid autoSkip issues from getPixelForTick
+                            const meta = chart.getDatasetMeta(0);
+                            let xPos = 0;
+                            if (meta && meta.data && meta.data[index]) {
+                                xPos = meta.data[index].x;
+                            } else {
+                                // Fallback for Category scale
+                                xPos = x.getPixelForValue(index);
+                            }
+                            
+                            const yearMatch = label.match(/\d{4}/);
+                            const year = yearMatch ? yearMatch[0] : '';
+
+                            ctx.save();
+                            ctx.beginPath();
+                            const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--p-primary-color') || getComputedStyle(document.documentElement).getPropertyValue('--primary-color') || '#3b82f6';
+                            ctx.strokeStyle = primaryColor;
+                            ctx.lineWidth = 1;
+                            ctx.setLineDash([5, 5]);
+                            ctx.moveTo(xPos, top);
+                            ctx.lineTo(xPos, bottom);
+                            ctx.stroke();
+
+                            ctx.fillStyle = primaryColor;
+                            ctx.font = 'bold 12px sans-serif';
+                            ctx.textAlign = 'center';
+                            // Desenha o ano um pouco acima do topo da área do chart, ou no topo do chart se preferir
+                            ctx.fillText(year, xPos, top + 15);
+                            ctx.restore();
+                        }
+                    });
+                }
+            }
+        ];
     }
 
     detectEnvironmentAndLoad() {
@@ -752,10 +800,15 @@ export class Dashboard implements OnInit {
         const textColor = documentStyle.getPropertyValue('--text-color') || '#495057';
         const textColorSecondary = documentStyle.getPropertyValue('--text-color-secondary') || '#6c757d';
         const surfaceBorder = documentStyle.getPropertyValue('--surface-border') || '#dfe7ef';
+        const primaryColor = documentStyle.getPropertyValue('--p-primary-color') || documentStyle.getPropertyValue('--primary-color') || '#3b82f6';
 
         this.chartOptions = {
             maintainAspectRatio: false,
             aspectRatio: 0.8,
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
             plugins: {
                 legend: {
                     display: false
@@ -779,9 +832,21 @@ export class Dashboard implements OnInit {
                 x: {
                     stacked: this.isSingleMonth,
                     ticks: {
-                        color: textColorSecondary,
-                        font: {
-                            weight: 500
+                        color: (context: any) => {
+                            if (this.isSingleMonth) return textColorSecondary;
+                            const label = this.chartData?.labels?.[context.index] || '';
+                            if (label.toString().toUpperCase().startsWith('JAN/')) {
+                                return primaryColor;
+                            }
+                            return textColorSecondary;
+                        },
+                        font: (context: any) => {
+                            if (this.isSingleMonth) return { weight: 500 };
+                            const label = this.chartData?.labels?.[context.index] || '';
+                            if (label.toString().toUpperCase().startsWith('JAN/')) {
+                                return { weight: 'bold' };
+                            }
+                            return { weight: 500 };
                         }
                     },
                     grid: {

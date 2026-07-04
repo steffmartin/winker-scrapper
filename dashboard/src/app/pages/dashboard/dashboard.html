@@ -261,7 +261,7 @@
                         </div>
                     </div>
                     <ng-container *ngIf="!loadingTreeTable">
-                        <p-chart type="line" [data]="chartData" [options]="chartOptions" *ngIf="!isSingleMonth" height="400px"></p-chart>
+                        <p-chart type="line" [data]="chartData" [options]="chartOptions" [plugins]="chartPlugins" *ngIf="!isSingleMonth" height="400px"></p-chart>
                         <p-chart type="bar" [data]="chartData" [options]="chartOptions" *ngIf="isSingleMonth" height="400px"></p-chart>
                     </ng-container>
                 </div>
