@@ -206,16 +206,16 @@
                         <td class="whitespace-nowrap px-4" [ngClass]="getRowClass(rowData)">
                             <div class="flex items-center justify-end w-full h-full">
                                 <ng-container *ngIf="rowNode.node.children === undefined">
-                                    <i *ngIf="rowData.anexos > 0" class="pi pi-paperclip text-inherit mr-3 text-lg cursor-pointer" [pTooltip]="rowData.anexos + ' documento(s)'" tooltipPosition="left"></i>
-                                    <i *ngIf="rowData.consistente" class="pi pi-check-circle text-primary-500 text-lg" pTooltip="Lançamento consistente" tooltipPosition="left"></i>
-                                    <i *ngIf="!rowData.consistente" class="pi pi-times-circle text-red-500 text-lg" pTooltip="Lançamento inconsistente" tooltipPosition="left"></i>
+                                    <i *ngIf="rowData.anexos > 0" class="pi pi-paperclip text-inherit mr-3 text-lg cursor-pointer" [pTooltip]="rowData.anexos + ' documento(s)'" tooltipPosition="left" (click)="abrirAnexos(rowData, $event, op)"></i>
+                                    <i *ngIf="rowData.consistente" class="pi pi-check-circle text-primary-500 text-lg" pTooltip="Lançamento consistente" tooltipPosition="right"></i>
+                                    <i *ngIf="!rowData.consistente" class="pi pi-times-circle text-red-500 text-lg" pTooltip="Lançamento inconsistente" tooltipPosition="right"></i>
                                 </ng-container>
                                 <ng-container *ngIf="rowData.tipo_node === 'mes'">
-                                    <i *ngIf="rowData.anexos > 0" class="pi pi-paperclip text-inherit mr-3 text-lg cursor-pointer" [pTooltip]="rowData.anexos + ' documento(s)'" tooltipPosition="left"></i>
-                                    <i *ngIf="rowData.consistente" class="pi pi-check-circle text-primary-500 text-lg" pTooltip="Mês consistente" tooltipPosition="left"></i>
+                                    <i *ngIf="rowData.anexos > 0" class="pi pi-paperclip text-inherit mr-3 text-lg cursor-pointer" [pTooltip]="rowData.anexos + ' documento(s)'" tooltipPosition="left" (click)="abrirAnexos(rowData, $event, op)"></i>
+                                    <i *ngIf="rowData.consistente" class="pi pi-check-circle text-primary-500 text-lg" pTooltip="Mês consistente" tooltipPosition="right"></i>
                                     <ng-container *ngIf="!rowData.consistente">
-                                        <i *ngIf="!isMonthOpen(rowData)" class="pi pi-times-circle text-red-500 text-lg" pTooltip="Mês inconsistente" tooltipPosition="left"></i>
-                                        <i *ngIf="isMonthOpen(rowData)" class="pi pi-clock text-gray-500 text-lg" pTooltip="Mês em aberto" tooltipPosition="left"></i>
+                                        <i *ngIf="!isMonthOpen(rowData)" class="pi pi-times-circle text-red-500 text-lg" pTooltip="Mês inconsistente" tooltipPosition="right"></i>
+                                        <i *ngIf="isMonthOpen(rowData)" class="pi pi-clock text-gray-500 text-lg" pTooltip="Mês em aberto" tooltipPosition="right"></i>
                                     </ng-container>
                                 </ng-container>
                             </div>
@@ -269,3 +269,17 @@
         </div>
     </div>
 </div>
+
+<p-popover #op>
+    <div class="flex flex-col gap-2 min-w-[250px]">
+        <div class="font-medium text-lg border-b pb-2 mb-2 dark:border-surface-700">Documentos disponíveis</div>
+        <div class="max-h-[300px] overflow-y-auto">
+            <div *ngFor="let anexo of anexosAtuais" 
+                 class="p-3 hover:bg-surface-100 dark:hover:bg-surface-800 rounded cursor-pointer flex items-center gap-3 transition-colors"
+                 (click)="abrirArquivo(anexo.caminho_local)">
+                <i class="pi pi-file text-primary text-xl"></i>
+                <span class="text-sm truncate w-[200px]" [pTooltip]="anexo.nome_original" tooltipPosition="top">{{ anexo.nome_original }}</span>
+            </div>
+        </div>
+    </div>
+</p-popover>

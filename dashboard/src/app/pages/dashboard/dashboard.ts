@@ -17,6 +17,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { ChartModule } from 'primeng/chart';
+import { PopoverModule } from 'primeng/popover';
 import localePt from '@angular/common/locales/pt';
 
 registerLocaleData(localePt);
@@ -44,7 +45,8 @@ import { LayoutService } from '@/app/layout/service/layout.service';
         InputTextModule,
         InputGroupModule,
         InputGroupAddonModule,
-        ChartModule
+        ChartModule,
+        PopoverModule
     ],
     providers: [
         { provide: LOCALE_ID, useValue: 'pt-BR' }
@@ -96,6 +98,9 @@ export class Dashboard implements OnInit {
     chartData: any;
     chartOptions: any;
     isSingleMonth = false;
+
+    // Attachments Popover State
+    anexosAtuais: any[] = [];
 
     constructor(private cdr: ChangeDetectorRef) {}
 
@@ -799,5 +804,54 @@ export class Dashboard implements OnInit {
                 }
             }
         };
+    }
+
+    abrirAnexos(rowData: any, event: Event, op: any) {
+        if (!rowData) return;
+        
+        if (this.isMockMode) {
+            console.log('Modo simulação: Listar anexos para', rowData);
+            this.anexosAtuais = [
+                { nome_original: 'boleto.pdf', caminho_local: 'fake/path/boleto.pdf' },
+                { nome_original: 'recibo.jpg', caminho_local: 'fake/path/recibo.jpg' }
+            ];
+            op.toggle(event);
+            return;
+        }
+
+        const api = (window as any).pywebview?.api;
+        if (!api) return;
+
+        const handleList = (resp: any) => {
+            if (resp && resp.status === 'success') {
+                const lista = resp.data || [];
+                if (lista.length === 1) {
+                    this.abrirArquivo(lista[0].caminho_local);
+                } else if (lista.length > 1) {
+                    this.anexosAtuais = lista;
+                    op.toggle(event);
+                    this.cdr.detectChanges();
+                }
+            } else if (resp) {
+                console.error('Erro ao buscar anexos', resp.message);
+            }
+        };
+
+        if (rowData.tipo_node === 'transacao') {
+            api.get_anexos_transacao(rowData.id).then(handleList).catch((err: any) => console.error('Erro na chamada da API', err));
+        } else if (rowData.tipo_node === 'mes') {
+            api.get_prestacoes_contas_mes(rowData.competencia).then(handleList).catch((err: any) => console.error('Erro na chamada da API', err));
+        }
+    }
+
+    abrirArquivo(caminho: string) {
+        const api = (window as any).pywebview?.api;
+        if (api) {
+            api.abrir_arquivo_local(caminho).then((resp: any) => {
+                if (resp && resp.status !== 'success') {
+                    console.error('Erro ao abrir arquivo:', resp.message);
+                }
+            });
+        }
     }
 }
