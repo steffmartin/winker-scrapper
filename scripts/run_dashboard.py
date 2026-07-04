@@ -46,17 +46,71 @@ class Api:
         except Exception:
             pass
 
-    def get_condominio(self):
+    def get_nome_condominio(self):
         if self.init_error:
             return {"status": "error", "message": self.init_error}
 
         try:
             condo = models.Condominio.get_or_none(id=self.condo_id)
             if condo:
-                data = condo.__data__
-                return {"status": "success", "data": data}
+                return {"status": "success", "data": {"nome": condo.nome}}
             else:
                 return {"status": "error", "message": "Condomínio não encontrado."}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def get_condominio_config(self):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+
+        try:
+            condo = models.Condominio.get_or_none(id=self.condo_id)
+            if condo:
+                condo_data = condo.__data__
+                membros = list(models.MembrosGestao.select().where(models.MembrosGestao.condominio_id == self.condo_id).dicts())
+                return {"status": "success", "data": {"condominio": condo_data, "membros": membros}}
+            else:
+                return {"status": "error", "message": "Condomínio não encontrado."}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def update_condominio_config(self, payload):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        
+        try:
+            with models.db.atomic():
+                condo = models.Condominio.get_or_none(id=self.condo_id)
+                if not condo:
+                    return {"status": "error", "message": "Condomínio não encontrado."}
+                
+                condo_data = payload.get("condominio", {})
+                membros_data = payload.get("membros", [])
+                
+                if 'nome' in condo_data: condo.nome = condo_data['nome']
+                if 'administradora' in condo_data: condo.administradora = condo_data['administradora']
+                if 'telefone_administradora' in condo_data: condo.telefone_administradora = condo_data['telefone_administradora']
+                if 'saldo_inicial' in condo_data: condo.saldo_inicial = condo_data['saldo_inicial']
+                if 'prazo_fechamento' in condo_data: condo.prazo_fechamento = condo_data['prazo_fechamento']
+                if 'inadimplencia_data_corte' in condo_data: condo.inadimplencia_data_corte = condo_data['inadimplencia_data_corte']
+                if 'inadimplencia_unidades' in condo_data: condo.inadimplencia_unidades = condo_data['inadimplencia_unidades']
+                if 'inadimplencia_valor' in condo_data: condo.inadimplencia_valor = condo_data['inadimplencia_valor']
+                
+                from datetime import datetime
+                condo.ultima_atualizacao = datetime.now().isoformat()
+                
+                condo.save()
+                
+                models.MembrosGestao.delete().where(models.MembrosGestao.condominio_id == self.condo_id).execute()
+                
+                for m in membros_data:
+                    models.MembrosGestao.create(
+                        condominio_id=self.condo_id,
+                        nome=m.get('nome'),
+                        cargo=m.get('cargo')
+                    )
+                    
+            return {"status": "success", "message": "Configurações atualizadas com sucesso."}
         except Exception as e:
             return {"status": "error", "message": str(e)}
 

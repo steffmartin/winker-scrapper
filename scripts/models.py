@@ -22,6 +22,8 @@ class Condominio(BaseModel):
     administradora = CharField(null=True)
     telefone_administradora = CharField(null=True)
     ultima_atualizacao = CharField(null=True)
+    saldo_inicial = FloatField(null=True)
+    prazo_fechamento = IntegerField(null=True)
 
     class Meta:
         table_name = 'condominio'

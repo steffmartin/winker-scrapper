@@ -112,7 +112,7 @@ export class AppTopbar implements OnInit {
     fetchFromApi() {
         const pywebview = (window as any).pywebview;
         if (pywebview && pywebview.api) {
-            pywebview.api.get_condominio().then((res: any) => {
+            pywebview.api.get_nome_condominio().then((res: any) => {
                 if (res.status === 'success' && res.data && res.data.nome) {
                     this.condoName = res.data.nome;
                     this.cdr.detectChanges();

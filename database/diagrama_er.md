@@ -18,6 +18,8 @@ erDiagram
         TEXT administradora
         TEXT telefone_administradora
         TEXT ultima_atualizacao
+        REAL saldo_inicial
+        INTEGER prazo_fechamento
     }
 
     meses {

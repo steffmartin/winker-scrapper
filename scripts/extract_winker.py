@@ -658,9 +658,10 @@ def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor
     try:
         cond, created = models.Condominio.get_or_create(id=condo_id)
         cond.nome = condo_nome
-        if data_corte: cond.inadimplencia_data_corte = data_corte
-        if unidades is not None: cond.inadimplencia_unidades = unidades
-        if valor is not None: cond.inadimplencia_valor = valor
+        if data_corte and unidades is not None and valor is not None:
+            cond.inadimplencia_data_corte = data_corte
+            cond.inadimplencia_unidades = unidades
+            cond.inadimplencia_valor = valor
         if administradora: cond.administradora = administradora
         if telefone: cond.telefone_administradora = telefone
         cond.ultima_atualizacao = datetime.now().isoformat()

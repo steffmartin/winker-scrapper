@@ -29,7 +29,7 @@ describe('AppTopbar', () => {
     it('should load condo data and inconsistencies from pywebview when available', async () => {
         (window as any).pywebview = {
             api: {
-                get_condominio: () => Promise.resolve({ status: 'success', data: { nome: 'Condominio Pywebview' } }),
+                get_nome_condominio: () => Promise.resolve({ status: 'success', data: { nome: 'Condominio Pywebview' } }),
                 get_inconsistencies_count: () => Promise.resolve({ status: 'success', data: { count: 5 } })
             }
         };

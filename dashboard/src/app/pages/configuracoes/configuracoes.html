@@ -1,0 +1,127 @@
+<div class="card shadow-sm border rounded-xl w-full">
+    <h4 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Configurações</h4>
+    <p-toast position="bottom-right"></p-toast>
+    <p-confirmDialog [style]="{width: '450px'}"></p-confirmDialog>
+    
+    <form [formGroup]="configForm" (ngSubmit)="salvar()" (keydown.enter)="$event.preventDefault()">
+        <p-tabs value="0" [lazy]="true">
+            <p-tablist>
+                <p-tab value="0"><i class="pi pi-id-card mr-2"></i><span>Dados Cadastrais</span></p-tab>
+                <p-tab value="1"><i class="pi pi-money-bill mr-2"></i><span>Financeiro</span></p-tab>
+                <p-tab value="2"><i class="pi pi-exclamation-triangle mr-2"></i><span>Inadimplência</span></p-tab>
+                <p-tab value="3"><i class="pi pi-users mr-2"></i><span>Membros da Gestão</span></p-tab>
+            </p-tablist>
+
+            <p-tabpanels class="pt-4">
+                <!-- Aba 1: Dados Cadastrais -->
+                <p-tabpanel value="0">
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-6" formGroupName="condominio">
+                        <div class="md:col-span-2 flex flex-col gap-2">
+                            <label for="nome" class="font-medium">Nome do Condomínio</label>
+                            <input pInputText id="nome" formControlName="nome" type="text" />
+                        </div>
+                        <div class="md:col-span-2 flex flex-col gap-2">
+                            <label for="administradora" class="font-medium">Nome da Administradora</label>
+                            <input pInputText id="administradora" formControlName="administradora" type="text" />
+                        </div>
+                        <div class="md:col-span-1 flex flex-col gap-2">
+                            <label for="telefone_administradora" class="font-medium">Telefone da Administradora</label>
+                            <p-inputMask id="telefone_administradora" formControlName="telefone_administradora" mask="(99) 9999-9999?9" styleClass="w-full"></p-inputMask>
+                        </div>
+                    </div>
+                </p-tabpanel>
+
+                <!-- Aba 2: Financeiro -->
+                <p-tabpanel value="1">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6" formGroupName="condominio">
+                        <div class="flex flex-col gap-2">
+                            <label for="saldo_inicial" class="font-medium">Saldo Inicial</label>
+                            <p-inputNumber id="saldo_inicial" formControlName="saldo_inicial" mode="currency" currency="BRL" locale="pt-BR"></p-inputNumber>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label for="prazo_fechamento" class="font-medium">Prazo de Fechamento do Mês</label>
+                            <p-inputNumber id="prazo_fechamento" formControlName="prazo_fechamento" [min]="0" [showButtons]="true" suffix=" dias" styleClass="primary-inputnumber-btn"></p-inputNumber>
+                        </div>
+                    </div>
+                </p-tabpanel>
+
+                <!-- Aba 3: Inadimplência -->
+                <p-tabpanel value="2">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6" formGroupName="condominio">
+                        <div class="flex flex-col gap-2">
+                            <label for="inadimplencia_unidades" class="font-medium">Unidades Inadimplentes</label>
+                            <p-inputNumber id="inadimplencia_unidades" formControlName="inadimplencia_unidades" [min]="0" [showButtons]="true" styleClass="primary-inputnumber-btn"></p-inputNumber>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label for="inadimplencia_valor" class="font-medium">Valor da Inadimplência</label>
+                            <p-inputNumber id="inadimplencia_valor" formControlName="inadimplencia_valor" mode="currency" currency="BRL" locale="pt-BR"></p-inputNumber>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label for="inadimplencia_data_corte" class="font-medium">Data de Corte</label>
+                            @defer (on idle) {
+                                <p-datePicker id="inadimplencia_data_corte" formControlName="inadimplencia_data_corte" dateFormat="dd/mm/yy" [showIcon]="true" [maxDate]="maxDate" styleClass="w-full primary-datepicker-btn"></p-datePicker>
+                            } @placeholder {
+                                <div class="w-full h-10 border border-surface-300 dark:border-surface-700 rounded-md flex items-center justify-between px-3">
+                                    <span class="text-surface-400">Carregando calendário...</span>
+                                    <i class="pi pi-calendar text-surface-400"></i>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </p-tabpanel>
+
+                <!-- Aba 4: Gestão -->
+                <p-tabpanel value="3">
+                    <div formArrayName="membros">
+                        <div class="flex items-center justify-start flex-wrap gap-3 mt-2">
+                            <p-chip *ngFor="let membro of membros.controls; let i = index" 
+                                    [label]="membro.value.nome" 
+                                    [icon]="getMembroIcon(membro.value.cargo)"
+                                    [removable]="true" 
+                                    pTooltip="{{ membro.value.cargo }}" tooltipPosition="bottom"
+                                    (onRemove)="removeMembro(i)" 
+                                    styleClass="bg-primary text-primary-contrast"
+                                    class="text-sm font-medium">
+                            </p-chip>
+                            
+                            <p-chip *ngIf="membros.length === 0" label="Nenhum membro de gestão cadastrado" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
+                            
+                            <p-button icon="pi pi-plus" [rounded]="true" size="small" pTooltip="Adicionar membro" tooltipPosition="right" (onClick)="showDialog()"></p-button>
+                        </div>
+                    </div>
+                </p-tabpanel>
+            </p-tabpanels>
+        </p-tabs>
+
+        <div class="flex justify-end mt-6">
+            <p-button label="Salvar Alterações" icon="pi pi-save" type="submit" [loading]="loading" [disabled]="configForm.pristine || configForm.invalid"></p-button>
+        </div>
+    </form>
+</div>
+
+<!-- Modal Adicionar Membro -->
+<p-dialog header="Adicionar Membro" [modal]="true" [(visible)]="displayMembroDialog" [style]="{ width: '25rem' }">
+    @defer (on idle) {
+        <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o nome e o cargo do novo membro da gestão.</span>
+        <form [formGroup]="novoMembroForm" (ngSubmit)="salvarNovoMembro()" (keydown.enter)="$event.preventDefault()">
+            <div class="flex flex-col gap-4">
+                <div class="flex flex-col gap-2">
+                    <label for="novo_nome" class="font-semibold text-sm">Nome</label>
+                    <input pInputText id="novo_nome" formControlName="nome" autocomplete="off" />
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="novo_cargo" class="font-semibold text-sm">Cargo</label>
+                    <input pInputText id="novo_cargo" formControlName="cargo" autocomplete="off" />
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <p-button label="Cancelar" severity="secondary" (onClick)="displayMembroDialog = false" [text]="true"></p-button>
+                    <p-button label="Adicionar" type="submit" [disabled]="novoMembroForm.invalid"></p-button>
+                </div>
+            </div>
+        </form>
+    } @placeholder {
+        <div class="h-32 flex items-center justify-center">
+            <span class="text-surface-400 text-sm">Carregando formulário...</span>
+        </div>
+    }
+</p-dialog>
