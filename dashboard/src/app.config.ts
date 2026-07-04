@@ -1,5 +1,5 @@
 import { provideHttpClient, withFetch } from '@angular/common/http';
-import { ApplicationConfig, provideZonelessChangeDetection, APP_INITIALIZER } from '@angular/core';
+import { ApplicationConfig, provideZonelessChangeDetection, provideAppInitializer, inject } from '@angular/core';
 import { provideRouter, withEnabledBlockingInitialNavigation, withInMemoryScrolling, withHashLocation } from '@angular/router';
 import { definePreset } from '@primeuix/themes';
 import Aura from '@primeuix/themes/aura';
@@ -65,47 +65,43 @@ export const appConfig: ApplicationConfig = {
         provideHttpClient(withFetch()),
         provideZonelessChangeDetection(),
         providePrimeNG({ theme: { preset: WinkerPreset, options: { darkModeSelector: '.app-dark' } } }),
-        {
-            provide: APP_INITIALIZER,
-            useFactory: (layoutService: LayoutService) => {
-                return () => new Promise<void>((resolve) => {
-                    const checkApi = setInterval(async () => {
-                        const win = window as any;
-                        if (win.pywebview && win.pywebview.api) {
-                            clearInterval(checkApi);
-                            try {
-                                const response = await win.pywebview.api.get_preferencias();
-                                if (response && response.status === 'success' && response.data) {
-                                    const pref = response.data;
-                                    layoutService.layoutConfig.update(config => ({
-                                        ...config,
-                                        darkTheme: pref.modo_escuro === 1,
-                                        primary: pref.cor_primaria || config.primary,
-                                        surface: pref.cor_superficie || config.surface,
-                                        preset: pref.tema_preset || config.preset,
-                                        menuMode: pref.modo_menu || config.menuMode
-                                    }));
-                                }
-                            } catch (e) {
-                                console.error('Erro ao carregar preferências:', e);
-                            }
-                            
-                            // Resolve após carregar preferências
-                            setTimeout(() => {
-                                resolve();
-                            }, 50);
-                        }
-                    }, 50);
-                    
-                    // Fallback para desenvolvimento web ou falha do pywebview
-                    setTimeout(() => {
+        provideAppInitializer(() => {
+            const layoutService = inject(LayoutService);
+            return new Promise<void>((resolve) => {
+                const checkApi = setInterval(async () => {
+                    const win = window as any;
+                    if (win.pywebview && win.pywebview.api) {
                         clearInterval(checkApi);
-                        resolve();
-                    }, 3000);
-                });
-            },
-            deps: [LayoutService],
-            multi: true
-        }
+                        try {
+                            const response = await win.pywebview.api.get_preferencias();
+                            if (response && response.status === 'success' && response.data) {
+                                const pref = response.data;
+                                layoutService.layoutConfig.update(config => ({
+                                    ...config,
+                                    darkTheme: pref.modo_escuro === 1,
+                                    primary: pref.cor_primaria || config.primary,
+                                    surface: pref.cor_superficie || config.surface,
+                                    preset: pref.tema_preset || config.preset,
+                                    menuMode: pref.modo_menu || config.menuMode
+                                }));
+                            }
+                        } catch (e) {
+                            console.error('Erro ao carregar preferências:', e);
+                        }
+                        
+                        // Resolve após carregar preferências
+                        setTimeout(() => {
+                            resolve();
+                        }, 50);
+                    }
+                }, 50);
+                
+                // Fallback para desenvolvimento web ou falha do pywebview
+                setTimeout(() => {
+                    clearInterval(checkApi);
+                    resolve();
+                }, 3000);
+            });
+        })
     ]
 };
