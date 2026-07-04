@@ -1,4 +1,5 @@
 import argparse
+import ctypes
 import os
 import subprocess
 import sys
@@ -96,7 +97,6 @@ class Api:
                 if 'inadimplencia_unidades' in condo_data: condo.inadimplencia_unidades = condo_data['inadimplencia_unidades']
                 if 'inadimplencia_valor' in condo_data: condo.inadimplencia_valor = condo_data['inadimplencia_valor']
                 
-                from datetime import datetime
                 condo.ultima_atualizacao = datetime.now().isoformat()
                 
                 condo.save()
@@ -257,6 +257,9 @@ class Api:
             return {"status": "error", "message": self.init_error}
             
         try:
+            condo = models.Condominio.get_or_none(models.Condominio.id == self.condo_id)
+            prazo_fechamento = condo.prazo_fechamento or 0
+            
             m = models.Meses
             c = models.Categorias
             s = models.Subcategorias
@@ -294,7 +297,6 @@ class Api:
             
             meses_dict = {}
             if len(rows) == 0 and start_date and end_date:
-                from datetime import datetime
                 try:
                     s_date = datetime.strptime(start_date, '%Y-%m-%d')
                     e_date = datetime.strptime(end_date, '%Y-%m-%d')
@@ -438,7 +440,10 @@ class Api:
                 
             return {
                 "status": "success",
-                "data": tree
+                "data": {
+                    "tree": tree,
+                    "prazo_fechamento": prazo_fechamento
+                }
             }
         except Exception as e:
             return {"status": "error", "message": str(e)}
@@ -452,7 +457,6 @@ class Api:
                 os.startfile(full_path)
                 return {"status": "success"}
             except AttributeError:
-                import subprocess
                 if sys.platform == 'darwin':
                     subprocess.call(('open', full_path))
                 else:
@@ -615,7 +619,6 @@ def main():
             splash_w, splash_h = 480, 350
             scr_w, scr_h = 1920, 1080
             try:
-                import ctypes
                 user32 = ctypes.windll.user32
                 scr_w = user32.GetSystemMetrics(0)
                 scr_h = user32.GetSystemMetrics(1)

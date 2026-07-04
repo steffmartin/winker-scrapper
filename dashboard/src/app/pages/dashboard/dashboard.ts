@@ -142,7 +142,7 @@ export class Dashboard implements OnInit {
                                 // Fallback for Category scale
                                 xPos = x.getPixelForValue(index);
                             }
-                            
+
                             const yearMatch = label.match(/\d{4}/);
                             const year = yearMatch ? yearMatch[0] : '';
 
@@ -210,7 +210,7 @@ export class Dashboard implements OnInit {
 
     public isMonthOpen(rowData: any): boolean {
         if (rowData?.tipo_node !== 'mes' || (!rowData?.competencia && !rowData?.descricao)) return false;
-        
+
         let nodeMonth: number;
         let nodeYear: number;
 
@@ -223,27 +223,17 @@ export class Dashboard implements OnInit {
             // Fallback just in case
             return false;
         }
-        
-        const now = new Date();
-        const currentMonth = now.getMonth() + 1;
-        const currentYear = now.getFullYear();
-        
-        if (nodeYear === currentYear && nodeMonth === currentMonth) {
-            return true;
-        }
-        
-        let nextMonth = nodeMonth + 1;
-        let nextYear = nodeYear;
-        if (nextMonth > 12) {
-            nextMonth = 1;
-            nextYear += 1;
-        }
-        
-        if (nextYear === currentYear && nextMonth === currentMonth) {
-            return true;
-        }
-        
-        return false;
+
+        const prazo = this.prazoFechamento || 0;
+        const lastDayOfMonth = new Date(nodeYear, nodeMonth, 0);
+
+        lastDayOfMonth.setDate(lastDayOfMonth.getDate() + prazo);
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        lastDayOfMonth.setHours(0, 0, 0, 0);
+
+        return lastDayOfMonth >= today;
     }
 
     fetchKpis(api: any) {
@@ -326,7 +316,7 @@ export class Dashboard implements OnInit {
     onDateRangeChange() {
         if (this.dateRange && this.dateRange.length === 2 && this.dateRange[1]) {
             this.loadingTreeTable = true;
-            
+
             // Limpa qualquer filtro global ativo antes de buscar novos dados
             if (this.globalFilterValue && this.treeTable) {
                 this.globalFilterValue = '';
@@ -352,10 +342,10 @@ export class Dashboard implements OnInit {
     getDatePickerLabel(): string {
         if (!this.dateRange || this.dateRange.length === 0) return '';
         if (!this.dateRange[0] && !this.dateRange[1]) return '';
-        
+
         let start = this.dateRange[0] ? this.formatDate(this.dateRange[0]) : '*';
         let end = this.dateRange[1] ? this.formatDate(this.dateRange[1]) : '';
-        
+
         if (end) {
             return `${start} - ${end}`;
         }
@@ -404,7 +394,9 @@ export class Dashboard implements OnInit {
 
         api.get_transacoes(startStr, endStr).then((response: any) => {
             if (response.status === 'success') {
-                this.nodes = this.processNodes(response.data);
+                this.nodes = this.processNodes(response.data.tree);
+                this.prazoFechamento = response.data.prazo_fechamento || 0;
+
                 if (this.nodes.length === 1) {
                     this.expandLevels(2);
                 } else if (this.nodes.length > 1) {
@@ -439,6 +431,10 @@ export class Dashboard implements OnInit {
         });
     }
 
+    expandedRows = {};
+    prazoFechamento: number = 0;
+
+    // ViewChildren para acessar todos os inputs de mês;
     expandAll() {
         let currentLevel = this.nodes;
         while (currentLevel.length > 0) {
@@ -874,7 +870,7 @@ export class Dashboard implements OnInit {
 
     abrirAnexos(rowData: any, event: Event) {
         if (!rowData) return;
-        
+
         if (this.isMockMode) {
             console.log('Modo simulação: Listar anexos para', rowData);
             this.anexosAtuais = [
