@@ -40,6 +40,7 @@ class Meses(BaseModel):
     competencia = CharField(null=True)
     receita_total = FloatField(null=True)
     despesa_total = FloatField(null=True)
+    anexos = IntegerField(default=0)
     consistente = IntegerField(default=1)
     motivo_inconsistencia = CharField(null=True)
     revisado_usuario = IntegerField(default=0)

@@ -85,8 +85,8 @@ class TestDBQueries(unittest.TestCase):
         cursor = conn.cursor()
         current_comp = datetime.now().strftime("%Y-%m")
         current_exib = datetime.now().strftime("%m/%Y")
-        cursor.execute("INSERT INTO meses (condominio_id, exibicao, competencia, receita_total, despesa_total, consistente, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                       ("COND-API", current_exib, current_comp, 5000.0, 4000.0, 1, 0))
+        cursor.execute("INSERT INTO meses (condominio_id, exibicao, competencia, receita_total, despesa_total, anexos, consistente, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                       ("COND-API", current_exib, current_comp, 5000.0, 4000.0, 0, 1, 0))
         mes_id = cursor.lastrowid
         cursor.execute("INSERT INTO categorias (mes_id, tipo, nome, valor, consistente, revisado_usuario) VALUES (?, ?, ?, ?, ?, ?)",
                        (mes_id, 'Despesas', 'Despesas Operacionais', 4000.0, 1, 0))

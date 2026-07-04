@@ -154,6 +154,44 @@ export class Dashboard implements OnInit {
         }
     }
 
+    public isMonthOpen(rowData: any): boolean {
+        if (rowData?.tipo_node !== 'mes' || (!rowData?.competencia && !rowData?.descricao)) return false;
+        
+        let nodeMonth: number;
+        let nodeYear: number;
+
+        if (rowData.competencia) {
+            const parts = rowData.competencia.split('-');
+            if (parts.length !== 2) return false;
+            nodeYear = parseInt(parts[0], 10);
+            nodeMonth = parseInt(parts[1], 10);
+        } else {
+            // Fallback just in case
+            return false;
+        }
+        
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        
+        if (nodeYear === currentYear && nodeMonth === currentMonth) {
+            return true;
+        }
+        
+        let nextMonth = nodeMonth + 1;
+        let nextYear = nodeYear;
+        if (nextMonth > 12) {
+            nextMonth = 1;
+            nextYear += 1;
+        }
+        
+        if (nextYear === currentYear && nextMonth === currentMonth) {
+            return true;
+        }
+        
+        return false;
+    }
+
     fetchKpis(api: any) {
         api.get_dashboard_kpis().then((response: any) => {
             if (response.status === 'success') {

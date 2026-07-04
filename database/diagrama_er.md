@@ -27,6 +27,7 @@ erDiagram
         TEXT competencia
         REAL receita_total
         REAL despesa_total
+        INTEGER anexos
         INTEGER consistente
         TEXT motivo_inconsistencia
         INTEGER revisado_usuario

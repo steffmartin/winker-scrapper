@@ -681,6 +681,19 @@ def save_prestacao_contas(mes_id, caminho_local, nome_original, extensao, consis
             mes_id=mes_id, caminho_local=caminho_local, nome_original=nome_original,
             extensao=extensao, consistente=consistente, motivo_inconsistencia=motivo_inconsistencia
         )
+        if caminho_local:
+            mes = models.Meses.get(models.Meses.id == mes_id)
+            mes.anexos += 1
+            if mes.motivo_inconsistencia:
+                reasons = json.loads(mes.motivo_inconsistencia)
+                if "Mês sem prestação de contas" in reasons:
+                    reasons.remove("Mês sem prestação de contas")
+                    if not reasons:
+                        mes.consistente = 1
+                        mes.motivo_inconsistencia = None
+                    else:
+                        mes.motivo_inconsistencia = json.dumps(reasons, ensure_ascii=False)
+            mes.save()
     except Exception as e:
         logger.error(f"Erro ao salvar prestação de contas no banco: {e}")
 
@@ -795,9 +808,12 @@ def evaluate_entity_consistency(entity_type, **kwargs):
         desp_total = kwargs.get('desp_total_mes', 0.0)
         soma_desp = kwargs.get('soma_cat_desp', 0.0)
         
+        anexos = kwargs.get('anexos', 0)
+        
         mes_rec_ok = abs(rec_total - soma_rec) < 0.01
         mes_desp_ok = abs(desp_total - soma_desp) < 0.01
-        consistente = 1 if (mes_rec_ok and mes_desp_ok) else 0
+        mes_prestacao_ok = anexos > 0
+        consistente = 1 if (mes_rec_ok and mes_desp_ok and mes_prestacao_ok) else 0
         
         motivo = None
         if not consistente:
@@ -806,6 +822,8 @@ def evaluate_entity_consistency(entity_type, **kwargs):
                 reasons.append("Divergência em receitas")
             if not mes_desp_ok:
                 reasons.append("Divergência em despesas")
+            if not mes_prestacao_ok:
+                reasons.append("Mês sem prestação de contas")
             if not reasons:
                 reasons.append("Divergência em receitas ou despesas")
             motivo = json.dumps(reasons, ensure_ascii=False)

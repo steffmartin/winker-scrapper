@@ -93,18 +93,26 @@ class TestExtractWinker(unittest.TestCase):
     def test_evaluate_consistency_mes(self):
         # Mês consistente
         consistente, motivo = evaluate_entity_consistency(
-            'mes', rec_total_mes=100.0, soma_cat_rec=100.0, desp_total_mes=50.0, soma_cat_desp=50.0
+            'mes', rec_total_mes=100.0, soma_cat_rec=100.0, desp_total_mes=50.0, soma_cat_desp=50.0, anexos=1
         )
         self.assertEqual(consistente, 1)
         self.assertIsNone(motivo)
 
         # Mês inconsistente (divergência em despesas)
         consistente, motivo = evaluate_entity_consistency(
-            'mes', rec_total_mes=100.0, soma_cat_rec=100.0, desp_total_mes=50.0, soma_cat_desp=49.9
+            'mes', rec_total_mes=100.0, soma_cat_rec=100.0, desp_total_mes=50.0, soma_cat_desp=49.9, anexos=1
         )
         self.assertEqual(consistente, 0)
         reasons = json.loads(motivo)
         self.assertIn("Divergência em despesas", reasons)
+
+        # Mês inconsistente (sem anexos)
+        consistente, motivo = evaluate_entity_consistency(
+            'mes', rec_total_mes=100.0, soma_cat_rec=100.0, desp_total_mes=50.0, soma_cat_desp=50.0, anexos=0
+        )
+        self.assertEqual(consistente, 0)
+        reasons = json.loads(motivo)
+        self.assertIn("Mês sem prestação de contas", reasons)
 
     def test_evaluate_consistency_categoria(self):
         # Categoria consistente

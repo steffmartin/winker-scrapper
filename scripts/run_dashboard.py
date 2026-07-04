@@ -198,6 +198,8 @@ class Api:
             query = (t.select(
                         m.competencia.alias('mes_competencia'),
                         m.exibicao.alias('mes_exibicao'),
+                        m.consistente.alias('mes_consistente'),
+                        m.anexos.alias('mes_anexos'),
                         c.nome.alias('categoria_nome'),
                         c.tipo.alias('categoria_tipo'),
                         s.nome.alias('subcategoria_nome'),
@@ -234,7 +236,7 @@ class Api:
                         mes_exibicao = f"{m:02d}/{y}"
                         mes_competencia = f"{y}-{m:02d}"
                         meses_dict[mes_competencia] = {
-                            "data": {"descricao": mes_exibicao, "valor_total": 0, "tipo_node": "mes"},
+                            "data": {"descricao": mes_exibicao, "competencia": mes_competencia, "valor_total": 0, "tipo_node": "mes", "consistente": 0, "anexos": 0},
                             "expanded": False,
                             "children_dict": {
                                 "Receitas": {
@@ -266,7 +268,7 @@ class Api:
                 
                 if mes not in meses_dict:
                     meses_dict[mes] = {
-                        "data": {"descricao": mes_exibicao, "valor_total": 0, "tipo_node": "mes"},
+                        "data": {"descricao": mes_exibicao, "competencia": mes, "valor_total": 0, "tipo_node": "mes", "consistente": row.get("mes_consistente", 1), "anexos": row.get("mes_anexos", 0)},
                         "expanded": False,
                         "children_dict": {}
                     }
