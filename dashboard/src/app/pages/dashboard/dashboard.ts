@@ -102,6 +102,7 @@ export class Dashboard implements OnInit {
 
     // Attachments Popover State
     anexosAtuais: any[] = [];
+    @ViewChild('op') op: any;
 
     constructor(private cdr: ChangeDetectorRef) {}
 
@@ -871,7 +872,7 @@ export class Dashboard implements OnInit {
         };
     }
 
-    abrirAnexos(rowData: any, event: Event, op: any) {
+    abrirAnexos(rowData: any, event: Event) {
         if (!rowData) return;
         
         if (this.isMockMode) {
@@ -880,7 +881,7 @@ export class Dashboard implements OnInit {
                 { nome_original: 'boleto.pdf', caminho_local: 'fake/path/boleto.pdf' },
                 { nome_original: 'recibo.jpg', caminho_local: 'fake/path/recibo.jpg' }
             ];
-            op.toggle(event);
+            this.op?.toggle(event);
             return;
         }
 
@@ -894,7 +895,7 @@ export class Dashboard implements OnInit {
                     this.abrirArquivo(lista[0].caminho_local);
                 } else if (lista.length > 1) {
                     this.anexosAtuais = lista;
-                    op.toggle(event);
+                    this.op?.toggle(event);
                     this.cdr.detectChanges();
                 }
             } else if (resp) {

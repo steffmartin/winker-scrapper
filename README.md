@@ -13,6 +13,7 @@ v21 + PrimeNG v21 + Tailwind CSS v4).
 - **Indicadores de Gestão (KPIs):** Visualização rápida da Gestão atual, Resumo do Mês (receitas vs despesas), Inadimplência, Saldo de Contas e Estatísticas do Sistema.
 - **Tema Dinâmico (Light/Dark Mode):** O layout é totalmente responsivo e se adapta suavemente a temas claros e escuros usando classes dinâmicas e gradientes do Tailwind CSS.
 - **Monitoramento de Inconsistências:** O painel superior (Topbar) exibe um badge de notificação interativo sempre que existirem transações ou meses com divergência matemática pendentes de revisão.
+- **Otimização de Performance:** Estratégias de lazy loading nativo do Angular 17+ (`@defer`) garantem que gráficos pesados (Chart.js), popovers e menus ocultos sejam carregados sob demanda ou em modo *idle*, mantendo o tamanho do pacote inicial (*initial bundle*) extremamente leve.
 - **Design Premium:** Uso de Skeletons elegantes para carregamento, tipografia moderna e tolerância a dados faltantes (Zero-value fallbacks).
 
 ---

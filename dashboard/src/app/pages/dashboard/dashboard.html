@@ -1,4 +1,4 @@
-<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6 p-6">
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6 mb-6">
     <!-- Skeletons para Loading Elegante -->
     <ng-container *ngIf="loadingKpis">
         <div class="card mb-0 shadow-sm rounded-lg h-full flex flex-col justify-between" *ngFor="let i of [1,2,3,4,5]">
@@ -106,7 +106,7 @@
     </ng-container>
 </div>
 
-<div class="px-6 pb-6">
+<div>
     <div class="card shadow-sm border rounded-xl bg-primary-50 dark:bg-primary-900/10">
         <p-toolbar styleClass="border-none bg-transparent mb-4 flex-wrap gap-4">
             <ng-template pTemplate="left">
@@ -115,29 +115,36 @@
             <ng-template pTemplate="right">
                 <div class="flex flex-wrap lg:flex-nowrap items-center w-full lg:w-auto max-w-full justify-end gap-3" style="width: 100%; margin-left: auto;">
                     <div class="relative w-full lg:w-auto">
-                        <p-datePicker
-                            #dp
-                            [(ngModel)]="dateRange"
-                            selectionMode="range"
-                            [readonlyInput]="true"
-                            (onSelect)="onDateRangeChange()"
-                            (onClear)="onDateRangeChange()"
-                            [showButtonBar]="true"
-                            [showIcon]="true"
-                            [maxDate]="maxDate"
-                            dateFormat="dd/mm/yy"
-                            styleClass="w-full lg:w-auto min-w-[230px] primary-datepicker-btn"
-                            inputStyleClass="w-full !text-transparent">
-                            <ng-template #buttonbar>
-                                <div class="flex gap-2 w-full justify-between items-center px-2 pb-2">
-                                    <div class="flex gap-2">
-                                        <p-button [label]="currentYear" (click)="setAnoAtual(dp)" variant="outlined" />
-                                        <p-button label="Tudo" (click)="setDesdeOComeco(dp)" variant="outlined" />
+                        @defer (on idle) {
+                            <p-datePicker
+                                #dp
+                                [(ngModel)]="dateRange"
+                                selectionMode="range"
+                                [readonlyInput]="true"
+                                (onSelect)="onDateRangeChange()"
+                                (onClear)="onDateRangeChange()"
+                                [showButtonBar]="true"
+                                [showIcon]="true"
+                                [maxDate]="maxDate"
+                                dateFormat="dd/mm/yy"
+                                styleClass="w-full lg:w-auto min-w-[230px] primary-datepicker-btn"
+                                inputStyleClass="w-full !text-transparent">
+                                <ng-template #buttonbar>
+                                    <div class="flex gap-2 w-full justify-between items-center px-2 pb-2">
+                                        <div class="flex gap-2">
+                                            <p-button [label]="currentYear" (click)="setAnoAtual(dp)" variant="outlined" />
+                                            <p-button label="Tudo" (click)="setDesdeOComeco(dp)" variant="outlined" />
+                                        </div>
+                                        <p-button size="small" icon="pi pi-times" severity="danger" variant="text" (click)="setMesAtual(dp)" />
                                     </div>
-                                    <p-button size="small" icon="pi pi-times" severity="danger" variant="text" (click)="setMesAtual(dp)" />
-                                </div>
-                            </ng-template>
-                        </p-datePicker>
+                                </ng-template>
+                            </p-datePicker>
+                        } @placeholder {
+                            <div class="w-full lg:w-auto min-w-[230px] h-10 border border-surface-300 dark:border-surface-700 rounded-md flex items-center justify-between px-3">
+                                <span class="text-surface-400">Carregando calendário...</span>
+                                <i class="pi pi-calendar text-surface-400"></i>
+                            </div>
+                        }
                         <div class="absolute inset-y-0 left-0 flex items-center px-3 pointer-events-none text-surface-700 dark:text-white/80">
                             {{ getDatePickerLabel() }}
                         </div>
@@ -206,12 +213,12 @@
                         <td class="whitespace-nowrap px-4" [ngClass]="getRowClass(rowData)">
                             <div class="flex items-center justify-end w-full h-full">
                                 <ng-container *ngIf="rowNode.node.children === undefined">
-                                    <i *ngIf="rowData.anexos > 0" class="pi pi-paperclip text-inherit mr-3 text-lg cursor-pointer" [pTooltip]="rowData.anexos + ' documento(s)'" tooltipPosition="left" (click)="abrirAnexos(rowData, $event, op)"></i>
+                                    <i *ngIf="rowData.anexos > 0" class="pi pi-paperclip text-inherit mr-3 text-lg cursor-pointer" [pTooltip]="rowData.anexos + ' documento(s)'" tooltipPosition="left" (click)="abrirAnexos(rowData, $event)"></i>
                                     <i *ngIf="rowData.consistente" class="pi pi-check-circle text-primary-500 text-lg" pTooltip="Lançamento consistente" tooltipPosition="right"></i>
                                     <i *ngIf="!rowData.consistente" class="pi pi-times-circle text-red-500 text-lg" pTooltip="Lançamento inconsistente" tooltipPosition="right"></i>
                                 </ng-container>
                                 <ng-container *ngIf="rowData.tipo_node === 'mes'">
-                                    <i *ngIf="rowData.anexos > 0" class="pi pi-paperclip text-inherit mr-3 text-lg cursor-pointer" [pTooltip]="rowData.anexos + ' documento(s)'" tooltipPosition="left" (click)="abrirAnexos(rowData, $event, op)"></i>
+                                    <i *ngIf="rowData.anexos > 0" class="pi pi-paperclip text-inherit mr-3 text-lg cursor-pointer" [pTooltip]="rowData.anexos + ' documento(s)'" tooltipPosition="left" (click)="abrirAnexos(rowData, $event)"></i>
                                     <i *ngIf="rowData.consistente" class="pi pi-check-circle text-primary-500 text-lg" pTooltip="Mês consistente" tooltipPosition="right"></i>
                                     <ng-container *ngIf="!rowData.consistente">
                                         <i *ngIf="!isMonthOpen(rowData)" class="pi pi-times-circle text-red-500 text-lg" pTooltip="Mês inconsistente" tooltipPosition="right"></i>
@@ -261,8 +268,10 @@
                         </div>
                     </div>
                     <ng-container *ngIf="!loadingTreeTable">
-                        <p-chart type="line" [data]="chartData" [options]="chartOptions" [plugins]="chartPlugins" *ngIf="!isSingleMonth" height="400px"></p-chart>
-                        <p-chart type="bar" [data]="chartData" [options]="chartOptions" *ngIf="isSingleMonth" height="400px"></p-chart>
+                        @defer (when !loadingTreeTable) {
+                            <p-chart type="line" [data]="chartData" [options]="chartOptions" [plugins]="chartPlugins" *ngIf="!isSingleMonth" height="400px"></p-chart>
+                            <p-chart type="bar" [data]="chartData" [options]="chartOptions" *ngIf="isSingleMonth" height="400px"></p-chart>
+                        }
                     </ng-container>
                 </div>
             </div>
@@ -270,16 +279,18 @@
     </div>
 </div>
 
-<p-popover #op>
-    <div class="flex flex-col gap-2 min-w-[250px]">
-        <div class="font-medium text-lg border-b pb-2 mb-2 dark:border-surface-700">Documentos disponíveis</div>
-        <div class="max-h-[300px] overflow-y-auto">
-            <div *ngFor="let anexo of anexosAtuais" 
-                 class="p-3 hover:bg-surface-100 dark:hover:bg-surface-800 rounded cursor-pointer flex items-center gap-3 transition-colors"
-                 (click)="abrirArquivo(anexo.caminho_local)">
-                <i class="pi pi-file text-primary text-xl"></i>
-                <span class="text-sm truncate w-[200px]" [pTooltip]="anexo.nome_original" tooltipPosition="top">{{ anexo.nome_original }}</span>
+@defer (on idle) {
+    <p-popover #op>
+        <div class="flex flex-col gap-2 min-w-[250px]">
+            <div class="font-medium text-lg border-b pb-2 mb-2 dark:border-surface-700">Documentos disponíveis</div>
+            <div class="max-h-[300px] overflow-y-auto">
+                <div *ngFor="let anexo of anexosAtuais" 
+                     class="p-3 hover:bg-surface-100 dark:hover:bg-surface-800 rounded cursor-pointer flex items-center gap-3 transition-colors"
+                     (click)="abrirArquivo(anexo.caminho_local)">
+                    <i class="pi pi-file text-primary text-xl"></i>
+                    <span class="text-sm truncate w-[200px]" [pTooltip]="anexo.nome_original" tooltipPosition="top">{{ anexo.nome_original }}</span>
+                </div>
             </div>
         </div>
-    </div>
-</p-popover>
+    </p-popover>
+}

@@ -31,18 +31,20 @@ import { OverlayBadgeModule } from 'primeng/overlaybadge';
                     <i class="pi pi-moon !hidden dark:!inline-block"></i>
                 </button>
                 <div class="relative">
-                    <button
-                        class="layout-topbar-action layout-topbar-action-highlight"
-                        pStyleClass="@next"
-                        enterFromClass="hidden"
-                        enterActiveClass="animate-scalein"
-                        leaveToClass="hidden"
-                        leaveActiveClass="animate-fadeout"
-                        [hideOnOutsideClick]="true"
-                    >
-                        <i class="pi pi-palette"></i>
-                    </button>
-                    <app-configurator />
+                    @defer (on idle) {
+                        <button
+                            class="layout-topbar-action layout-topbar-action-highlight"
+                            pStyleClass="@next"
+                            enterFromClass="hidden"
+                            enterActiveClass="animate-scalein"
+                            leaveToClass="hidden"
+                            leaveActiveClass="animate-fadeout"
+                            [hideOnOutsideClick]="true"
+                        >
+                            <i class="pi pi-palette"></i>
+                        </button>
+                        <app-configurator />
+                    }
                 </div>
             </div>
 

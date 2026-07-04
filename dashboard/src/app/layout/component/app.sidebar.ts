@@ -12,7 +12,11 @@ import { CommonModule } from '@angular/common';
     imports: [AppMenu, RouterModule, CommonModule],
     template: `
         <div class="layout-sidebar !bg-gradient-to-b !from-indigo-50/50 !to-blue-50/50 !border-r !border-indigo-100/50 dark:!from-slate-900/50 dark:!to-indigo-900/50 dark:!border-slate-800">
-            <app-menu></app-menu>
+            @defer (on viewport) {
+                <app-menu></app-menu>
+            } @placeholder {
+                <div class="p-4 text-surface-500">Carregando menu...</div>
+            }
         </div>
     `
 })
