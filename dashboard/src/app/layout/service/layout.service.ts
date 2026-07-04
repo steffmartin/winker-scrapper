@@ -60,7 +60,7 @@ export class LayoutService {
 
             // Sincroniza em memória no backend (sem IO intensivo, apenas cache)
             const win = window as any;
-            if (win.pywebview && win.pywebview.api) {
+            if (win.pywebview && win.pywebview.api && typeof win.pywebview.api.sync_preferencias_cache === 'function') {
                 win.pywebview.api.sync_preferencias_cache(config);
             }
 
