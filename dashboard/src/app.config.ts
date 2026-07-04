@@ -88,14 +88,19 @@ export const appConfig: ApplicationConfig = {
                         } catch (e) {
                             console.error('Erro ao carregar preferências:', e);
                         }
-                        
-                        // Resolve após carregar preferências
-                        setTimeout(() => {
-                            resolve();
+
+                        resolve();
+
+                        setTimeout(async () => {
+                            try {
+                                if (win.pywebview?.api?.app_ready) {
+                                    await win.pywebview.api.app_ready();
+                                }
+                            } catch (_) { /* splash já pode ter sido fechada */ }
                         }, 50);
                     }
                 }, 50);
-                
+
                 // Fallback para desenvolvimento web ou falha do pywebview
                 setTimeout(() => {
                     clearInterval(checkApi);

@@ -25,6 +25,8 @@ class Api:
         self.db_path = db_path or self._get_db_path()
         self.init_error = None
         self.prefs_cache = None
+        self._splash_window = None
+        self._main_window = None
         
         if not os.path.exists(self.db_path):
             self.init_error = "Banco de dados não encontrado."
@@ -451,6 +453,23 @@ class Api:
         self.prefs_cache = dados
         return {"status": "success"}
 
+    def app_ready(self):
+        """Chamado pelo Angular quando o tema foi aplicado e o DOM está pronto."""
+        # Mostra a janela principal (que estava hidden)
+        if self._main_window:
+            try:
+                self._main_window.show()
+            except Exception:
+                pass
+        # Destrói a splash screen
+        if self._splash_window:
+            try:
+                self._splash_window.destroy()
+            except Exception:
+                pass
+            self._splash_window = None
+        return {"status": "success"}
+
     def _get_db_path(self):
         return os.path.join(project_root, "database", "winker_data.db")
 
@@ -512,9 +531,52 @@ def main():
 
 
     api = Api(condo_id=args.condo_id)
+
+    # Cria a splash screen como janela separada (banner de carregamento)
+    splash_window = None
+    if html_content is None:
+        splash_html_path = None
+        candidates = [
+            os.path.join(project_root, "compilados", "browser", "splash.html"),
+            os.path.join(project_root, "dashboard", "public", "splash.html")
+        ]
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                splash_html_path = candidate
+                break
+        
+        if splash_html_path:
+            # Calcula posição centralizada na tela
+            splash_w, splash_h = 480, 350
+            scr_w, scr_h = 1920, 1080
+            try:
+                import ctypes
+                user32 = ctypes.windll.user32
+                scr_w = user32.GetSystemMetrics(0)
+                scr_h = user32.GetSystemMetrics(1)
+            except Exception:
+                pass
+            splash_x = (scr_w - splash_w) // 2
+            splash_y = (scr_h - splash_h) // 2
+            
+            splash_window = webview.create_window(
+                title="",
+                url=splash_html_path,
+                width=splash_w,
+                height=splash_h,
+                x=splash_x,
+                y=splash_y,
+                resizable=False,
+                frameless=True,
+                on_top=True,
+                background_color='#E9F2FC'
+            )
+            api._splash_window = splash_window
+            logger.info("Splash screen criada.")
     
     # Cria a janela desktop nativa provida pelo PyWebView
     if html_content is not None:
+        # Janela de erro — exibe imediatamente, sem splash
         window = webview.create_window(
             title="Dashboard",
             html=html_content,
@@ -525,6 +587,7 @@ def main():
             maximized=True
         )
     else:
+        # Janela Angular — inicia oculta até o tema ser aplicado
         window = webview.create_window(
             title="Dashboard",
             url=html_path,
@@ -532,8 +595,11 @@ def main():
             width=1280,
             height=800,
             resizable=True,
-            maximized=True
+            maximized=True,
+            hidden=True
         )
+    
+    api._main_window = window
 
     def on_closing():
         try:
