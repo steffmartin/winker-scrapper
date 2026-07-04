@@ -200,12 +200,23 @@ class Api:
                 "administradora": administradora
             }
             
+            totais = m.select(
+                models.fn.SUM(m.receita_total).alias('tr'),
+                models.fn.SUM(m.despesa_total).alias('td')
+            ).where(m.condominio_id == self.condo_id).scalar(as_tuple=True)
+            
+            if totais:
+                tr, td = totais
+            else:
+                tr, td = 0, 0
+                
+            saldo_inicial = condo.saldo_inicial or 0
+            tr = tr or 0
+            td = td or 0
+            saldo_total = saldo_inicial + tr - td
+
             saldos = {
-                "saldo_total": 0,
-                "contas": [
-                    {"nome": "Conta Corrente Padrão", "saldo": 0},
-                    {"nome": "Fundo de Reserva", "saldo": 0}
-                ]
+                "saldo_total": saldo_total
             }
             
             current_date_str = datetime.now().strftime("%Y-%m")
