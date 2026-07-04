@@ -24,6 +24,7 @@ class Api:
         self.condo_id = condo_id
         self.db_path = db_path or self._get_db_path()
         self.init_error = None
+        self.prefs_cache = None
         
         if not os.path.exists(self.db_path):
             self.init_error = "Banco de dados não encontrado."
@@ -373,6 +374,40 @@ class Api:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    def get_preferencias(self):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            pref = models.PreferenciasUsuario.select().first()
+            if pref:
+                return {"status": "success", "data": pref.__data__}
+            return {"status": "success", "data": None}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def salvar_preferencias(self, dados):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            pref = models.PreferenciasUsuario.select().first()
+            if not pref:
+                pref = models.PreferenciasUsuario()
+            
+            if 'modo_escuro' in dados: pref.modo_escuro = dados['modo_escuro']
+            if 'cor_primaria' in dados: pref.cor_primaria = dados['cor_primaria']
+            if 'cor_superficie' in dados: pref.cor_superficie = dados['cor_superficie']
+            if 'tema_preset' in dados: pref.tema_preset = dados['tema_preset']
+            if 'modo_menu' in dados: pref.modo_menu = dados['modo_menu']
+            
+            pref.save()
+            return {"status": "success", "data": pref.__data__}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def sync_preferencias_cache(self, dados):
+        self.prefs_cache = dados
+        return {"status": "success"}
+
     def _get_db_path(self):
         return os.path.join(project_root, "database", "winker_data.db")
 
@@ -437,7 +472,7 @@ def main():
     
     # Cria a janela desktop nativa provida pelo PyWebView
     if html_content is not None:
-        webview.create_window(
+        window = webview.create_window(
             title="Dashboard",
             html=html_content,
             js_api=api,
@@ -447,7 +482,7 @@ def main():
             maximized=True
         )
     else:
-        webview.create_window(
+        window = webview.create_window(
             title="Dashboard",
             url=html_path,
             js_api=api,
@@ -456,6 +491,21 @@ def main():
             resizable=True,
             maximized=True
         )
+
+    def on_closing():
+        try:
+            if api.prefs_cache:
+                api.salvar_preferencias({
+                    'modo_escuro': 1 if api.prefs_cache.get('darkTheme') else 0,
+                    'cor_primaria': api.prefs_cache.get('primary'),
+                    'cor_superficie': api.prefs_cache.get('surface'),
+                    'tema_preset': api.prefs_cache.get('preset'),
+                    'modo_menu': api.prefs_cache.get('menuMode')
+                })
+        except Exception as e:
+            logger.error(f"Erro ao salvar preferências no encerramento: {e}")
+
+    window.events.closing += on_closing
     
     # Inicia o loop de eventos
     webview.start()

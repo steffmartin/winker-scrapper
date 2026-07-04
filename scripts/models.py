@@ -137,10 +137,20 @@ class Auditoria(BaseModel):
     class Meta:
         table_name = 'auditoria'
 
+class PreferenciasUsuario(BaseModel):
+    modo_escuro = IntegerField(default=0)
+    cor_primaria = CharField(null=True)
+    cor_superficie = CharField(null=True)
+    tema_preset = CharField(null=True)
+    modo_menu = CharField(null=True)
+
+    class Meta:
+        table_name = 'preferencias_usuario'
+
 def init_models(db_path):
     db.init(db_path, pragmas={'foreign_keys': 1})
     db.connect(reuse_if_open=True)
     db.create_tables([
         Condominio, MembrosGestao, Meses, Categorias, Subcategorias, 
-        Transacoes, Anexos, PrestacoesContas, Auditoria
+        Transacoes, Anexos, PrestacoesContas, Auditoria, PreferenciasUsuario
     ], safe=True)

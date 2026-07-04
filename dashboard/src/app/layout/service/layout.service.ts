@@ -58,6 +58,12 @@ export class LayoutService {
         effect(() => {
             const config = this.layoutConfig();
 
+            // Sincroniza em memória no backend (sem IO intensivo, apenas cache)
+            const win = window as any;
+            if (win.pywebview && win.pywebview.api) {
+                win.pywebview.api.sync_preferencias_cache(config);
+            }
+
             if (!this.initialized || !config) {
                 this.initialized = true;
                 return;
@@ -71,14 +77,18 @@ export class LayoutService {
         const supportsViewTransition = 'startViewTransition' in document;
 
         if (supportsViewTransition) {
-            this.startViewTransition(config);
+            try {
+                this.startViewTransition(config);
+            } catch (e) {
+                this.toggleDarkMode(config);
+            }
         } else {
             this.toggleDarkMode(config);
         }
     }
 
     private startViewTransition(config: LayoutConfig): void {
-        document.startViewTransition(() => {
+        (document as any).startViewTransition(() => {
             this.toggleDarkMode(config);
         });
     }

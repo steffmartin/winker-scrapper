@@ -1,7 +1,9 @@
 # Diagrama de Relacionamento do Banco de Dados
 
 > [!NOTE]
-> Banco de dados SQLite do projeto **Winker Scrapper**. O modelo relacional é gerenciado pelo ORM **Peewee** através da declaração de classes no arquivo `scripts/models.py`. O `ON DELETE CASCADE` garante integridade nativa nas chaves estrangeiras.
+> Banco de dados SQLite do projeto **Winker Scrapper**. O modelo relacional é gerenciado pelo ORM **Peewee** através da
+> declaração de classes no arquivo `scripts/models.py`. O `ON DELETE CASCADE` garante integridade nativa nas chaves
+> estrangeiras.
 
 ## Diagrama ER (Entidade-Relacionamento)
 
@@ -98,9 +100,18 @@ erDiagram
         TEXT cargo
     }
 
+    preferencias_usuario {
+        INTEGER id PK
+        INTEGER modo_escuro
+        TEXT cor_primaria
+        TEXT cor_superficie
+        TEXT tema_preset
+        TEXT modo_menu
+    }
+
     auditoria {
         INTEGER id PK
-        TEXT condominio_id FK
+        TEXT condominio_id
         TEXT usuario_uuid
         INTEGER usuario_id
         TEXT usuario_name
@@ -123,7 +134,6 @@ erDiagram
 
     condominio ||--o{ meses: "condominio_id"
     condominio ||--o{ membros_gestao: "condominio_id"
-    condominio |o--o{ auditoria: "condominio_id (nullable)"
     meses ||--o{ categorias: "mes_id"
     meses ||--o{ prestacoes_contas: "mes_id"
     categorias ||--o{ subcategorias: "categoria_id"
@@ -134,6 +144,8 @@ erDiagram
 ## Fluxo Hierárquico dos Dados
 
 ```
+auditoria (Global)
+preferencias_usuario (Global)
 condominio  ← tabela raiz
  ├── meses
  │    ├── categorias
@@ -141,23 +153,23 @@ condominio  ← tabela raiz
  │    │         └── transacoes
  │    │              └── anexos
  │    └── prestacoes_contas
- ├── membros_gestao
- └── auditoria
+ └── membros_gestao
 ```
 
 ## Resumo das Tabelas
 
-| Tabela              | PK             | FK para            | Tipo       | Descrição                                    |
-|---------------------|----------------|--------------------|------------|----------------------------------------------|
-| `condominio`        | `id` (TEXT)    | —                  | **Raiz**   | Dados cadastrais do condomínio               |
-| `meses`             | `id` (INTEGER) | `condominio.id`    | Dependente | Período mensal com totais de receita/despesa |
-| `categorias`        | `id` (INTEGER) | `meses.id`         | Dependente | Categorias financeiras por mês               |
-| `subcategorias`     | `id` (INTEGER) | `categorias.id`    | Dependente | Subcategorias dentro de uma categoria        |
-| `transacoes`        | `id` (INTEGER) | `subcategorias.id` | Dependente | Transações financeiras individuais           |
-| `anexos`            | `id` (INTEGER) | `transacoes.id`    | Dependente | Arquivos anexados às transações              |
-| `prestacoes_contas` | `id` (INTEGER) | `meses.id`         | Dependente | Documentos de prestação de contas por mês    |
-| `membros_gestao`    | `id` (INTEGER) | `condominio.id`    | Dependente | Membros da gestão condominial                |
-| `auditoria`         | `id` (INTEGER) | `condominio.id`    | Dependente | Log de auditorias e acessos                  |
+| Tabela                 | PK             | FK para            | Tipo       | Descrição                                    |
+|------------------------|----------------|--------------------|------------|----------------------------------------------|
+| `auditoria`            | `id` (INTEGER) | —                  | **Global** | Log de auditorias e acessos                  |
+| `preferencias_usuario` | `id` (INTEGER) | —                  | **Global** | Configurações visuais do dashboard           |
+| `condominio`           | `id` (TEXT)    | —                  | **Raiz**   | Dados cadastrais do condomínio               |
+| `meses`                | `id` (INTEGER) | `condominio.id`    | Dependente | Período mensal com totais de receita/despesa |
+| `categorias`           | `id` (INTEGER) | `meses.id`         | Dependente | Categorias financeiras por mês               |
+| `subcategorias`        | `id` (INTEGER) | `categorias.id`    | Dependente | Subcategorias dentro de uma categoria        |
+| `transacoes`           | `id` (INTEGER) | `subcategorias.id` | Dependente | Transações financeiras individuais           |
+| `anexos`               | `id` (INTEGER) | `transacoes.id`    | Dependente | Arquivos anexados às transações              |
+| `prestacoes_contas`    | `id` (INTEGER) | `meses.id`         | Dependente | Documentos de prestação de contas por mês    |
+| `membros_gestao`       | `id` (INTEGER) | `condominio.id`    | Dependente | Membros da gestão condominial                |
 
 ## Observações
 
