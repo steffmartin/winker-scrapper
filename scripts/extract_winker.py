@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from urllib.parse import parse_qs, unquote, urlparse
 
 # Módulos internos independentes
-from utils import logger, setup_logging
+from utils import logger, setup_logging, load_config
 
 # Garantir dependências antes de importar libs externas
 from setup_deps import install_dependencies
@@ -23,15 +23,12 @@ install_dependencies()
 
 # Dependências externas e modelos
 import pypdf
-from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
 import models
 
-# Carrega variáveis de ambiente do .env localizado na raiz do projeto
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
-load_dotenv(dotenv_path=os.path.join(project_root, '.env'))
 
 # ==========================================
 # 1. Utilitários de String, Moeda e Data
@@ -1049,7 +1046,7 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
 # 4. Orquestrador Principal do Script
 # ==========================================
 
-def extract_winker(username, password, condo, start_date_obj, end_date_obj, headless):
+def extract_winker(username, password, wl, start_date_obj, end_date_obj, headless):
     """
     Fluxo principal de extração web de dados do Winker via Playwright.
     """
@@ -1099,7 +1096,7 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
 
         try:
             # Login no portal
-            login_url = f"https://app.winker.com.br/intra/default/login?wl={condo}"
+            login_url = f"https://app.winker.com.br/intra/default/login?wl={wl}"
             page.goto(login_url, wait_until="networkidle")
             page.fill("#LoginForm_username", username)
             page.fill("#LoginForm_password", password)
@@ -1404,25 +1401,17 @@ def extract_winker(username, password, condo, start_date_obj, end_date_obj, head
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--user', default=None)
-    parser.add_argument('--password', default=None)
-    parser.add_argument('--condo', default=None)
-    parser.add_argument('--start', default=None)
-    parser.add_argument('--end', default=None)
-    parser.add_argument('--headless', action='store_true')
-    parser.add_argument('--no-wait', action='store_true')
-    parser.add_argument('--log-level', default=os.environ.get("LOG_LEVEL", "INFO"), choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+    parser.add_argument('--config-file', default='config/dev.config')
     args = parser.parse_args()
     
-    setup_logging(args.log_level)
+    config = load_config(args.config_file)
     
-    # Prioridade para os argumentos de linha de comando, caindo para as env vars
-    user = args.user or os.environ.get("WINKER_USER")
-    password = args.password or os.environ.get("WINKER_PASSWORD")
-    condo = args.condo or os.environ.get("WINKER_CONDO") or "gosuen"
+    user = config.get("user")
+    password = config.get("password")
+    wl = config.get("wl", "")
     
     if not user or not password:
-        parser.error("O usuário e a senha devem ser fornecidos via argumentos (--user/--password) ou variáveis de ambiente (WINKER_USER/WINKER_PASSWORD) no arquivo .env.")
+        parser.error("O usuário e a senha devem ser fornecidos no arquivo de configuração.")
         
     # Calcula mês atual e mês passado como defaults
     today = datetime.now()
@@ -1432,8 +1421,8 @@ if __name__ == "__main__":
     last_month_date = first_of_this_month - timedelta(days=1)
     default_start = last_month_date.strftime("%Y-%m")
     
-    start_str = args.start if args.start else default_start
-    end_str = args.end if args.end else default_end
+    start_str = config.get("start") or default_start
+    end_str = config.get("end") or default_end
     
     s_y, s_m = map(int, start_str.split('-'))
     s_obj = datetime(s_y, s_m, 1)
@@ -1441,7 +1430,7 @@ if __name__ == "__main__":
     e_obj = datetime(e_y, e_m, 1)
     
     try:
-        extract_winker(user, password, condo, s_obj, e_obj, args.headless)
+        extract_winker(user, password, wl, s_obj, e_obj, config.get("headless", False))
     finally:
-        if not args.no_wait:
+        if not config.get("no_wait", False):
             input("\nPressione Enter para continuar...")

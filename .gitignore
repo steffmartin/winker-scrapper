@@ -20,3 +20,10 @@ compilados/
 
 # IDEs
 /.idea/
+
+# Configurações
+config/*.config
+!config/dev.config
+
+# Atalhos
+*.lnk

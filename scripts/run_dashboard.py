@@ -6,7 +6,7 @@ import sys
 from datetime import datetime
 
 # Módulos internos independentes
-from utils import logger
+from utils import logger, load_config
 
 # Garantir dependências antes de importar libs externas
 from setup_deps import install_dependencies
@@ -544,16 +544,19 @@ class Api:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--condo-id', help='ID do condomínio a ser carregado', default=None)
-    parser.add_argument('--dev', action='store_true', help='Modo de desenvolvimento')
+    parser.add_argument('--config-file', default='config/dev.config')
     args = parser.parse_args()
+    
+    config = load_config(args.config_file)
+    dev_mode = config.get("dev", True)
+    condo_id = config.get("condo_id")
 
     html_content = None
     html_path = None
     
     # 1. Verifica se a base de dados SQLite existe
     db_path = os.path.join(project_root, "database", "winker_data.db")
-    if not args.dev and not os.path.exists(db_path):
+    if not dev_mode and not os.path.exists(db_path):
         logger.warning("AVISO: Banco de dados não encontrado em database/winker_data.db!")
         html_content = "<html><head><meta charset='utf-8'/><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:40px;background:#1e293b;color:#f8fafc;}h2{color:#eab308;}code{background:#334155;padding:2px 6px;border-radius:4px;font-family:monospace;}ol{line-height:1.6;}</style></head><body><h2>Banco de Dados Não Encontrado</h2><p>Não foi possível localizar o banco de dados local em <code>database/winker_data.db</code>.</p><p><b>Como resolver:</b> Você precisa realizar a extração inicial de dados para criar e popular o banco de dados antes de abrir o painel. Por favor:</p><ol><li>Dê um duplo clique no atalho <b><code>Extrair_Dados.lnk</code></b> (ou <b><code>Extrair_Dados_Headless.lnk</code></b>) na raiz do projeto.</li><li>Aguarde o extrator concluir o processamento de pelo menos um período de transações.</li><li>Após o término da extração com sucesso, abra novamente o dashboard.</li></ol></body></html>"
         logger.info("Carregando aviso de banco de dados ausente...")
@@ -599,7 +602,7 @@ def main():
         
 
 
-    api = Api(condo_id=args.condo_id)
+    api = Api(condo_id=condo_id)
 
     # Cria a splash screen como janela separada (banner de carregamento)
     splash_window = None

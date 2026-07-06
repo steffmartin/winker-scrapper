@@ -29,25 +29,32 @@ Para rodar e compilar este projeto em sua máquina local, você precisará de:
 
 ## ⚡ Instalação e Primeira Execução
 
-Para facilitar o uso sem a necessidade de rodar comandos complexos no console do terminal, criamos atalhos prontos na
-raiz do projeto.
-
 ### Passo 1: Configurar Credenciais
 
-Crie ou edite o arquivo `.env` na raiz do projeto contendo suas credenciais de login no portal Winker:
+Crie o arquivo de configuração de produção ou edite o arquivo padrão de desenvolvimento localizado em `config/dev.config` na raiz do projeto, contendo suas credenciais de login no portal Winker:
 
-```env
-WINKER_USER=seu_email@provedor.com
-WINKER_PASSWORD=sua_senha
-WINKER_CONDO=nome_ou_id_do_condominio
+```json
+{
+    "user": "seu_usuario",
+    "password": "sua_senha",
+    "wl": "codigo_adm_no_winker",
+    "condo_id": "codigo_do_condominio",
+    "log_level": "INFO",
+    "start": "2026-01",
+    "end": "2026-12",
+    "headless": false,
+    "no_wait": true,
+    "dev": true
+}
 ```
+
+> O **Código do Condomínio** (`condo_id`) pode ser obtido em `https://app.winker.com.br/intra/condominio/sobre/index`.
 
 ### Passo 2: Primeira Execução e Compilação Automática
 
 Se você acabou de clonar este repositório do zero, a pasta de arquivos estáticos `compilados/` não estará presente.
 
-* Basta dar um duplo clique no atalho [**`Visualizar_Dashboard.lnk`
-  **](file:///D:/projects/winker/Visualizar_Dashboard.lnk) na raiz do projeto.
+* Basta rodar o comando de visualização do dashboard na raiz do projeto.
 * O próprio backend em Python detectará a ausência do build, executará o `npm install` (caso a pasta `node_modules` não
   exista) e o `npm run build` na pasta do dashboard de forma automática.
 * Assim que a compilação finalizar, a janela do dashboard abrirá conectada diretamente ao SQLite.
@@ -56,14 +63,19 @@ Se você acabou de clonar este repositório do zero, a pasta de arquivos estáti
 
 ## 🚀 Como Executar
 
-Utilize os atalhos criados na pasta raiz:
+Execute os seguintes comandos Python a partir do terminal na raiz do projeto (substitua pelo seu arquivo de configuração):
 
-1. [**`Visualizar_Dashboard.lnk`**](file:///D:/projects/winker/Visualizar_Dashboard.lnk): Abre a janela desktop nativa
-   do Dashboard financeiro conectado ao banco de dados SQLite real.
-2. [**`Extrair_Dados.lnk`**](file:///D:/projects/winker/Extrair_Dados.lnk): Roda a automação em Python exibindo o
-   navegador Playwright passo a passo para extrair novos períodos de transações.
-3. [**`Extrair_Dados_Headless.lnk`**](file:///D:/projects/winker/Extrair_Dados_Headless.lnk): Executa o mesmo robô de
-   extração de dados, porém de forma invisível/silenciosa em segundo plano.
+1. **Dashboard Financeiro**
+   Abre a janela desktop nativa do Dashboard financeiro conectado ao banco de dados SQLite real.
+   ```bash
+   python scripts/run_dashboard.py --config-file config/dev.config
+   ```
+
+2. **Extração de Dados**
+   Roda a automação em Python para extrair novos períodos de transações.
+   ```bash
+   python scripts/extract_winker.py --config-file config/dev.config
+   ```
 
 ---
 
@@ -103,6 +115,7 @@ O projeto está organizado da seguinte maneira:
     * `setup_deps.py`: Utilitário central de verificação e instalação dinâmica de dependências.
     * `utils.py`: Funções utilitárias compartilhadas, como a configuração e centralização de logs do sistema.
     * `test_*.py`: Suíte de testes unitários de cada arquivo Python.
+* **[`config/`](file:///D:/projects/winker/config)**: Contém os arquivos JSON (`*.config`) de parametrização e credenciais para execução do scraper e inicialização do dashboard.
 * **[`database/`](file:///D:/projects/winker/database)**: Contém o arquivo do banco de dados SQLite local (
   `winker_data.db`) utilizado pelo extrator e lido pelo dashboard. Consulte o
   [`database/diagrama_er.md`](database/diagrama_er.md) para visualizar o diagrama de entidade-relacionamento completo
@@ -122,18 +135,22 @@ Se precisar customizar a interface, a lógica ou o comportamento do painel, este
 localizados na pasta `dashboard/`:
 
 1. **Estrutura Visual (HTML):**
-    * [
-      `dashboard/src/app/pages/dashboard/dashboard.html`](file:///D:/projects/winker/dashboard/src/app/pages/dashboard/dashboard.html)
-        * Define o layout de página única do painel com cards de KPIs, tabelas de meses/transações, tags dinâmicas e o
-          painel superior de filtros usando componentes do PrimeNG e Tailwind.
+    * [`dashboard/src/app/pages/dashboard/dashboard.html`](file:///D:/projects/winker/dashboard/src/app/pages/dashboard/dashboard.html)
+        * Define o layout principal do painel com cards de KPIs, tabelas de meses/transações, tags dinâmicas e filtros usando componentes do PrimeNG e Tailwind.
+    * [`dashboard/src/app/pages/configuracoes/configuracoes.html`](file:///D:/projects/winker/dashboard/src/app/pages/configuracoes/configuracoes.html)
+        * Painel visual para edição de configurações do aplicativo e preferências de tema.
+    * [`dashboard/src/app/pages/notfound/notfound.html`](file:///D:/projects/winker/dashboard/src/app/pages/notfound/notfound.html)
+        * Tela de fallback amigável caso uma rota inexistente seja acessada.
+
 2. **Lógica e Integração (TypeScript):**
-    * [
-      `dashboard/src/app/pages/dashboard/dashboard.ts`](file:///D:/projects/winker/dashboard/src/app/pages/dashboard/dashboard.ts)
-        * Gerencia a filtragem em tempo real, a detecção de ambiente (Modo Simulação vs. Conexão Real), formata textos
-          do SQLite e invoca as chamadas do backend expostas pela API do `pywebview`.
+    * [`dashboard/src/app/pages/dashboard/dashboard.ts`](file:///D:/projects/winker/dashboard/src/app/pages/dashboard/dashboard.ts)
+        * Gerencia a filtragem em tempo real e invoca as chamadas de extração de dados expostas pela API do `pywebview`.
+    * [`dashboard/src/app/pages/configuracoes/configuracoes.ts`](file:///D:/projects/winker/dashboard/src/app/pages/configuracoes/configuracoes.ts)
+        * Gerencia o estado das configurações do tema, cache e preferências do usuário.
+
 3. **Roteamento da Aplicação:**
     * [`dashboard/src/app.routes.ts`](file:///D:/projects/winker/dashboard/src/app.routes.ts)
-        * Define a rota raiz para carregar diretamente o componente do dashboard dentro do layout Sakai.
+        * Define as rotas raiz mapeando as telas (`/`, `/configuracoes`, etc.) dentro do layout Sakai.
 4. **Configurações Globais do Angular:**
     * [`dashboard/src/app.config.ts`](file:///D:/projects/winker/dashboard/src/app.config.ts)
         * Ativa o Hash Location (`withHashLocation`), eliminando erros 404 de navegação no navegador do app nativo.
