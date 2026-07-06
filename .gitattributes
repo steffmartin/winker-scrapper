@@ -18,6 +18,11 @@
 *.bat text eol=crlf
 .gitignore text eol=lf
 .gitattributes text eol=lf
+.gitmodules text eol=lf
+.editorconfig text eol=lf
+.prettierignore text eol=lf
+*.yml text eol=lf
+*.config text eol=lf
 
 # Definição explícita de arquivos binários (não devem ser modificados pelo Git)
 *.png binary
