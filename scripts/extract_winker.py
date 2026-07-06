@@ -1046,7 +1046,7 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
 # 4. Orquestrador Principal do Script
 # ==========================================
 
-def extract_winker(username, password, wl, start_date_obj, end_date_obj, headless):
+def extract_winker(username, password, wl, start_date_obj, end_date_obj, headless, portal_index=None):
     """
     Fluxo principal de extração web de dados do Winker via Playwright.
     """
@@ -1101,7 +1101,22 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
             page.fill("#LoginForm_username", username)
             page.fill("#LoginForm_password", password)
             page.click("#loginform > div.input-group.login-entrar > input")
-            page.wait_for_url("**/intra", timeout=60000)
+            
+            try:
+                page.wait_for_url(lambda url: "/intra" in url, timeout=60000)
+            except Exception:
+                pass
+                
+            if "escolherPortal" in page.url:
+                if portal_index is not None:
+                    idx = int(portal_index) - 1
+                    page.locator("#content hgroup > div > table tbody tr").nth(idx).locator("a").first.click()
+                else:
+                    page.locator("#content hgroup > div > table tbody tr").nth(0).locator("a").first.click()
+                
+                page.wait_for_url("**/intra", timeout=60000)
+            else:
+                page.wait_for_url("**/intra", timeout=60000)
 
             # Inicializa tabelas uma única vez no início
             init_db()
@@ -1430,7 +1445,7 @@ if __name__ == "__main__":
     e_obj = datetime(e_y, e_m, 1)
     
     try:
-        extract_winker(user, password, wl, s_obj, e_obj, config.get("headless", False))
+        extract_winker(user, password, wl, s_obj, e_obj, config.get("headless", False), config.get("portal_index"))
     finally:
         if not config.get("no_wait", False):
             input("\nPressione Enter para continuar...")

@@ -10,11 +10,17 @@ v21 + PrimeNG v21 + Tailwind CSS v4).
 
 ## 📊 Recursos Principais do Dashboard
 
-- **Indicadores de Gestão (KPIs):** Visualização rápida da Gestão atual, Resumo do Mês (receitas vs despesas), Inadimplência, Saldo de Contas e Estatísticas do Sistema.
-- **Tema Dinâmico (Light/Dark Mode):** O layout é totalmente responsivo e se adapta suavemente a temas claros e escuros usando classes dinâmicas e gradientes do Tailwind CSS.
-- **Monitoramento de Inconsistências:** O painel superior (Topbar) exibe um badge de notificação interativo sempre que existirem transações ou meses com divergência matemática pendentes de revisão.
-- **Otimização de Performance:** Estratégias de lazy loading nativo do Angular 17+ (`@defer`) garantem que gráficos pesados (Chart.js), popovers e menus ocultos sejam carregados sob demanda ou em modo *idle*, mantendo o tamanho do pacote inicial (*initial bundle*) extremamente leve.
-- **Design Premium:** Uso de Skeletons elegantes para carregamento, tipografia moderna e tolerância a dados faltantes (Zero-value fallbacks).
+- **Indicadores de Gestão (KPIs):** Visualização rápida da Gestão atual, Resumo do Mês (receitas vs despesas),
+  Inadimplência, Saldo de Contas e Estatísticas do Sistema.
+- **Tema Dinâmico (Light/Dark Mode):** O layout é totalmente responsivo e se adapta suavemente a temas claros e escuros
+  usando classes dinâmicas e gradientes do Tailwind CSS.
+- **Monitoramento de Inconsistências:** O painel superior (Topbar) exibe um badge de notificação interativo sempre que
+  existirem transações ou meses com divergência matemática pendentes de revisão.
+- **Otimização de Performance:** Estratégias de lazy loading nativo do Angular 17+ (`@defer`) garantem que gráficos
+  pesados (Chart.js), popovers e menus ocultos sejam carregados sob demanda ou em modo *idle*, mantendo o tamanho do
+  pacote inicial (*initial bundle*) extremamente leve.
+- **Design Premium:** Uso de Skeletons elegantes para carregamento, tipografia moderna e tolerância a dados faltantes (
+  Zero-value fallbacks).
 
 ---
 
@@ -31,24 +37,40 @@ Para rodar e compilar este projeto em sua máquina local, você precisará de:
 
 ### Passo 1: Configurar Credenciais
 
-Crie o arquivo de configuração de produção ou edite o arquivo padrão de desenvolvimento localizado em `config/dev.config` na raiz do projeto, contendo suas credenciais de login no portal Winker:
+Crie o arquivo de configuração de produção ou edite o arquivo padrão de desenvolvimento localizado em
+`config/dev.config` na raiz do projeto, contendo suas credenciais de login no portal Winker:
 
 ```json
 {
-    "user": "seu_usuario",
-    "password": "sua_senha",
-    "wl": "codigo_adm_no_winker",
-    "condo_id": "codigo_do_condominio",
-    "log_level": "INFO",
-    "start": "2026-01",
-    "end": "2026-12",
-    "headless": false,
-    "no_wait": true,
-    "dev": true
+  "user": "seu_usuario",
+  "password": "sua_senha",
+  "wl": "codigo_adm_no_winker",
+  "condo_id": "codigo_do_condominio",
+  "portal_index": 1,
+  "log_level": "INFO",
+  "start": "2026-01",
+  "end": "2026-12",
+  "headless": false,
+  "no_wait": true,
+  "dev": true
 }
 ```
 
-> O **Código do Condomínio** (`condo_id`) pode ser obtido em `https://app.winker.com.br/intra/condominio/sobre/index`.
+Abaixo está o detalhamento de cada parâmetro do arquivo de configuração:
+
+| Parâmetro      | Descrição                                                                                              | Valor Default / Padrão |
+|----------------|--------------------------------------------------------------------------------------------------------|------------------------|
+| `user`         | Usuário ou e-mail de login no portal Winker.                                                           | *(Obrigatório)*        |
+| `password`     | Senha de login.                                                                                        | *(Obrigatório)*        |
+| `wl`           | Código da administradora (`wl`) que aparece na URL de login.                                           | `""` (Vazio)           |
+| `condo_id`     | Código do condomínio obtido em `https://app.winker.com.br/intra/condominio/sobre/index`.               | *(Obrigatório)*        |
+| `portal_index` | Posição do condomínio na lista de "Escolher Portal" caso a conta tenha acesso a múltiplos condomínios. | `1`                    |
+| `log_level`    | Nível de detalhamento dos registros de log (`DEBUG`, `INFO`, `WARNING`, `ERROR`).                      | `"INFO"`               |
+| `start`        | Competência (Mês/Ano) inicial da extração, no formato `YYYY-MM`.                                       | Mês anterior           |
+| `end`          | Competência (Mês/Ano) final da extração, no formato `YYYY-MM`.                                         | Mês atual              |
+| `headless`     | Se `true`, executa o navegador oculto em segundo plano.                                                | `false`                |
+| `no_wait`      | Se `true`, o terminal é encerrado imediatamente ao final, sem pedir para pressionar Enter.             | `false`                |
+| `dev`          | Flag que indica ambiente de desenvolvimento.                                                           | `false`                |
 
 ### Passo 2: Primeira Execução e Compilação Automática
 
@@ -63,7 +85,8 @@ Se você acabou de clonar este repositório do zero, a pasta de arquivos estáti
 
 ## 🚀 Como Executar
 
-Execute os seguintes comandos Python a partir do terminal na raiz do projeto (substitua pelo seu arquivo de configuração):
+Execute os seguintes comandos Python a partir do terminal na raiz do projeto (substitua pelo seu arquivo de
+configuração):
 
 1. **Dashboard Financeiro**
    Abre a janela desktop nativa do Dashboard financeiro conectado ao banco de dados SQLite real.
@@ -115,7 +138,8 @@ O projeto está organizado da seguinte maneira:
     * `setup_deps.py`: Utilitário central de verificação e instalação dinâmica de dependências.
     * `utils.py`: Funções utilitárias compartilhadas, como a configuração e centralização de logs do sistema.
     * `test_*.py`: Suíte de testes unitários de cada arquivo Python.
-* **[`config/`](file:///D:/projects/winker/config)**: Contém os arquivos JSON (`*.config`) de parametrização e credenciais para execução do scraper e inicialização do dashboard.
+* **[`config/`](file:///D:/projects/winker/config)**: Contém os arquivos JSON (`*.config`) de parametrização e
+  credenciais para execução do scraper e inicialização do dashboard.
 * **[`database/`](file:///D:/projects/winker/database)**: Contém o arquivo do banco de dados SQLite local (
   `winker_data.db`) utilizado pelo extrator e lido pelo dashboard. Consulte o
   [`database/diagrama_er.md`](database/diagrama_er.md) para visualizar o diagrama de entidade-relacionamento completo
@@ -135,17 +159,23 @@ Se precisar customizar a interface, a lógica ou o comportamento do painel, este
 localizados na pasta `dashboard/`:
 
 1. **Estrutura Visual (HTML):**
-    * [`dashboard/src/app/pages/dashboard/dashboard.html`](file:///D:/projects/winker/dashboard/src/app/pages/dashboard/dashboard.html)
-        * Define o layout principal do painel com cards de KPIs, tabelas de meses/transações, tags dinâmicas e filtros usando componentes do PrimeNG e Tailwind.
-    * [`dashboard/src/app/pages/configuracoes/configuracoes.html`](file:///D:/projects/winker/dashboard/src/app/pages/configuracoes/configuracoes.html)
+    * [
+      `dashboard/src/app/pages/dashboard/dashboard.html`](file:///D:/projects/winker/dashboard/src/app/pages/dashboard/dashboard.html)
+        * Define o layout principal do painel com cards de KPIs, tabelas de meses/transações, tags dinâmicas e filtros
+          usando componentes do PrimeNG e Tailwind.
+    * [
+      `dashboard/src/app/pages/configuracoes/configuracoes.html`](file:///D:/projects/winker/dashboard/src/app/pages/configuracoes/configuracoes.html)
         * Painel visual para edição de configurações do aplicativo e preferências de tema.
-    * [`dashboard/src/app/pages/notfound/notfound.html`](file:///D:/projects/winker/dashboard/src/app/pages/notfound/notfound.html)
+    * [
+      `dashboard/src/app/pages/notfound/notfound.html`](file:///D:/projects/winker/dashboard/src/app/pages/notfound/notfound.html)
         * Tela de fallback amigável caso uma rota inexistente seja acessada.
 
 2. **Lógica e Integração (TypeScript):**
-    * [`dashboard/src/app/pages/dashboard/dashboard.ts`](file:///D:/projects/winker/dashboard/src/app/pages/dashboard/dashboard.ts)
+    * [
+      `dashboard/src/app/pages/dashboard/dashboard.ts`](file:///D:/projects/winker/dashboard/src/app/pages/dashboard/dashboard.ts)
         * Gerencia a filtragem em tempo real e invoca as chamadas de extração de dados expostas pela API do `pywebview`.
-    * [`dashboard/src/app/pages/configuracoes/configuracoes.ts`](file:///D:/projects/winker/dashboard/src/app/pages/configuracoes/configuracoes.ts)
+    * [
+      `dashboard/src/app/pages/configuracoes/configuracoes.ts`](file:///D:/projects/winker/dashboard/src/app/pages/configuracoes/configuracoes.ts)
         * Gerencia o estado das configurações do tema, cache e preferências do usuário.
 
 3. **Roteamento da Aplicação:**

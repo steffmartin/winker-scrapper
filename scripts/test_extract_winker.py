@@ -355,5 +355,35 @@ class TestExtractWinker(unittest.TestCase):
                 os.unlink(temp_path)
             except: pass
 
+    @patch('extract_winker.sync_playwright')
+    @patch('extract_winker.init_db')
+    @patch('extract_winker.create_auditoria')
+    @patch('extract_winker.extract_condominio_and_gestao')
+    def test_extract_winker_portal_index(self, mock_extract_condominio, mock_auditoria, mock_init, mock_sp):
+        from extract_winker import extract_winker
+        from datetime import datetime
+        
+        mock_extract_condominio.side_effect = Exception("Stop Execution")
+        
+        mock_page = MagicMock()
+        mock_page.url = "https://app.winker.com.br/intra/default/escolherPortal"
+        
+        mock_context = MagicMock()
+        mock_context.new_page.return_value = mock_page
+        
+        mock_browser = MagicMock()
+        mock_browser.new_context.return_value = mock_context
+        
+        mock_p = MagicMock()
+        mock_p.chromium.launch.return_value = mock_browser
+        mock_sp.return_value.__enter__.return_value = mock_p
+        
+        try:
+            extract_winker("user", "pass", "123", datetime.now(), datetime.now(), True, portal_index=2)
+        except Exception as e:
+            self.assertEqual(str(e), "Stop Execution")
+            
+        mock_page.locator.assert_any_call("#content hgroup > div > table tbody tr")
+
 if __name__ == "__main__":
     unittest.main()
