@@ -1,10 +1,60 @@
-<div class="card shadow-sm border rounded-xl w-full">
+<!-- Modal Adicionar Membro -->
+<p-dialog header="Adicionar Membro" [modal]="true" [(visible)]="displayMembroDialog" [style]="{ width: '25rem' }">
+    @defer (on idle) {
+        <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o nome e o cargo do novo membro da gestão.</span>
+        <form [formGroup]="novoMembroForm" (ngSubmit)="salvarNovoMembro()" (keydown.enter)="$event.preventDefault()">
+            <div class="flex flex-col gap-4">
+                <div class="flex flex-col gap-2">
+                    <label for="novo_nome" class="font-semibold text-sm">Nome</label>
+                    <input pInputText id="novo_nome" formControlName="nome" autocomplete="off" />
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="novo_cargo" class="font-semibold text-sm">Cargo</label>
+                    <input pInputText id="novo_cargo" formControlName="cargo" autocomplete="off" />
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <p-button label="Cancelar" severity="secondary" (onClick)="displayMembroDialog = false" [text]="true"></p-button>
+                    <p-button label="Adicionar" type="submit" [disabled]="novoMembroForm.invalid"></p-button>
+                </div>
+            </div>
+        </form>
+    } @placeholder {
+        <div class="h-32 flex items-center justify-center">
+            <span class="text-surface-400 text-sm">Carregando formulário...</span>
+        </div>
+    }
+</p-dialog>
+
+<!-- Modal Adicionar Telefone -->
+<p-dialog header="Adicionar Telefone" [modal]="true" [(visible)]="displayTelefoneDialog" [style]="{ width: '25rem' }">
+    @defer (on idle) {
+        <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o novo número de telefone.</span>
+        <form [formGroup]="novoTelefoneForm" (ngSubmit)="salvarNovoTelefone()" (keydown.enter)="$event.preventDefault()">
+            <div class="flex flex-col gap-4">
+                <div class="flex flex-col gap-2">
+                    <label for="novo_telefone" class="font-semibold text-sm">Telefone / Celular</label>
+                    <input pInputText id="novo_telefone" formControlName="numero" (input)="onTelefoneInput($event)" autocomplete="off" class="w-full" placeholder="(00) 00000-0000" maxlength="15" />
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <p-button label="Cancelar" severity="secondary" (onClick)="displayTelefoneDialog = false" [text]="true"></p-button>
+                    <p-button label="Adicionar" type="submit" [disabled]="novoTelefoneForm.invalid"></p-button>
+                </div>
+            </div>
+        </form>
+    } @placeholder {
+        <div class="h-32 flex items-center justify-center">
+            <span class="text-surface-400 text-sm">Carregando formulário...</span>
+        </div>
+    }
+</p-dialog>
+
+<div class="card shadow-sm border rounded-xl w-full flex flex-col relative">
     <h4 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Configurações</h4>
     <p-toast position="bottom-right"></p-toast>
     <p-confirmDialog [style]="{width: '450px'}"></p-confirmDialog>
 
-    <form [formGroup]="configForm" (ngSubmit)="salvar()" (keydown.enter)="$event.preventDefault()">
-        <p-tabs value="0" [lazy]="true">
+    <form [formGroup]="configForm" (ngSubmit)="salvar()" (keydown.enter)="$event.preventDefault()" class="flex-1 flex flex-col">
+        <p-tabs value="0" [lazy]="true" class="flex-1 flex flex-col">
             <p-tablist>
                 <p-tab value="0"><i class="pi pi-id-card mr-2"></i><span>Dados Cadastrais</span></p-tab>
                 <p-tab value="1"><i class="pi pi-money-bill mr-2"></i><span>Financeiro</span></p-tab>
@@ -107,58 +157,9 @@
             </p-tabpanels>
         </p-tabs>
 
-        <div class="flex justify-end mt-6">
+        <div class="flex justify-end mt-auto pt-6">
             <p-button label="Salvar Alterações" icon="pi pi-save" type="submit" [loading]="loading" [disabled]="configForm.pristine || configForm.invalid"></p-button>
         </div>
     </form>
 </div>
 
-<!-- Modal Adicionar Membro -->
-<p-dialog header="Adicionar Membro" [modal]="true" [(visible)]="displayMembroDialog" [style]="{ width: '25rem' }">
-    @defer (on idle) {
-        <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o nome e o cargo do novo membro da gestão.</span>
-        <form [formGroup]="novoMembroForm" (ngSubmit)="salvarNovoMembro()" (keydown.enter)="$event.preventDefault()">
-            <div class="flex flex-col gap-4">
-                <div class="flex flex-col gap-2">
-                    <label for="novo_nome" class="font-semibold text-sm">Nome</label>
-                    <input pInputText id="novo_nome" formControlName="nome" autocomplete="off" />
-                </div>
-                <div class="flex flex-col gap-2">
-                    <label for="novo_cargo" class="font-semibold text-sm">Cargo</label>
-                    <input pInputText id="novo_cargo" formControlName="cargo" autocomplete="off" />
-                </div>
-                <div class="flex justify-end gap-2 mt-4">
-                    <p-button label="Cancelar" severity="secondary" (onClick)="displayMembroDialog = false" [text]="true"></p-button>
-                    <p-button label="Adicionar" type="submit" [disabled]="novoMembroForm.invalid"></p-button>
-                </div>
-            </div>
-        </form>
-    } @placeholder {
-        <div class="h-32 flex items-center justify-center">
-            <span class="text-surface-400 text-sm">Carregando formulário...</span>
-        </div>
-    }
-</p-dialog>
-
-<!-- Modal Adicionar Telefone -->
-<p-dialog header="Adicionar Telefone" [modal]="true" [(visible)]="displayTelefoneDialog" [style]="{ width: '25rem' }">
-    @defer (on idle) {
-        <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o novo número de telefone.</span>
-        <form [formGroup]="novoTelefoneForm" (ngSubmit)="salvarNovoTelefone()" (keydown.enter)="$event.preventDefault()">
-            <div class="flex flex-col gap-4">
-                <div class="flex flex-col gap-2">
-                    <label for="novo_telefone" class="font-semibold text-sm">Telefone / Celular</label>
-                    <input pInputText id="novo_telefone" formControlName="numero" (input)="onTelefoneInput($event)" autocomplete="off" class="w-full" placeholder="(00) 00000-0000" maxlength="15" />
-                </div>
-                <div class="flex justify-end gap-2 mt-4">
-                    <p-button label="Cancelar" severity="secondary" (onClick)="displayTelefoneDialog = false" [text]="true"></p-button>
-                    <p-button label="Adicionar" type="submit" [disabled]="novoTelefoneForm.invalid"></p-button>
-                </div>
-            </div>
-        </form>
-    } @placeholder {
-        <div class="h-32 flex items-center justify-center">
-            <span class="text-surface-400 text-sm">Carregando formulário...</span>
-        </div>
-    }
-</p-dialog>
