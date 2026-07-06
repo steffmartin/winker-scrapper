@@ -53,6 +53,9 @@ export class ConfiguracoesComponent implements OnInit {
     maxDate = new Date();
     displayMembroDialog = false;
     novoMembroForm: FormGroup;
+    
+    displayTelefoneDialog = false;
+    novoTelefoneForm: FormGroup;
 
     constructor(
         private fb: FormBuilder, 
@@ -64,7 +67,7 @@ export class ConfiguracoesComponent implements OnInit {
             condominio: this.fb.group({
                 nome: ['', Validators.required],
                 administradora: [''],
-                telefone_administradora: [''],
+                telefone_administradora: this.fb.array([]),
                 saldo_inicial: [0],
                 prazo_fechamento: [0, Validators.min(0)],
                 inadimplencia_data_corte: [null],
@@ -78,10 +81,18 @@ export class ConfiguracoesComponent implements OnInit {
             nome: ['', Validators.required],
             cargo: ['', Validators.required]
         });
+
+        this.novoTelefoneForm = this.fb.group({
+            numero: ['', Validators.required]
+        });
     }
 
     get membros() {
         return this.configForm.get('membros') as FormArray;
+    }
+
+    get telefones() {
+        return this.configForm.get('condominio.telefone_administradora') as FormArray;
     }
 
     ngOnInit() {
@@ -130,8 +141,18 @@ export class ConfiguracoesComponent implements OnInit {
                         }
                     }
                     
+                    const telefonesList = condo.telefone_administradora || [];
+                    delete condo.telefone_administradora;
+
                     this.configForm.get('condominio')?.patchValue(condo);
                     
+                    this.telefones.clear();
+                    if (Array.isArray(telefonesList)) {
+                        telefonesList.forEach((t: string) => {
+                            this.telefones.push(this.fb.control(t));
+                        });
+                    }
+
                     this.membros.clear();
                     membrosData.forEach((m: any) => {
                         this.membros.push(this.fb.group({
@@ -181,6 +202,59 @@ export class ConfiguracoesComponent implements OnInit {
     removeMembro(index: number) {
         this.membros.removeAt(index);
         this.configForm.markAsDirty();
+    }
+
+    showTelefoneDialog() {
+        this.novoTelefoneForm.reset();
+        this.displayTelefoneDialog = true;
+    }
+
+    salvarNovoTelefone() {
+        if (this.novoTelefoneForm.valid) {
+            let numero = this.novoTelefoneForm.value.numero;
+            if (numero) {
+                numero = numero.replace(/\D/g, '');
+                this.telefones.push(this.fb.control(numero));
+                this.configForm.markAsDirty();
+            }
+            this.displayTelefoneDialog = false;
+        }
+    }
+
+    removeTelefone(index: number) {
+        this.telefones.removeAt(index);
+        this.configForm.markAsDirty();
+    }
+
+    onTelefoneInput(event: any) {
+        let val = event.target.value.replace(/\D/g, '');
+        if (val.length > 11) val = val.substring(0, 11);
+        
+        let formatado = '';
+        if (val.length === 0) {
+            formatado = '';
+        } else if (val.length <= 2) {
+            formatado = `(${val}`;
+        } else if (val.length <= 6) {
+            formatado = `(${val.substring(0, 2)}) ${val.substring(2)}`;
+        } else if (val.length <= 10) {
+            formatado = `(${val.substring(0, 2)}) ${val.substring(2, 6)}-${val.substring(6)}`;
+        } else {
+            formatado = `(${val.substring(0, 2)}) ${val.substring(2, 7)}-${val.substring(7)}`;
+        }
+        
+        this.novoTelefoneForm.patchValue({ numero: formatado }, { emitEvent: false });
+    }
+
+    formatarTelefone(tel: string): string {
+        if (!tel) return '';
+        const d = tel.replace(/\D/g, '');
+        if (d.length === 11) {
+            return `(${d.substring(0, 2)}) ${d.substring(2, 7)}-${d.substring(7, 11)}`;
+        } else if (d.length === 10) {
+            return `(${d.substring(0, 2)}) ${d.substring(2, 6)}-${d.substring(6, 10)}`;
+        }
+        return tel;
     }
 
     salvar() {

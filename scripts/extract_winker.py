@@ -565,7 +565,8 @@ def extract_inadimplencia_boleto(page, context):
     boleto_url = "https://app.winker.com.br/intra/meuCondominio/boleto"
     page.goto(boleto_url, wait_until="networkidle")
     
-    administradora, telefone = (None, None)
+    administradora = None
+    telefone = []
     try:
         locators = page.locator("strong, .panel-heading, div.alert.alert-info").all()
         for loc in locators:
@@ -574,12 +575,19 @@ def extract_inadimplencia_boleto(page, context):
             if re.search(r"\(\d{2}\)\s*\d{4,5}-?\d{4}", text):
                 if " - " in text:
                     text = text.split(" - ")[-1].strip()
-                match = re.search(r"([A-ZÀ-Úa-z\s]+)\s*\((\d{2})\)\s*([\d-]+)", text)
-                if match:
-                    administradora = match.group(1).strip()
-                    ddd = match.group(2)
-                    num = match.group(3).replace("-", "").replace(" ", "").strip()
-                    telefone = f"{ddd}{num}"
+                        
+                match_adm = re.search(r"([A-ZÀ-Úa-z\s]+)\s*\(", text)
+                if match_adm and not administradora:
+                    administradora = match_adm.group(1).strip()
+                    
+                phones = re.findall(r"\((\d{2})\)\s*([\d-]+)", text)
+                for ddd, num in phones:
+                    num_clean = num.replace("-", "").replace(" ", "").strip()
+                    full_phone = f"{ddd}{num_clean}"
+                    if full_phone not in telefone:
+                        telefone.append(full_phone)
+                
+                if telefone:
                     break
     except Exception as ex_admin:
         logger.error(f"Erro ao extrair dados da administradora: {ex_admin}")
@@ -660,7 +668,7 @@ def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor
             cond.inadimplencia_unidades = unidades
             cond.inadimplencia_valor = valor
         if administradora: cond.administradora = administradora
-        if telefone: cond.telefone_administradora = telefone
+        if telefone is not None: cond.telefone_administradora = json.dumps(telefone)
         cond.ultima_atualizacao = datetime.now().isoformat()
         cond.save()
         

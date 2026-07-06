@@ -2,7 +2,7 @@
     <h4 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Configurações</h4>
     <p-toast position="bottom-right"></p-toast>
     <p-confirmDialog [style]="{width: '450px'}"></p-confirmDialog>
-    
+
     <form [formGroup]="configForm" (ngSubmit)="salvar()" (keydown.enter)="$event.preventDefault()">
         <p-tabs value="0" [lazy]="true">
             <p-tablist>
@@ -15,18 +15,32 @@
             <p-tabpanels class="pt-4">
                 <!-- Aba 1: Dados Cadastrais -->
                 <p-tabpanel value="0">
-                    <div class="grid grid-cols-1 md:grid-cols-5 gap-6" formGroupName="condominio">
-                        <div class="md:col-span-2 flex flex-col gap-2">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6" formGroupName="condominio">
+                        <div class="flex flex-col gap-2">
                             <label for="nome" class="font-medium">Nome do Condomínio</label>
                             <input pInputText id="nome" formControlName="nome" type="text" />
                         </div>
-                        <div class="md:col-span-2 flex flex-col gap-2">
+                        <div class="flex flex-col gap-2">
                             <label for="administradora" class="font-medium">Nome da Administradora</label>
                             <input pInputText id="administradora" formControlName="administradora" type="text" />
                         </div>
-                        <div class="md:col-span-1 flex flex-col gap-2">
-                            <label for="telefone_administradora" class="font-medium">Telefone da Administradora</label>
-                            <p-inputMask id="telefone_administradora" formControlName="telefone_administradora" mask="(99) 9999-9999?9" styleClass="w-full"></p-inputMask>
+                        <div class="flex flex-col gap-2">
+                            <label class="font-medium">Telefones da Administradora</label>
+                            <div formArrayName="telefone_administradora">
+                                <div class="flex items-center justify-start flex-wrap gap-2 mt-1">
+                                    <p-chip *ngFor="let tel of telefones.controls; let i = index"
+                                            [label]="formatarTelefone(tel.value)"
+                                            [removable]="true"
+                                            (onRemove)="removeTelefone(i)"
+                                            styleClass="bg-primary text-primary-contrast"
+                                            class="text-sm font-medium">
+                                    </p-chip>
+
+                                    <p-chip *ngIf="telefones.length === 0" label="Nenhum telefone cadastrado" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
+
+                                    <p-button icon="pi pi-plus" [rounded]="true" size="small" pTooltip="Adicionar telefone" tooltipPosition="right" (onClick)="showTelefoneDialog()"></p-button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </p-tabpanel>
@@ -74,18 +88,18 @@
                 <p-tabpanel value="3">
                     <div formArrayName="membros">
                         <div class="flex items-center justify-start flex-wrap gap-3 mt-2">
-                            <p-chip *ngFor="let membro of membros.controls; let i = index" 
-                                    [label]="membro.value.nome" 
+                            <p-chip *ngFor="let membro of membros.controls; let i = index"
+                                    [label]="membro.value.nome"
                                     [icon]="getMembroIcon(membro.value.cargo)"
-                                    [removable]="true" 
+                                    [removable]="true"
                                     pTooltip="{{ membro.value.cargo }}" tooltipPosition="bottom"
-                                    (onRemove)="removeMembro(i)" 
+                                    (onRemove)="removeMembro(i)"
                                     styleClass="bg-primary text-primary-contrast"
                                     class="text-sm font-medium">
                             </p-chip>
-                            
+
                             <p-chip *ngIf="membros.length === 0" label="Nenhum membro de gestão cadastrado" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
-                            
+
                             <p-button icon="pi pi-plus" [rounded]="true" size="small" pTooltip="Adicionar membro" tooltipPosition="right" (onClick)="showDialog()"></p-button>
                         </div>
                     </div>
@@ -116,6 +130,29 @@
                 <div class="flex justify-end gap-2 mt-4">
                     <p-button label="Cancelar" severity="secondary" (onClick)="displayMembroDialog = false" [text]="true"></p-button>
                     <p-button label="Adicionar" type="submit" [disabled]="novoMembroForm.invalid"></p-button>
+                </div>
+            </div>
+        </form>
+    } @placeholder {
+        <div class="h-32 flex items-center justify-center">
+            <span class="text-surface-400 text-sm">Carregando formulário...</span>
+        </div>
+    }
+</p-dialog>
+
+<!-- Modal Adicionar Telefone -->
+<p-dialog header="Adicionar Telefone" [modal]="true" [(visible)]="displayTelefoneDialog" [style]="{ width: '25rem' }">
+    @defer (on idle) {
+        <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o novo número de telefone.</span>
+        <form [formGroup]="novoTelefoneForm" (ngSubmit)="salvarNovoTelefone()" (keydown.enter)="$event.preventDefault()">
+            <div class="flex flex-col gap-4">
+                <div class="flex flex-col gap-2">
+                    <label for="novo_telefone" class="font-semibold text-sm">Telefone / Celular</label>
+                    <input pInputText id="novo_telefone" formControlName="numero" (input)="onTelefoneInput($event)" autocomplete="off" class="w-full" placeholder="(00) 00000-0000" maxlength="15" />
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <p-button label="Cancelar" severity="secondary" (onClick)="displayTelefoneDialog = false" [text]="true"></p-button>
+                    <p-button label="Adicionar" type="submit" [disabled]="novoTelefoneForm.invalid"></p-button>
                 </div>
             </div>
         </form>

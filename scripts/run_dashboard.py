@@ -3,6 +3,7 @@ import ctypes
 import os
 import subprocess
 import sys
+import json
 from datetime import datetime
 
 # Módulos internos independentes
@@ -68,6 +69,11 @@ class Api:
             condo = models.Condominio.get_or_none(id=self.condo_id)
             if condo:
                 condo_data = condo.__data__
+                if condo_data.get('telefone_administradora'):
+                    try:
+                        condo_data['telefone_administradora'] = json.loads(condo_data['telefone_administradora'])
+                    except Exception:
+                        pass
                 membros = list(models.MembrosGestao.select().where(models.MembrosGestao.condominio_id == self.condo_id).dicts())
                 return {"status": "success", "data": {"condominio": condo_data, "membros": membros}}
             else:
@@ -90,7 +96,7 @@ class Api:
                 
                 if 'nome' in condo_data: condo.nome = condo_data['nome']
                 if 'administradora' in condo_data: condo.administradora = condo_data['administradora']
-                if 'telefone_administradora' in condo_data: condo.telefone_administradora = condo_data['telefone_administradora']
+                if 'telefone_administradora' in condo_data: condo.telefone_administradora = json.dumps(condo_data['telefone_administradora'])
                 if 'saldo_inicial' in condo_data: condo.saldo_inicial = condo_data['saldo_inicial']
                 if 'prazo_fechamento' in condo_data: condo.prazo_fechamento = condo_data['prazo_fechamento']
                 if 'inadimplencia_data_corte' in condo_data: condo.inadimplencia_data_corte = condo_data['inadimplencia_data_corte']
@@ -173,9 +179,14 @@ class Api:
                     "unidades": condo.inadimplencia_unidades or 0,
                     "data_corte": condo.inadimplencia_data_corte
                 }
+                tels = condo.telefone_administradora
+                try:
+                    if tels: tels = json.loads(tels)
+                except Exception:
+                    pass
                 administradora = {
                     "nome": condo.administradora,
-                    "telefone": condo.telefone_administradora
+                    "telefone": tels
                 }
                 estatisticas["ultima_atualizacao"] = condo.ultima_atualizacao
             
