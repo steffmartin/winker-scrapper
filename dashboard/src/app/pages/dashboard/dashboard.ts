@@ -704,7 +704,11 @@ export class Dashboard implements OnInit {
         (nodes || []).forEach(n => traverse(n, {}));
 
         const mesesSet = new Set<string>();
-        allLeaves.forEach(item => mesesSet.add(item.mes));
+        (this.nodes || []).forEach(node => {
+            if (node.data && node.data.tipo_node === 'mes') {
+                mesesSet.add(node.data.descricao);
+            }
+        });
 
         // A ordem dos meses já vem corretamente ordenada (crescente) do backend
         const mesesArr = Array.from(mesesSet);
@@ -748,13 +752,21 @@ export class Dashboard implements OnInit {
             // Line chart for multiple months
             const receitasData = mesesArr.map(mes => {
                 let sum = 0;
-                allLeaves.filter(i => i.mes === mes && i.grupo === 'Receitas').forEach(i => sum += (i.leaf.valor || 0));
-                return sum;
+                let hasData = false;
+                allLeaves.filter(i => i.mes === mes && i.grupo === 'Receitas').forEach(i => {
+                    sum += (i.leaf.valor || 0);
+                    hasData = true;
+                });
+                return hasData ? sum : NaN;
             });
             const despesasData = mesesArr.map(mes => {
                 let sum = 0;
-                allLeaves.filter(i => i.mes === mes && i.grupo === 'Despesas').forEach(i => sum += (i.leaf.valor || 0));
-                return sum;
+                let hasData = false;
+                allLeaves.filter(i => i.mes === mes && i.grupo === 'Despesas').forEach(i => {
+                    sum += (i.leaf.valor || 0);
+                    hasData = true;
+                });
+                return hasData ? sum : NaN;
             });
 
             const documentStyle = getComputedStyle(document.documentElement);
@@ -766,14 +778,26 @@ export class Dashboard implements OnInit {
                         data: receitasData,
                         fill: false,
                         borderColor: documentStyle.getPropertyValue('--p-green-500') || '#22c55e',
-                        tension: 0.4
+                        pointBackgroundColor: documentStyle.getPropertyValue('--p-green-500') || '#22c55e',
+                        tension: 0.4,
+                        spanGaps: true,
+                        segment: {
+                            borderDash: (ctx: any) => ctx.p0.skip || ctx.p1.skip ? [5, 5] : undefined,
+                            borderWidth: (ctx: any) => ctx.p0.skip || ctx.p1.skip ? 1 : undefined
+                        }
                     },
                     {
                         label: 'Despesas',
                         data: despesasData,
                         fill: false,
                         borderColor: documentStyle.getPropertyValue('--p-red-500') || '#ef4444',
-                        tension: 0.4
+                        pointBackgroundColor: documentStyle.getPropertyValue('--p-red-500') || '#ef4444',
+                        tension: 0.4,
+                        spanGaps: true,
+                        segment: {
+                            borderDash: (ctx: any) => ctx.p0.skip || ctx.p1.skip ? [5, 5] : undefined,
+                            borderWidth: (ctx: any) => ctx.p0.skip || ctx.p1.skip ? 1 : undefined
+                        }
                     }
                 ]
             };
