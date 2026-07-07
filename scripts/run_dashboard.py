@@ -359,37 +359,56 @@ class Api:
             rows = list(query.dicts())
             
             meses_dict = {}
-            if len(rows) == 0 and start_date and end_date:
+            
+            s_year = s_month = e_year = e_month = None
+
+            if start_date:
                 try:
                     s_date = datetime.strptime(start_date, '%Y-%m-%d')
-                    e_date = datetime.strptime(end_date, '%Y-%m-%d')
-                    y, m = s_date.year, s_date.month
-                    while (y < e_date.year) or (y == e_date.year and m <= e_date.month):
-                        mes_exibicao = f"{m:02d}/{y}"
-                        mes_competencia = f"{y}-{m:02d}"
-                        meses_dict[mes_competencia] = {
-                            "data": {"descricao": mes_exibicao, "competencia": mes_competencia, "valor_total": 0, "tipo_node": "mes", "consistente": 0, "anexos": 0},
-                            "expanded": False,
-                            "children_dict": {
-                                "Receitas": {
-                                    "data": {"descricao": "Receitas", "valor_total": 0, "porcentagem": 0.0, "tipo_node": "tipo"},
-                                    "expanded": False,
-                                    "children_dict": {}
-                                },
-                                "Despesas": {
-                                    "data": {"descricao": "Despesas", "valor_total": 0, "porcentagem": 0.0, "tipo_node": "tipo"},
-                                    "expanded": False,
-                                    "children_dict": {}
-                                }
-                            }
-                        }
-                        if m == 12:
-                            m = 1
-                            y += 1
-                        else:
-                            m += 1
+                    s_year, s_month = s_date.year, s_date.month
                 except ValueError:
                     pass
+            elif len(rows) > 0:
+                min_mes = min(r["mes_competencia"] for r in rows)
+                s_year, s_month = int(min_mes.split('-')[0]), int(min_mes.split('-')[1])
+
+            if end_date:
+                try:
+                    e_date = datetime.strptime(end_date, '%Y-%m-%d')
+                    e_year, e_month = e_date.year, e_date.month
+                except ValueError:
+                    pass
+            elif len(rows) > 0:
+                max_mes = max(r["mes_competencia"] for r in rows)
+                e_year, e_month = int(max_mes.split('-')[0]), int(max_mes.split('-')[1])
+                
+            meses_map_inv = {1: 'JAN', 2: 'FEV', 3: 'MAR', 4: 'ABR', 5: 'MAI', 6: 'JUN', 7: 'JUL', 8: 'AGO', 9: 'SET', 10: 'OUT', 11: 'NOV', 12: 'DEZ'}
+            if s_year and s_month and e_year and e_month:
+                y, m = s_year, s_month
+                while (y < e_year) or (y == e_year and m <= e_month):
+                    mes_exibicao = f"{meses_map_inv[m]}/{y}"
+                    mes_competencia = f"{y}-{m:02d}"
+                    meses_dict[mes_competencia] = {
+                        "data": {"descricao": mes_exibicao, "competencia": mes_competencia, "valor_total": 0, "tipo_node": "mes", "consistente": 0, "anexos": 0},
+                        "expanded": False,
+                        "children_dict": {
+                            "Receitas": {
+                                "data": {"descricao": "Receitas", "valor_total": 0, "porcentagem": 0.0, "tipo_node": "tipo"},
+                                "expanded": False,
+                                "children_dict": {}
+                            },
+                            "Despesas": {
+                                "data": {"descricao": "Despesas", "valor_total": 0, "porcentagem": 0.0, "tipo_node": "tipo"},
+                                "expanded": False,
+                                "children_dict": {}
+                            }
+                        }
+                    }
+                    if m == 12:
+                        m = 1
+                        y += 1
+                    else:
+                        m += 1
             
             for row in rows:
                 mes = row["mes_competencia"]
@@ -404,6 +423,10 @@ class Api:
                         "expanded": False,
                         "children_dict": {}
                     }
+                else:
+                    meses_dict[mes]["data"]["descricao"] = mes_exibicao
+                    meses_dict[mes]["data"]["consistente"] = row.get("mes_consistente", 1)
+                    meses_dict[mes]["data"]["anexos"] = row.get("mes_anexos", 0)
                 
                 mes_node = meses_dict[mes]
                 if tipo not in mes_node["children_dict"]:
