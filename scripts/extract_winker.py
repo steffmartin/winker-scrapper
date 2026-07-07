@@ -241,7 +241,7 @@ def download_http_file(context, url, dest_dir, filename_prefix="", default_filen
         
     return local_path, nome_orig
 
-def download_file_from_button(context, btn, dest_dir, filename_prefix="", default_filename=""):
+def download_file_from_button(context, btn, dest_dir, filename_prefix="", default_filename="", confirm_locator=None):
     """
     Clica em um botão que abre uma nova aba contendo um PDF ou arquivo,
     ou inicia um download direto (como em modo headless), e realiza o download.
@@ -269,6 +269,13 @@ def download_file_from_button(context, btn, dest_dir, filename_prefix="", defaul
         # Aguarda até 15 segundos por um evento de popup ou download direto
         start_time = time.time()
         while time.time() - start_time < 15.0:
+            if confirm_locator and confirm_locator.is_visible():
+                try:
+                    confirm_locator.click()
+                    confirm_locator = None
+                except Exception:
+                    pass
+
             # Caso 1: Foi disparado um evento de download direto (ex: em headless)
             if event_data["download"] is not None:
                 dl = event_data["download"]
@@ -592,16 +599,38 @@ def extract_inadimplencia_boleto(page, context):
     except Exception as ex_admin:
         logger.error(f"Erro ao extrair dados da administradora: {ex_admin}")
         
+    # Tenta localizar e clicar no botão de filtro se existir
+    try:
+        btn_filtro = page.locator("#boletos button:has-text('Filtrar')").first
+        if btn_filtro.count() > 0 and btn_filtro.is_visible():
+            btn_filtro.click()
+    except Exception as e:
+        logger.debug(f"Botão de filtro não encontrado ou erro ao clicar: {e}")
+
     try:
         page.wait_for_selector(".list-group-item", timeout=15000)
     except Exception:
         logger.warning("Aviso: Nenhum boleto listado na página de boletos.")
         return None, None, None, administradora, telefone
         
-    first_item = page.locator(".list-group-item").first
-    badge_btn = first_item.locator("a.badge")
+    badge_btn = None
     
-    if badge_btn.count() == 0:
+    # 1. Pegar o ÚLTIMO item que possui 'Ver boleto'
+    loc_ver_boleto = page.locator(".list-group-item:has(a:has-text('Ver boleto')) a:has-text('Ver boleto')")
+    if loc_ver_boleto.count() > 0:
+        badge_btn = loc_ver_boleto.last
+    else:
+        # 2. Se não existir, pegar o PRIMEIRO que possui 'Pago'
+        loc_pago = page.locator(".list-group-item:has(a:has-text('Pago')) a:has-text('Pago')")
+        if loc_pago.count() > 0:
+            badge_btn = loc_pago.first
+        else:
+            # 3. Se não existir, pegar o PRIMEIRO que possui 'a.badge'
+            loc_badge = page.locator(".list-group-item:has(a.badge) a.badge")
+            if loc_badge.count() > 0:
+                badge_btn = loc_badge.first
+    
+    if not badge_btn or badge_btn.count() == 0:
         logger.warning("Aviso: Botão de download/visualização do boleto não encontrado.")
         return None, None, None, administradora, telefone
         
@@ -609,22 +638,16 @@ def extract_inadimplencia_boleto(page, context):
     os.makedirs(temp_dir, exist_ok=True)
     
     try:
-        # Clicar no badge para abrir o modal de confirmação
-        badge_btn.click()
-        
-        # Aguarda o botão do SweetAlert aparecer e ser visível por até 5s
+        # Registra o localizador de confirmação opcional (SweetAlert)
         confirm_btn = page.locator("button.swal2-confirm")
-        try:
-            confirm_btn.wait_for(state="visible", timeout=5000)
-        except Exception:
-            logger.warning("Aviso: Botão de confirmação swal2-confirm não apareceu em 5s.")
-            return None, None, None, administradora, telefone
             
-        # Clica no botão de confirmação esperando a abertura da nova página (PDF)
+        # Chama a função principal de download passando o badge_btn como botão inicial.
+        # Ele será clicado e monitorado, e se a confirmação surgir, será automaticamente clicada.
         prefix = f"boleto_{int(time.time())}_"
         temp_path, nome_orig_final = download_file_from_button(
-            context, confirm_btn, temp_dir,
-            filename_prefix=prefix, default_filename="boleto_recente.pdf"
+            context, badge_btn, temp_dir,
+            filename_prefix=prefix, default_filename="boleto_recente.pdf",
+            confirm_locator=confirm_btn
         )
         
         data_corte, unidades, valor = extract_inadimplencia_from_pdf(temp_path)
@@ -953,8 +976,17 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
             
             if not mes_consistente:
                 logger.debug(f"    [AVISO CONSISTÊNCIA] Inconsistência no Mês {nome_mes_abbr}/{ano_item}:")
-                logger.debug(f"      - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
-                logger.debug(f"      - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
+                if mes_motivo:
+                    try:
+                        motivos = json.loads(mes_motivo)
+                        for m in motivos:
+                            logger.debug(f"      - Motivo: {m}")
+                    except Exception:
+                        pass
+                
+                if mes_motivo and "Divergência" in mes_motivo:
+                    logger.debug(f"      - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
+                    logger.debug(f"      - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
 
             competencia = get_competencia(exibicao)
             
