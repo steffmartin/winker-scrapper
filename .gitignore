@@ -18,8 +18,9 @@ anexos/
 # Compilados do Frontend (builds de produção do Angular)
 compilados/
 
-# IDEs
+# IDEs e Sandboxes
 /.idea/
+scratch/
 
 # Configurações
 config/*.config
