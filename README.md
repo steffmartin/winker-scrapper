@@ -37,22 +37,20 @@ Para rodar e compilar este projeto em sua máquina local, você precisará de:
 
 ### Passo 1: Configurar Credenciais
 
-Crie o arquivo de configuração de produção ou edite o arquivo padrão de desenvolvimento localizado em
-`config/dev.config` na raiz do projeto, contendo suas credenciais de login no portal Winker:
+Crie o arquivo de configuração de produção ou edite o arquivo padrão de exemplo localizado em
+`config/example.config`, contendo suas credenciais de login no portal Winker:
 
 ```json
 {
   "user": "seu_usuario",
   "password": "sua_senha",
   "wl": "codigo_adm_no_winker",
-  "condo_id": "codigo_do_condominio",
   "portal_index": 1,
   "log_level": "INFO",
   "start": "2026-01",
   "end": "2026-12",
   "headless": false,
-  "no_wait": true,
-  "dev": true
+  "no_wait": true
 }
 ```
 
@@ -63,14 +61,12 @@ Abaixo está o detalhamento de cada parâmetro do arquivo de configuração:
 | `user`         | Usuário ou e-mail de login no portal Winker.                                                           | *(Obrigatório)*        |
 | `password`     | Senha de login.                                                                                        | *(Obrigatório)*        |
 | `wl`           | Código da administradora (`wl`) que aparece na URL de login.                                           | `""` (Vazio)           |
-| `condo_id`     | Código do condomínio obtido em `https://app.winker.com.br/intra/condominio/sobre/index`.               | *(Obrigatório)*        |
 | `portal_index` | Posição do condomínio na lista de "Escolher Portal" caso a conta tenha acesso a múltiplos condomínios. | `1`                    |
 | `log_level`    | Nível de detalhamento dos registros de log (`DEBUG`, `INFO`, `WARNING`, `ERROR`).                      | `"INFO"`               |
 | `start`        | Competência (Mês/Ano) inicial da extração, no formato `YYYY-MM`.                                       | Mês anterior           |
 | `end`          | Competência (Mês/Ano) final da extração, no formato `YYYY-MM`.                                         | Mês atual              |
 | `headless`     | Se `true`, executa o navegador oculto em segundo plano.                                                | `false`                |
 | `no_wait`      | Se `true`, o terminal é encerrado imediatamente ao final, sem pedir para pressionar Enter.             | `false`                |
-| `dev`          | Flag que indica ambiente de desenvolvimento.                                                           | `false`                |
 
 ### Passo 2: Primeira Execução e Compilação Automática
 
@@ -88,17 +84,18 @@ Se você acabou de clonar este repositório do zero, a pasta de arquivos estáti
 Execute os seguintes comandos Python a partir do terminal na raiz do projeto (substitua pelo seu arquivo de
 configuração):
 
-1. **Dashboard Financeiro**
-   Abre a janela desktop nativa do Dashboard financeiro conectado ao banco de dados SQLite real.
-   ```bash
-   python scripts/run_dashboard.py --config-file config/dev.config
-   ```
-
-2. **Extração de Dados**
+1. **Extração de Dados**
    Roda a automação em Python para extrair novos períodos de transações.
    ```bash
-   python scripts/extract_winker.py --config-file config/dev.config
+   python scripts/extract_winker.py --config-file config/example.config
    ```
+   
+2. **Dashboard Financeiro**
+   Abre a janela desktop nativa do Dashboard financeiro conectado ao banco de dados SQLite real.
+   ```bash
+   python scripts/run_dashboard.py
+   ```
+
 
 ---
 

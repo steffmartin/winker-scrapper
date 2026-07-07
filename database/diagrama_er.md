@@ -110,6 +110,7 @@ erDiagram
         TEXT cor_superficie
         TEXT tema_preset
         TEXT modo_menu
+        TEXT condominio_id
     }
 
     auditoria {

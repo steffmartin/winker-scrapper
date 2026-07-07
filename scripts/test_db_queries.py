@@ -103,7 +103,8 @@ class TestDBQueries(unittest.TestCase):
         original_rd_root = run_dashboard.project_root
         run_dashboard.project_root = self.temp_dir.name
         try:
-            api = run_dashboard.Api("COND-API", db_path=self.default_db_path)
+            api = run_dashboard.Api(db_path=self.default_db_path)
+            api.condo_id = "COND-API"
             kpis = api.get_dashboard_kpis()
             self.assertIn("resumo_mes", kpis["data"])
             self.assertEqual(kpis["data"]["resumo_mes"]["receita_total"], 5000.0)

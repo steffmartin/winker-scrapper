@@ -45,7 +45,8 @@ class TestRunDashboard(unittest.TestCase):
         os.path.exists = lambda path: True if path.endswith('winker_data.db') or path.endswith('.db') else self.original_exists(path)
         
         try:
-            self.api = Api(condo_id=self.condo_id, db_path=self.temp_db_path)
+            self.api = Api(db_path=self.temp_db_path)
+            self.api.condo_id = self.condo_id
         finally:
             os.path.exists = self.original_exists
             

@@ -146,6 +146,7 @@ class PreferenciasUsuario(BaseModel):
     cor_superficie = CharField(null=True)
     tema_preset = CharField(null=True)
     modo_menu = CharField(null=True)
+    condominio_id = CharField(null=True)
 
     class Meta:
         table_name = 'preferencias_usuario'

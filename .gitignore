@@ -23,7 +23,7 @@ compilados/
 
 # Configurações
 config/*.config
-!config/dev.config
+!config/example.config
 
 # Atalhos
 *.lnk

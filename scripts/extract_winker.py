@@ -1424,7 +1424,7 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config-file', default='config/dev.config')
+    parser.add_argument('--config-file', default='config/example.config')
     args = parser.parse_args()
     
     config = load_config(args.config_file)

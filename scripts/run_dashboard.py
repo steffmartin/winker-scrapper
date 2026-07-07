@@ -1,4 +1,3 @@
-import argparse
 import ctypes
 import os
 import subprocess
@@ -7,7 +6,7 @@ import json
 from datetime import datetime
 
 # Módulos internos independentes
-from utils import logger, load_config
+from utils import logger
 
 # Garantir dependências antes de importar libs externas
 from setup_deps import install_dependencies
@@ -22,29 +21,37 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 
 class Api:
-    def __init__(self, condo_id=None, db_path=None):
-        self.condo_id = condo_id
+    def __init__(self, db_path=None):
         self.db_path = db_path or self._get_db_path()
         self.init_error = None
         self.prefs_cache = None
         self._splash_window = None
         self._main_window = None
+        self.condo_id = None
         
         if not os.path.exists(self.db_path):
             self.init_error = "Banco de dados não encontrado."
         else:
             models.init_models(self.db_path)
-            if not self.condo_id:
-                self._initialize_default_condo_id()
+            self._initialize_condo_id()
                 
             if not self.condo_id:
                 self.init_error = "Nenhum condomínio definido ou encontrado no banco."
 
-    def _initialize_default_condo_id(self):
+    def _initialize_condo_id(self):
         try:
-            condo = models.Condominio.select().first()
-            if condo:
-                self.condo_id = condo.id
+            pref = models.PreferenciasUsuario.select().first()
+            if pref and pref.condominio_id:
+                self.condo_id = pref.condominio_id
+            else:
+                condo = models.Condominio.select().first()
+                if condo:
+                    self.condo_id = condo.id
+                    if not pref:
+                        models.PreferenciasUsuario.create(condominio_id=condo.id)
+                    else:
+                        pref.condominio_id = condo.id
+                        pref.save()
         except Exception:
             pass
 
@@ -60,6 +67,51 @@ class Api:
                 return {"status": "error", "message": "Condomínio não encontrado."}
         except Exception as e:
             return {"status": "error", "message": str(e)}
+
+    def get_condominios(self):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            condominios = list(models.Condominio.select(models.Condominio.id, models.Condominio.nome).order_by(models.Condominio.nome).dicts())
+            return {"status": "success", "data": condominios, "current_id": self.condo_id}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def set_condominio(self, condo_id):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            self.condo_id = condo_id
+            pref = models.PreferenciasUsuario.select().first()
+            if pref:
+                pref.condominio_id = condo_id
+                pref.save()
+            else:
+                models.PreferenciasUsuario.create(condominio_id=condo_id)
+            return {"status": "success"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def exit_app(self):
+        try:
+            if self.prefs_cache:
+                self.salvar_preferencias({
+                    'modo_escuro': 1 if self.prefs_cache.get('darkTheme') else 0,
+                    'cor_primaria': self.prefs_cache.get('primary'),
+                    'cor_superficie': self.prefs_cache.get('surface'),
+                    'tema_preset': self.prefs_cache.get('preset'),
+                    'modo_menu': self.prefs_cache.get('menuMode')
+                })
+        except Exception:
+            pass
+
+        if self._main_window:
+            self._main_window.destroy()
+            
+        import os
+        import threading
+        threading.Timer(0.5, lambda: os._exit(0)).start()
+        return {"status": "success"}
 
     def get_condominio_config(self):
         if self.init_error:
@@ -523,6 +575,7 @@ class Api:
             if 'cor_superficie' in dados: pref.cor_superficie = dados['cor_superficie']
             if 'tema_preset' in dados: pref.tema_preset = dados['tema_preset']
             if 'modo_menu' in dados: pref.modo_menu = dados['modo_menu']
+            # We don't overwrite condominio_id here, it's done via set_condominio
             
             pref.save()
             return {"status": "success", "data": pref.__data__}
@@ -554,20 +607,12 @@ class Api:
         return os.path.join(project_root, "database", "winker_data.db")
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config-file', default='config/dev.config')
-    args = parser.parse_args()
-    
-    config = load_config(args.config_file)
-    dev_mode = config.get("dev", True)
-    condo_id = config.get("condo_id")
-
     html_content = None
     html_path = None
     
     # 1. Verifica se a base de dados SQLite existe
     db_path = os.path.join(project_root, "database", "winker_data.db")
-    if not dev_mode and not os.path.exists(db_path):
+    if not os.path.exists(db_path):
         logger.warning("AVISO: Banco de dados não encontrado em database/winker_data.db!")
         html_content = "<html><head><meta charset='utf-8'/><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:40px;background:#1e293b;color:#f8fafc;}h2{color:#eab308;}code{background:#334155;padding:2px 6px;border-radius:4px;font-family:monospace;}ol{line-height:1.6;}</style></head><body><h2>Banco de Dados Não Encontrado</h2><p>Não foi possível localizar o banco de dados local em <code>database/winker_data.db</code>.</p><p><b>Como resolver:</b> Você precisa realizar a extração inicial de dados para criar e popular o banco de dados antes de abrir o painel. Por favor:</p><ol><li>Dê um duplo clique no atalho <b><code>Extrair_Dados.lnk</code></b> (ou <b><code>Extrair_Dados_Headless.lnk</code></b>) na raiz do projeto.</li><li>Aguarde o extrator concluir o processamento de pelo menos um período de transações.</li><li>Após o término da extração com sucesso, abra novamente o dashboard.</li></ol></body></html>"
         logger.info("Carregando aviso de banco de dados ausente...")
@@ -613,7 +658,7 @@ def main():
         
 
 
-    api = Api(condo_id=condo_id)
+    api = Api()
 
     # Cria a splash screen como janela separada (banner de carregamento)
     splash_window = None
