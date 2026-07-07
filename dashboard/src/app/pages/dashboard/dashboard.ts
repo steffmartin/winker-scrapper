@@ -811,6 +811,12 @@ export class Dashboard implements OnInit {
                     display: false
                 },
                 tooltip: {
+                    filter: (tooltipItem: any) => {
+                        if (this.isSingleMonth) {
+                            return tooltipItem.parsed.y !== 0;
+                        }
+                        return true;
+                    },
                     callbacks: {
                         label: function(context: any) {
                             let label = context.dataset.label || '';
