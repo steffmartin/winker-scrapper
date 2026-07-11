@@ -9,6 +9,8 @@ import { ChipModule } from 'primeng/chip';
 import { AvatarModule } from 'primeng/avatar';
 import { ToastModule } from 'primeng/toast';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
+import { FormsModule } from '@angular/forms';
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { DialogService, DynamicDialogRef } from 'primeng/dynamicdialog';
 import { DialogEdicaoComponent } from './dialog-edicao';
@@ -19,7 +21,8 @@ import { LayoutService } from '@/app/layout/service/layout.service';
     standalone: true,
     imports: [
         CommonModule, CardModule, TabsModule, TableModule, ButtonModule,
-        BadgeModule, ChipModule, AvatarModule, ToastModule, ConfirmDialogModule
+        BadgeModule, ChipModule, AvatarModule, ToastModule, ConfirmDialogModule,
+        ToggleSwitchModule, FormsModule
     ],
     providers: [MessageService, ConfirmationService, DialogService],
     templateUrl: './revisao.html',
@@ -36,6 +39,7 @@ import { LayoutService } from '@/app/layout/service/layout.service';
     `]
 })
 export class RevisaoComponent implements OnInit {
+    exibirRevisados: boolean = false;
     loadingCounts: boolean = true;
     activeTab: string = '3'; // meses first
     pendenciasCounts: any = {
@@ -71,11 +75,20 @@ export class RevisaoComponent implements OnInit {
         this.loadCounts();
     }
 
+    onToggleChange() {
+        this.meses = [];
+        this.categorias = [];
+        this.subcategorias = [];
+        this.lancamentos = [];
+        this.documentos = [];
+        this.loadCounts();
+    }
+
     loadCounts() {
         this.loadingCounts = true;
         const pywebview = (window as any).pywebview;
         if (pywebview && pywebview.api) {
-            pywebview.api.get_pendencias_revisao_count().then((res: any) => {
+            pywebview.api.get_pendencias_revisao_count(this.exibirRevisados).then((res: any) => {
                 this.loadingCounts = false;
                 if (res.status === 'success' && res.data && res.data.details) {
                     this.pendenciasCounts = {
@@ -174,7 +187,7 @@ export class RevisaoComponent implements OnInit {
         
         const pywebview = (window as any).pywebview;
         if (pywebview && pywebview.api) {
-            pywebview.api.get_registros_nao_revisados(tipo_tabela).then((res: any) => {
+            pywebview.api.get_registros_nao_revisados(tipo_tabela, this.exibirRevisados).then((res: any) => {
                 (this as any)[loadingVar] = false;
                 if (res.status === 'success') {
                     const dataWithCount = res.data.map((row: any) => {

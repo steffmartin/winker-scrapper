@@ -1,5 +1,11 @@
 <div class="card shadow-sm border rounded-xl w-full">
-    <h4 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Revisão de Registros</h4>
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+        <h4 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-0">Revisão de Registros</h4>
+        <div class="flex items-center gap-2">
+            <span class="font-medium text-slate-700 dark:text-slate-300">Exibir registros já revisados</span>
+            <p-toggleSwitch [(ngModel)]="exibirRevisados" (onChange)="onToggleChange()"></p-toggleSwitch>
+        </div>
+    </div>
     <p-toast position="bottom-right"></p-toast>
     <p-confirmDialog [style]="{width: '450px'}"></p-confirmDialog>
 
@@ -10,7 +16,9 @@
     <div *ngIf="!loadingCounts && !hasPendencias()" class="flex flex-col items-center justify-center p-8 text-center bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 my-4">
         <i class="pi pi-check-circle text-6xl text-green-500 mb-4"></i>
         <h5 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Tudo Certo!</h5>
-        <p class="text-slate-600 dark:text-slate-400">Não há registros inconsistentes aguardando revisão.</p>
+        <p class="text-slate-600 dark:text-slate-400">
+            {{ exibirRevisados ? 'Nenhum registro inconsistente previamente revisado encontrado.' : 'Não há registros inconsistentes aguardando revisão.' }}
+        </p>
     </div>
 
     <p-tabs [value]="activeTab" [lazy]="true" (valueChange)="onTabChange($event)" *ngIf="!loadingCounts && hasPendencias()">

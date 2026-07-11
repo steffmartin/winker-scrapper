@@ -172,7 +172,7 @@ class Api:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    def get_pendencias_revisao_count(self):
+    def get_pendencias_revisao_count(self, exibir_revisados=False):
         if self.init_error:
             return {"status": "error", "message": self.init_error}
         
@@ -184,12 +184,18 @@ class Api:
             a = models.Anexos
             p = models.PrestacoesContas
             
-            c_m = m.select().where((m.revisado_usuario == 0) & (m.condominio_id == self.condo_id)).count()
-            c_c = c.select().join(m).where((c.revisado_usuario == 0) & (m.condominio_id == self.condo_id)).count()
-            c_s = s.select().join(c).join(m).where((s.revisado_usuario == 0) & (m.condominio_id == self.condo_id)).count()
-            c_t = t.select().join(s).join(c).join(m).where((t.revisado_usuario == 0) & (m.condominio_id == self.condo_id)).count()
-            c_a = a.select().join(t).join(s).join(c).join(m).where((a.revisado_usuario == 0) & (m.condominio_id == self.condo_id)).count()
-            c_p = p.select().join(m).where((p.revisado_usuario == 0) & (m.condominio_id == self.condo_id)).count()
+            def get_cond(model):
+                if exibir_revisados:
+                    return (model.revisado_usuario == 1) & (model.consistente == 0) & (m.condominio_id == self.condo_id)
+                else:
+                    return (model.revisado_usuario == 0) & (m.condominio_id == self.condo_id)
+            
+            c_m = m.select().where(get_cond(m)).count()
+            c_c = c.select().join(m).where(get_cond(c)).count()
+            c_s = s.select().join(c).join(m).where(get_cond(s)).count()
+            c_t = t.select().join(s).join(c).join(m).where(get_cond(t)).count()
+            c_a = a.select().join(t).join(s).join(c).join(m).where(get_cond(a)).count()
+            c_p = p.select().join(m).where(get_cond(p)).count()
             
             details = {}
             if c_m > 0: details["meses"] = c_m
@@ -535,7 +541,7 @@ class Api:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    def get_registros_nao_revisados(self, tipo_tabela):
+    def get_registros_nao_revisados(self, tipo_tabela, exibir_revisados=False):
         if self.init_error:
             return {"status": "error", "message": self.init_error}
         try:
@@ -544,10 +550,16 @@ class Api:
             s = models.Subcategorias
             t = models.Transacoes
             
+            def get_cond(model):
+                if exibir_revisados:
+                    return (model.revisado_usuario == 1) & (model.consistente == 0) & (m.condominio_id == self.condo_id)
+                else:
+                    return (model.revisado_usuario == 0) & (m.condominio_id == self.condo_id)
+            
             registros = []
             if tipo_tabela == 'meses':
                 query = (m.select()
-                         .where((m.revisado_usuario == 0) & (m.condominio_id == self.condo_id))
+                         .where(get_cond(m))
                          .order_by(m.id.desc()))
                 for row in query:
                     prestacoes = list(models.PrestacoesContas.select().where(models.PrestacoesContas.mes_id == row.id).dicts())
@@ -557,21 +569,21 @@ class Api:
             elif tipo_tabela == 'categorias':
                 query = (c.select(c, m.exibicao.alias('mes_exibicao'), m.competencia.alias('mes_competencia'))
                          .join(m)
-                         .where((c.revisado_usuario == 0) & (m.condominio_id == self.condo_id))
+                         .where(get_cond(c))
                          .order_by(c.id.desc()))
                 for row in query.dicts():
                     registros.append(row)
             elif tipo_tabela == 'subcategorias':
                 query = (s.select(s, m.exibicao.alias('mes_exibicao'), m.competencia.alias('mes_competencia'))
                          .join(c).join(m)
-                         .where((s.revisado_usuario == 0) & (m.condominio_id == self.condo_id))
+                         .where(get_cond(s))
                          .order_by(s.id.desc()))
                 for row in query.dicts():
                     registros.append(row)
             elif tipo_tabela == 'lancamentos':
                 query = (t.select(t, m.exibicao.alias('mes_exibicao'), m.competencia.alias('mes_competencia'))
                          .join(s).join(c).join(m)
-                         .where((t.revisado_usuario == 0) & (m.condominio_id == self.condo_id))
+                         .where(get_cond(t))
                          .order_by(t.id.desc()))
                 for row in query.dicts():
                     anexos = list(models.Anexos.select().where(models.Anexos.transacao_id == row['id']).dicts())
@@ -593,7 +605,7 @@ class Api:
                 
                 query_a = (a.select(a, m.exibicao.alias('mes_exibicao'), m.competencia.alias('mes_competencia'))
                            .join(t).join(s).join(c).join(m)
-                           .where((a.revisado_usuario == 0) & (m.condominio_id == self.condo_id)))
+                           .where(get_cond(a)))
                 
                 for row in query_a.dicts():
                     row['tipo_doc'] = 'C'
@@ -601,7 +613,7 @@ class Api:
                     
                 query_p = (p.select(p, m.exibicao.alias('mes_exibicao'), m.competencia.alias('mes_competencia'))
                            .join(m)
-                           .where((p.revisado_usuario == 0) & (m.condominio_id == self.condo_id)))
+                           .where(get_cond(p)))
                 
                 for row in query_p.dicts():
                     row['tipo_doc'] = 'P'
