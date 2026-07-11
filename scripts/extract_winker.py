@@ -1336,23 +1336,26 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                                 action_sheet_btn = iframe_pc.locator("button.action-sheet-button:has-text('Visualizar')")
                                 action_sheet_btn.wait_for(state="visible", timeout=10000)
 
-                                # Intercepta a resposta da API de register-access para obter o token/link direto
-                                created_pages = []
-                                def catch_page(p):
-                                    created_pages.append(p)
-                                context.on("page", catch_page)
+                                # Guarda o estado das páginas abertas antes da ação
+                                pages_before = set(context.pages)
 
-                                try:
-                                    with page_pc.expect_response("**/register-access*", timeout=15000) as response_info:
-                                        action_sheet_btn.click()
-                                    response = response_info.value
-                                finally:
-                                    context.remove_listener("page", catch_page)
+                                with page_pc.expect_response("**/register-access*", timeout=15000) as response_info:
+                                    action_sheet_btn.click()
+                                response = response_info.value
+                                
+                                # Aguarda um instante para o frontend processar a resposta e disparar a abertura do PDF
+                                page_pc.wait_for_timeout(1500)
 
-                                # Fecha abas/popups extras criados por essa ação
-                                for cp in created_pages:
+                                # Fecha quaisquer abas/popups abertos em decorrência do clique
+                                pages_after = set(context.pages)
+                                for p in pages_after - pages_before:
                                     try:
-                                        cp.close()
+                                        # Aguarda a página estar pronta para receber comandos (evita erro de fechamento prematuro)
+                                        p.wait_for_load_state("domcontentloaded", timeout=3000)
+                                    except:
+                                        pass
+                                    try:
+                                        p.close()
                                     except:
                                         pass
 
