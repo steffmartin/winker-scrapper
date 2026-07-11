@@ -47,14 +47,29 @@
 
                 <!-- Aba 2: Financeiro -->
                 <p-tabpanel value="1">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6" formGroupName="condominio">
-                        <div class="flex flex-col gap-2">
-                            <label for="saldo_inicial" class="font-medium">Saldo Inicial</label>
-                            <p-inputNumber id="saldo_inicial" formControlName="saldo_inicial" mode="currency" currency="BRL" locale="pt-BR"></p-inputNumber>
-                        </div>
-                        <div class="flex flex-col gap-2">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="flex flex-col gap-2" formGroupName="condominio">
                             <label for="prazo_fechamento" class="font-medium">Prazo de Fechamento do Mês</label>
                             <p-inputNumber id="prazo_fechamento" formControlName="prazo_fechamento" [min]="0" [showButtons]="true" suffix=" dias" styleClass="primary-inputnumber-btn"></p-inputNumber>
+                        </div>
+                        <div class="flex flex-col gap-2 md:col-span-2">
+                            <label class="font-medium">Saldos iniciais</label>
+                            <div formArrayName="contas">
+                                <div class="flex items-center justify-start flex-wrap gap-2 mt-1">
+                                    <p-chip *ngFor="let conta of contas.controls; let i = index"
+                                            [label]="formatarContaLabel(conta.value)"
+                                            icon="pi pi-wallet"
+                                            [removable]="true"
+                                            (onRemove)="removeConta(i)"
+                                            styleClass="bg-primary text-primary-contrast"
+                                            class="text-sm font-medium">
+                                    </p-chip>
+
+                                    <p-chip *ngIf="contas.length === 0" label="Nenhum saldo inicial cadastrado" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
+
+                                    <p-button icon="pi pi-plus" [rounded]="true" size="small" pTooltip="Adicionar saldo" tooltipPosition="right" (onClick)="showContaDialog()"></p-button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </p-tabpanel>
@@ -162,3 +177,31 @@
         </div>
     }
 </p-dialog>
+
+<!-- Modal Adicionar Saldo -->
+<p-dialog header="Adicionar Saldo" [modal]="true" [(visible)]="displayContaDialog" [style]="{ width: '25rem' }">
+    @defer (on idle) {
+        <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o nome da conta e o saldo inicial.</span>
+        <form [formGroup]="novoContaForm" (ngSubmit)="salvarNovaConta()" (keydown.enter)="$event.preventDefault()">
+            <div class="flex flex-col gap-4">
+                <div class="flex flex-col gap-2">
+                    <label for="nova_conta" class="font-semibold text-sm">Nome da Conta</label>
+                    <input pInputText id="nova_conta" formControlName="conta" autocomplete="off" />
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="novo_saldo" class="font-semibold text-sm">Saldo Inicial</label>
+                    <p-inputNumber id="novo_saldo" formControlName="saldo_inicial" mode="currency" currency="BRL" locale="pt-BR" [style]="{'width': '100%'}"></p-inputNumber>
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <p-button label="Cancelar" severity="secondary" (onClick)="displayContaDialog = false" [text]="true"></p-button>
+                    <p-button label="Adicionar" type="submit" [disabled]="novoContaForm.invalid"></p-button>
+                </div>
+            </div>
+        </form>
+    } @placeholder {
+        <div class="h-32 flex items-center justify-center">
+            <span class="text-surface-400 text-sm">Carregando formulário...</span>
+        </div>
+    }
+</p-dialog>
+

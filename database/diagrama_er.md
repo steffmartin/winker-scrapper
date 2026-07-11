@@ -18,8 +18,14 @@ erDiagram
         TEXT administradora
         TEXT telefone_administradora
         TEXT ultima_atualizacao
-        REAL saldo_inicial
         INTEGER prazo_fechamento
+    }
+
+    contas {
+        INTEGER id PK
+        TEXT condominio_id FK
+        TEXT conta
+        REAL saldo_inicial
     }
 
     meses {
@@ -138,6 +144,7 @@ erDiagram
 
     condominio ||--o{ meses: "condominio_id"
     condominio ||--o{ membros_gestao: "condominio_id"
+    condominio ||--o{ contas: "condominio_id"
     meses ||--o{ categorias: "mes_id"
     meses ||--o{ prestacoes_contas: "mes_id"
     categorias ||--o{ subcategorias: "categoria_id"
@@ -157,7 +164,8 @@ condominio  ← tabela raiz
  │    │         └── transacoes
  │    │              └── anexos
  │    └── prestacoes_contas
- └── membros_gestao
+ ├── membros_gestao
+ └── contas
 ```
 
 ## Resumo das Tabelas
@@ -167,6 +175,7 @@ condominio  ← tabela raiz
 | `auditoria`            | `id` (INTEGER) | —                  | **Global** | Log de auditorias e acessos                  |
 | `preferencias_usuario` | `id` (INTEGER) | —                  | **Global** | Configurações visuais do dashboard           |
 | `condominio`           | `id` (TEXT)    | —                  | **Raiz**   | Dados cadastrais do condomínio               |
+| `contas`               | `id` (INTEGER) | `condominio.id`    | Dependente | Saldos iniciais por conta                    |
 | `meses`                | `id` (INTEGER) | `condominio.id`    | Dependente | Período mensal com totais de receita/despesa |
 | `categorias`           | `id` (INTEGER) | `meses.id`         | Dependente | Categorias financeiras por mês               |
 | `subcategorias`        | `id` (INTEGER) | `categorias.id`    | Dependente | Subcategorias dentro de uma categoria        |

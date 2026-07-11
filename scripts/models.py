@@ -22,7 +22,6 @@ class Condominio(BaseModel):
     administradora = CharField(null=True)
     telefone_administradora = CharField(null=True)
     ultima_atualizacao = CharField(null=True)
-    saldo_inicial = FloatField(null=True)
     prazo_fechamento = IntegerField(null=True)
 
     class Meta:
@@ -35,6 +34,14 @@ class MembrosGestao(BaseModel):
 
     class Meta:
         table_name = 'membros_gestao'
+
+class Contas(BaseModel):
+    condominio_id = ForeignKeyField(Condominio, backref='contas', on_delete='CASCADE', db_column='condominio_id')
+    conta = CharField(null=True)
+    saldo_inicial = FloatField(null=True)
+
+    class Meta:
+        table_name = 'contas'
 
 class Meses(BaseModel):
     condominio_id = ForeignKeyField(Condominio, backref='meses', on_delete='CASCADE', db_column='condominio_id')
@@ -155,6 +162,6 @@ def init_models(db_path):
     db.init(db_path, pragmas={'foreign_keys': 1})
     db.connect(reuse_if_open=True)
     db.create_tables([
-        Condominio, MembrosGestao, Meses, Categorias, Subcategorias, 
+        Condominio, MembrosGestao, Contas, Meses, Categorias, Subcategorias, 
         Transacoes, Anexos, PrestacoesContas, Auditoria, PreferenciasUsuario
     ], safe=True)

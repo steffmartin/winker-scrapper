@@ -81,7 +81,7 @@
                 {{ kpis.saldos?.saldo_total | currency:'BRL':'symbol':'1.2-2' }}
             </div>
             <div class="text-base mt-2 text-cyan-900/70 dark:text-cyan-200/70">
-                Considerando <span class="font-bold text-cyan-600 dark:text-cyan-300">todas</span> as contas e reservas
+                Total de <span class="font-bold text-cyan-600 dark:text-cyan-300">{{ kpis.saldos?.count_contas || 0 }}</span> contas e reservas
             </div>
         </div>
 

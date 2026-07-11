@@ -57,6 +57,9 @@ export class ConfiguracoesComponent implements OnInit {
     displayTelefoneDialog = false;
     novoTelefoneForm: FormGroup;
 
+    displayContaDialog = false;
+    novoContaForm: FormGroup;
+
     constructor(
         private fb: FormBuilder, 
         private messageService: MessageService, 
@@ -68,13 +71,13 @@ export class ConfiguracoesComponent implements OnInit {
                 nome: ['', Validators.required],
                 administradora: [''],
                 telefone_administradora: this.fb.array([]),
-                saldo_inicial: [0],
                 prazo_fechamento: [0, Validators.min(0)],
                 inadimplencia_data_corte: [null],
                 inadimplencia_unidades: [0],
                 inadimplencia_valor: [0]
             }),
-            membros: this.fb.array([])
+            membros: this.fb.array([]),
+            contas: this.fb.array([])
         });
 
         this.novoMembroForm = this.fb.group({
@@ -85,6 +88,11 @@ export class ConfiguracoesComponent implements OnInit {
         this.novoTelefoneForm = this.fb.group({
             numero: ['', Validators.required]
         });
+
+        this.novoContaForm = this.fb.group({
+            conta: ['', Validators.required],
+            saldo_inicial: [0, Validators.required]
+        });
     }
 
     get membros() {
@@ -93,6 +101,10 @@ export class ConfiguracoesComponent implements OnInit {
 
     get telefones() {
         return this.configForm.get('condominio.telefone_administradora') as FormArray;
+    }
+
+    get contas() {
+        return this.configForm.get('contas') as FormArray;
     }
 
     ngOnInit() {
@@ -133,6 +145,7 @@ export class ConfiguracoesComponent implements OnInit {
                 if (res.status === 'success') {
                     const condo = res.data.condominio || {};
                     const membrosData = res.data.membros || [];
+                    const contasData = res.data.contas || [];
                     
                     if (condo.inadimplencia_data_corte && typeof condo.inadimplencia_data_corte === 'string') {
                         const parts = condo.inadimplencia_data_corte.split('/');
@@ -158,6 +171,14 @@ export class ConfiguracoesComponent implements OnInit {
                         this.membros.push(this.fb.group({
                             nome: [m.nome, Validators.required],
                             cargo: [m.cargo, Validators.required]
+                        }));
+                    });
+
+                    this.contas.clear();
+                    contasData.forEach((c: any) => {
+                        this.contas.push(this.fb.group({
+                            conta: [c.conta, Validators.required],
+                            saldo_inicial: [c.saldo_inicial, Validators.required]
                         }));
                     });
                     
@@ -255,6 +276,34 @@ export class ConfiguracoesComponent implements OnInit {
             return `(${d.substring(0, 2)}) ${d.substring(2, 6)}-${d.substring(6, 10)}`;
         }
         return tel;
+    }
+
+    showContaDialog() {
+        this.novoContaForm.reset({ saldo_inicial: 0 });
+        this.displayContaDialog = true;
+    }
+
+    salvarNovaConta() {
+        if (this.novoContaForm.valid) {
+            this.contas.push(this.fb.group({
+                conta: [this.novoContaForm.value.conta, Validators.required],
+                saldo_inicial: [this.novoContaForm.value.saldo_inicial, Validators.required]
+            }));
+            this.configForm.markAsDirty();
+            this.displayContaDialog = false;
+        }
+    }
+
+    removeConta(index: number) {
+        this.contas.removeAt(index);
+        this.configForm.markAsDirty();
+    }
+
+    formatarContaLabel(conta: any): string {
+        if (!conta || !conta.conta) return '';
+        const formatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+        const saldoFormatado = formatter.format(conta.saldo_inicial || 0);
+        return `${conta.conta} (${saldoFormatado})`;
     }
 
     salvar() {

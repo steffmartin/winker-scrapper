@@ -127,7 +127,8 @@ class Api:
                     except Exception:
                         pass
                 membros = list(models.MembrosGestao.select().where(models.MembrosGestao.condominio_id == self.condo_id).dicts())
-                return {"status": "success", "data": {"condominio": condo_data, "membros": membros}}
+                contas = list(models.Contas.select().where(models.Contas.condominio_id == self.condo_id).dicts())
+                return {"status": "success", "data": {"condominio": condo_data, "membros": membros, "contas": contas}}
             else:
                 return {"status": "error", "message": "Condomínio não encontrado."}
         except Exception as e:
@@ -149,7 +150,6 @@ class Api:
                 if 'nome' in condo_data: condo.nome = condo_data['nome']
                 if 'administradora' in condo_data: condo.administradora = condo_data['administradora']
                 if 'telefone_administradora' in condo_data: condo.telefone_administradora = json.dumps(condo_data['telefone_administradora'])
-                if 'saldo_inicial' in condo_data: condo.saldo_inicial = condo_data['saldo_inicial']
                 if 'prazo_fechamento' in condo_data: condo.prazo_fechamento = condo_data['prazo_fechamento']
                 if 'inadimplencia_data_corte' in condo_data: condo.inadimplencia_data_corte = condo_data['inadimplencia_data_corte']
                 if 'inadimplencia_unidades' in condo_data: condo.inadimplencia_unidades = condo_data['inadimplencia_unidades']
@@ -166,6 +166,15 @@ class Api:
                         condominio_id=self.condo_id,
                         nome=m.get('nome'),
                         cargo=m.get('cargo')
+                    )
+                
+                contas_data = payload.get("contas", [])
+                models.Contas.delete().where(models.Contas.condominio_id == self.condo_id).execute()
+                for c in contas_data:
+                    models.Contas.create(
+                        condominio_id=self.condo_id,
+                        conta=c.get('conta'),
+                        saldo_inicial=c.get('saldo_inicial', 0.0)
                     )
                     
             return {"status": "success", "message": "Configurações atualizadas com sucesso."}
@@ -278,13 +287,23 @@ class Api:
             else:
                 tr, td = 0, 0
                 
-            saldo_inicial = condo.saldo_inicial or 0
+            contas_info = models.Contas.select(
+                models.fn.SUM(models.Contas.saldo_inicial).alias('total'),
+                models.fn.COUNT(models.Contas.id).alias('count')
+            ).where(models.Contas.condominio_id == self.condo_id).scalar(as_tuple=True)
+            
+            if contas_info and contas_info[0] is not None:
+                saldo_inicial_total, count_contas = contas_info
+            else:
+                saldo_inicial_total, count_contas = 0, 0
+
             tr = tr or 0
             td = td or 0
-            saldo_total = saldo_inicial + tr - td
+            saldo_total = saldo_inicial_total + tr - td
 
             saldos = {
-                "saldo_total": saldo_total
+                "saldo_total": saldo_total,
+                "count_contas": count_contas
             }
             
             current_date_str = datetime.now().strftime("%Y-%m")
