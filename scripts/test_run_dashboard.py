@@ -62,21 +62,20 @@ class TestRunDashboard(unittest.TestCase):
         except:
             pass
 
-    def test_get_inconsistencies_count(self):
-        result = self.api.get_inconsistencies_count()
+    def test_get_pendencias_revisao_count(self):
+        result = self.api.get_pendencias_revisao_count()
         self.assertEqual(result["status"], "success", result.get("message"))
         
         data = result["data"]
-        self.assertEqual(data["count"], 6)
+        self.assertEqual(data["count"], 7)
         
         details = data["details"]
         self.assertIn("meses", details)
-        self.assertEqual(details["meses"], 1)
+        self.assertEqual(details["meses"], 2)
         self.assertIn("categorias", details)
         self.assertIn("subcategorias", details)
-        self.assertIn("transacoes", details)
-        self.assertIn("anexos", details)
-        self.assertIn("prestacoes_contas", details)
+        self.assertIn("lancamentos", details)
+        self.assertIn("documentos", details)
 
     def test_get_dashboard_kpis(self):
         result = self.api.get_dashboard_kpis()

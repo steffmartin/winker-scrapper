@@ -209,15 +209,15 @@ class TestExtractWinker(unittest.TestCase):
         self.assertEqual(consistente, 0)
 
     def test_evaluate_consistency_prestacao_contas(self):
-        # Prestação de contas baixada com sucesso
-        consistente, motivo = evaluate_entity_consistency('prestacao_contas', sucesso=True)
+        # Prestação de contas com extensão válida
+        consistente, motivo = evaluate_entity_consistency('prestacao_contas', extensao="pdf")
         self.assertEqual(consistente, 1)
         self.assertIsNone(motivo)
 
-        # Prestação de contas indisponível
-        consistente, motivo = evaluate_entity_consistency('prestacao_contas', sucesso=False)
+        # Prestação de contas indisponível ou sem extensão
+        consistente, motivo = evaluate_entity_consistency('prestacao_contas', extensao="")
         self.assertEqual(consistente, 0)
-        self.assertEqual(json.loads(motivo)[0], "Prestação de contas indisponível")
+        self.assertEqual(json.loads(motivo)[0], "Extensão de arquivo inválida ou ausente")
 
     def test_extract_inadimplencia_from_pdf(self):
         with patch('pypdf.PdfReader') as mock_pdf_reader:
