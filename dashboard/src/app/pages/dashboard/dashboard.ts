@@ -75,8 +75,10 @@ export class Dashboard implements OnInit {
         estatisticas: null
     };
 
-    sindicoName = 'Sem Síndico';
-    conselheirosList: string[] = [];
+    sindicoName: string = '';
+    demaisMembrosList: { nome: string, cargo: string }[] = [];
+    hiddenMembrosCount: number = 0;
+    hiddenMembrosTooltip: string = '';
 
     layoutService = inject(LayoutService);
 
@@ -256,21 +258,44 @@ export class Dashboard implements OnInit {
     processMembers() {
         const membros = this.kpis?.gestao?.membros || [];
 
-        const sindico = membros.find((m: any) => m.cargo && m.cargo.toLowerCase().includes('síndico') && !m.cargo.toLowerCase().includes('sub'));
+        const isSindico = (cargo: string) => {
+            if (!cargo) return false;
+            const c = cargo.toLowerCase();
+            return /s[ií]ndic[oa]/.test(c) && !c.includes('sub');
+        };
+
+        const sindico = membros.find((m: any) => isSindico(m.cargo));
+        let centerMember: any = null;
+        
         if (sindico) {
             this.sindicoName = sindico.nome;
+            centerMember = sindico;
         } else if (membros.length > 0) {
             this.sindicoName = membros[0].nome;
+            centerMember = membros[0];
         }
 
-        const conselheiros = membros.filter((m: any) => m.cargo && m.cargo.toLowerCase().includes('conselh'));
-        if (conselheiros.length > 0) {
-            this.conselheirosList = conselheiros.map((c: any) => {
+        const demais = membros.filter((m: any) => m !== centerMember);
+        
+        if (demais.length > 0) {
+            const allDemais = demais.map((c: any) => {
                 const parts = c.nome.trim().split(' ');
-                return parts[0];
+                return { nome: parts[0], cargo: c.cargo || 'Membro' };
             });
+
+            if (allDemais.length > 3) {
+                this.demaisMembrosList = allDemais.slice(0, 3);
+                this.hiddenMembrosCount = allDemais.length - 3;
+                this.hiddenMembrosTooltip = allDemais.slice(3).map((m: any) => `${m.nome} (${m.cargo})`).join(', ');
+            } else {
+                this.demaisMembrosList = allDemais;
+                this.hiddenMembrosCount = 0;
+                this.hiddenMembrosTooltip = '';
+            }
         } else {
-            this.conselheirosList = [];
+            this.demaisMembrosList = [];
+            this.hiddenMembrosCount = 0;
+            this.hiddenMembrosTooltip = '';
         }
     }
 
@@ -285,7 +310,10 @@ export class Dashboard implements OnInit {
                 membros: [
                     { nome: 'Carlos Silva', cargo: 'Síndico' },
                     { nome: 'Ana Souza', cargo: 'Conselheiro' },
-                    { nome: 'Pedro Álvares', cargo: 'Conselheiro' }
+                    { nome: 'Pedro Álvares', cargo: 'Advogado' },
+                    { nome: 'Maria Lima', cargo: 'Conselheiro' },
+                    { nome: 'João Ferreira', cargo: 'Conselheiro' },
+                    { nome: 'Paulo César', cargo: 'Subsíndico' }
                 ],
                 administradora: {
                     nome: 'Admin Teste LTDA',

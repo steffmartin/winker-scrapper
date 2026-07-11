@@ -54,7 +54,7 @@
             <input pInputText formControlName="conta" type="text" class="w-full" />
         </div>
         <div class="flex flex-col gap-2" *ngIf="registro.tipo === 'D' || (registro.tipo === 'R' && registro.motivo_inconsistencia?.includes('Quantidade de anexos divergente'))">
-            <label class="font-semibold text-sm">Documentos (Anexos)</label>
+            <label class="font-semibold text-sm">Comprovantes</label>
             <div class="flex items-center justify-start flex-wrap gap-2 mt-1">
                 <p-chip *ngFor="let doc of documentos; let i = index"
                         [label]="doc.nome_original"

@@ -29,8 +29,9 @@
                 {{ sindicoName }}
             </div>
             <div class="flex flex-wrap gap-2 text-base mt-2">
-                <span *ngIf="conselheirosList.length === 0" class="text-blue-900/60 dark:text-blue-200/60">Nenhum conselheiro</span>
-                <p-chip *ngFor="let conselheiro of conselheirosList" [label]="conselheiro" styleClass="!bg-blue-200 !text-blue-900 text-sm font-medium dark:!bg-blue-500/20 dark:!text-blue-200"></p-chip>
+                <span *ngIf="demaisMembrosList.length === 0" class="text-blue-900/60 dark:text-blue-200/60">Nenhum outro membro</span>
+                <p-chip *ngFor="let membro of demaisMembrosList" [label]="membro.nome" [pTooltip]="membro.cargo" tooltipPosition="bottom" styleClass="!bg-blue-200 !text-blue-900 text-sm font-medium dark:!bg-blue-500/20 dark:!text-blue-200"></p-chip>
+                <p-chip *ngIf="hiddenMembrosCount > 0" [label]="'+ ' + hiddenMembrosCount" [pTooltip]="hiddenMembrosTooltip" tooltipPosition="bottom" styleClass="!bg-blue-200 !text-blue-900 text-sm font-medium dark:!bg-blue-500/20 dark:!text-blue-200"></p-chip>
             </div>
         </div>
 

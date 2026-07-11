@@ -32,7 +32,9 @@
                                             [label]="formatarTelefone(tel.value)"
                                             [removable]="true"
                                             (onRemove)="removeTelefone(i)"
-                                            styleClass="bg-primary text-primary-contrast"
+                                            (click)="editarTelefone(i, $event)"
+                                            [ngClass]="removendoTelefoneIndex === i ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100'"
+                                            styleClass="bg-primary text-primary-contrast cursor-pointer transition-all duration-200"
                                             class="text-sm font-medium">
                                     </p-chip>
 
@@ -61,7 +63,9 @@
                                             icon="pi pi-wallet"
                                             [removable]="true"
                                             (onRemove)="removeConta(i)"
-                                            styleClass="bg-primary text-primary-contrast"
+                                            (click)="editarConta(i, $event)"
+                                            [ngClass]="removendoContaIndex === i ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100'"
+                                            styleClass="bg-primary text-primary-contrast cursor-pointer transition-all duration-200"
                                             class="text-sm font-medium">
                                     </p-chip>
 
@@ -101,15 +105,18 @@
 
                 <!-- Aba 4: Gestão -->
                 <p-tabpanel value="3">
-                    <div formArrayName="membros">
-                        <div class="flex items-center justify-start flex-wrap gap-3 mt-2">
+                    <div formArrayName="membros" class="flex flex-col gap-2">
+                        <label class="font-medium">Membros cadastrados</label>
+                        <div class="flex items-center justify-start flex-wrap gap-3 mt-1">
                             <p-chip *ngFor="let membro of membros.controls; let i = index"
                                     [label]="membro.value.nome"
                                     [icon]="getMembroIcon(membro.value.cargo)"
                                     [removable]="true"
                                     pTooltip="{{ membro.value.cargo }}" tooltipPosition="bottom"
                                     (onRemove)="removeMembro(i)"
-                                    styleClass="bg-primary text-primary-contrast"
+                                    (click)="editarMembro(i, $event)"
+                                    [ngClass]="removendoMembroIndex === i ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100'"
+                                    styleClass="bg-primary text-primary-contrast cursor-pointer transition-all duration-200"
                                     class="text-sm font-medium">
                             </p-chip>
 
@@ -128,10 +135,10 @@
     </form>
 </div>
 
-<!-- Modal Adicionar Membro -->
-<p-dialog header="Adicionar Membro" [modal]="true" [(visible)]="displayMembroDialog" [style]="{ width: '25rem' }">
+<!-- Modal Adicionar/Editar Membro -->
+<p-dialog [header]="editandoMembroIndex !== null ? 'Editar Membro' : 'Adicionar Membro'" [modal]="true" [(visible)]="displayMembroDialog" [style]="{ width: '25rem' }">
     @defer (on idle) {
-        <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o nome e o cargo do novo membro da gestão.</span>
+        <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o nome e o cargo do membro da gestão.</span>
         <form [formGroup]="novoMembroForm" (ngSubmit)="salvarNovoMembro()" (keydown.enter)="$event.preventDefault()">
             <div class="flex flex-col gap-4">
                 <div class="flex flex-col gap-2">
@@ -144,7 +151,7 @@
                 </div>
                 <div class="flex justify-end gap-2 mt-4">
                     <p-button label="Cancelar" severity="secondary" (onClick)="displayMembroDialog = false" [text]="true"></p-button>
-                    <p-button label="Adicionar" type="submit" [disabled]="novoMembroForm.invalid"></p-button>
+                    <p-button [label]="editandoMembroIndex !== null ? 'Salvar' : 'Adicionar'" type="submit" [disabled]="novoMembroForm.invalid"></p-button>
                 </div>
             </div>
         </form>
@@ -155,10 +162,10 @@
     }
 </p-dialog>
 
-<!-- Modal Adicionar Telefone -->
-<p-dialog header="Adicionar Telefone" [modal]="true" [(visible)]="displayTelefoneDialog" [style]="{ width: '25rem' }">
+<!-- Modal Adicionar/Editar Telefone -->
+<p-dialog [header]="editandoTelefoneIndex !== null ? 'Editar Telefone' : 'Adicionar Telefone'" [modal]="true" [(visible)]="displayTelefoneDialog" [style]="{ width: '25rem' }">
     @defer (on idle) {
-        <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o novo número de telefone.</span>
+        <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o número de telefone.</span>
         <form [formGroup]="novoTelefoneForm" (ngSubmit)="salvarNovoTelefone()" (keydown.enter)="$event.preventDefault()">
             <div class="flex flex-col gap-4">
                 <div class="flex flex-col gap-2">
@@ -167,7 +174,7 @@
                 </div>
                 <div class="flex justify-end gap-2 mt-4">
                     <p-button label="Cancelar" severity="secondary" (onClick)="displayTelefoneDialog = false" [text]="true"></p-button>
-                    <p-button label="Adicionar" type="submit" [disabled]="novoTelefoneForm.invalid"></p-button>
+                    <p-button [label]="editandoTelefoneIndex !== null ? 'Salvar' : 'Adicionar'" type="submit" [disabled]="novoTelefoneForm.invalid"></p-button>
                 </div>
             </div>
         </form>
@@ -178,8 +185,8 @@
     }
 </p-dialog>
 
-<!-- Modal Adicionar Saldo -->
-<p-dialog header="Adicionar Saldo" [modal]="true" [(visible)]="displayContaDialog" [style]="{ width: '25rem' }">
+<!-- Modal Adicionar/Editar Saldo -->
+<p-dialog [header]="editandoContaIndex !== null ? 'Editar Saldo' : 'Adicionar Saldo'" [modal]="true" [(visible)]="displayContaDialog" [style]="{ width: '25rem' }">
     @defer (on idle) {
         <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o nome da conta e o saldo inicial.</span>
         <form [formGroup]="novoContaForm" (ngSubmit)="salvarNovaConta()" (keydown.enter)="$event.preventDefault()">
@@ -194,7 +201,7 @@
                 </div>
                 <div class="flex justify-end gap-2 mt-4">
                     <p-button label="Cancelar" severity="secondary" (onClick)="displayContaDialog = false" [text]="true"></p-button>
-                    <p-button label="Adicionar" type="submit" [disabled]="novoContaForm.invalid"></p-button>
+                    <p-button [label]="editandoContaIndex !== null ? 'Salvar' : 'Adicionar'" type="submit" [disabled]="novoContaForm.invalid"></p-button>
                 </div>
             </div>
         </form>

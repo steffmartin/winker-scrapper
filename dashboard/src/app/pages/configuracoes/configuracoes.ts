@@ -53,12 +53,18 @@ export class ConfiguracoesComponent implements OnInit {
     maxDate = new Date();
     displayMembroDialog = false;
     novoMembroForm: FormGroup;
+    editandoMembroIndex: number | null = null;
+    removendoMembroIndex: number | null = null;
     
     displayTelefoneDialog = false;
     novoTelefoneForm: FormGroup;
+    editandoTelefoneIndex: number | null = null;
+    removendoTelefoneIndex: number | null = null;
 
     displayContaDialog = false;
     novoContaForm: FormGroup;
+    editandoContaIndex: number | null = null;
+    removendoContaIndex: number | null = null;
 
     constructor(
         private fb: FormBuilder, 
@@ -196,16 +202,30 @@ export class ConfiguracoesComponent implements OnInit {
     }
 
     showDialog() {
+        this.editandoMembroIndex = null;
         this.novoMembroForm.reset();
+        this.displayMembroDialog = true;
+    }
+
+    editarMembro(index: number, event?: Event) {
+        if (this.removendoMembroIndex === index) return;
+        if (event) event.stopPropagation();
+        this.editandoMembroIndex = index;
+        const membro = this.membros.at(index).value;
+        this.novoMembroForm.patchValue(membro);
         this.displayMembroDialog = true;
     }
 
     salvarNovoMembro() {
         if (this.novoMembroForm.valid) {
-            this.membros.push(this.fb.group({
-                nome: [this.novoMembroForm.value.nome, Validators.required],
-                cargo: [this.novoMembroForm.value.cargo, Validators.required]
-            }));
+            if (this.editandoMembroIndex !== null) {
+                this.membros.at(this.editandoMembroIndex).patchValue(this.novoMembroForm.value);
+            } else {
+                this.membros.push(this.fb.group({
+                    nome: [this.novoMembroForm.value.nome, Validators.required],
+                    cargo: [this.novoMembroForm.value.cargo, Validators.required]
+                }));
+            }
             this.configForm.markAsDirty();
             this.displayMembroDialog = false;
         }
@@ -220,13 +240,42 @@ export class ConfiguracoesComponent implements OnInit {
         return undefined;
     }
 
-    removeMembro(index: number) {
-        this.membros.removeAt(index);
-        this.configForm.markAsDirty();
+    removeMembro(index: number, event?: Event) {
+        if (event) event.stopPropagation();
+        this.removendoMembroIndex = index;
+        setTimeout(() => {
+            this.membros.removeAt(index);
+            this.removendoMembroIndex = null;
+            this.configForm.markAsDirty();
+            this.cdr.detectChanges();
+        }, 200);
     }
 
     showTelefoneDialog() {
+        this.editandoTelefoneIndex = null;
         this.novoTelefoneForm.reset();
+        this.displayTelefoneDialog = true;
+    }
+
+    editarTelefone(index: number, event?: Event) {
+        if (this.removendoTelefoneIndex === index) return;
+        if (event) event.stopPropagation();
+        this.editandoTelefoneIndex = index;
+        const tel = this.telefones.at(index).value || '';
+        let val = tel.replace(/\D/g, '');
+        let formatado = '';
+        if (val.length === 0) {
+            formatado = '';
+        } else if (val.length <= 2) {
+            formatado = `(${val}`;
+        } else if (val.length <= 6) {
+            formatado = `(${val.substring(0, 2)}) ${val.substring(2)}`;
+        } else if (val.length <= 10) {
+            formatado = `(${val.substring(0, 2)}) ${val.substring(2, 6)}-${val.substring(6)}`;
+        } else {
+            formatado = `(${val.substring(0, 2)}) ${val.substring(2, 7)}-${val.substring(7)}`;
+        }
+        this.novoTelefoneForm.patchValue({ numero: formatado });
         this.displayTelefoneDialog = true;
     }
 
@@ -235,16 +284,26 @@ export class ConfiguracoesComponent implements OnInit {
             let numero = this.novoTelefoneForm.value.numero;
             if (numero) {
                 numero = numero.replace(/\D/g, '');
-                this.telefones.push(this.fb.control(numero));
+                if (this.editandoTelefoneIndex !== null) {
+                    this.telefones.at(this.editandoTelefoneIndex).setValue(numero);
+                } else {
+                    this.telefones.push(this.fb.control(numero));
+                }
                 this.configForm.markAsDirty();
             }
             this.displayTelefoneDialog = false;
         }
     }
 
-    removeTelefone(index: number) {
-        this.telefones.removeAt(index);
-        this.configForm.markAsDirty();
+    removeTelefone(index: number, event?: Event) {
+        if (event) event.stopPropagation();
+        this.removendoTelefoneIndex = index;
+        setTimeout(() => {
+            this.telefones.removeAt(index);
+            this.removendoTelefoneIndex = null;
+            this.configForm.markAsDirty();
+            this.cdr.detectChanges();
+        }, 200);
     }
 
     onTelefoneInput(event: any) {
@@ -279,24 +338,44 @@ export class ConfiguracoesComponent implements OnInit {
     }
 
     showContaDialog() {
+        this.editandoContaIndex = null;
         this.novoContaForm.reset({ saldo_inicial: 0 });
+        this.displayContaDialog = true;
+    }
+
+    editarConta(index: number, event?: Event) {
+        if (this.removendoContaIndex === index) return;
+        if (event) event.stopPropagation();
+        this.editandoContaIndex = index;
+        const conta = this.contas.at(index).value;
+        this.novoContaForm.patchValue(conta);
         this.displayContaDialog = true;
     }
 
     salvarNovaConta() {
         if (this.novoContaForm.valid) {
-            this.contas.push(this.fb.group({
-                conta: [this.novoContaForm.value.conta, Validators.required],
-                saldo_inicial: [this.novoContaForm.value.saldo_inicial, Validators.required]
-            }));
+            if (this.editandoContaIndex !== null) {
+                this.contas.at(this.editandoContaIndex).patchValue(this.novoContaForm.value);
+            } else {
+                this.contas.push(this.fb.group({
+                    conta: [this.novoContaForm.value.conta, Validators.required],
+                    saldo_inicial: [this.novoContaForm.value.saldo_inicial, Validators.required]
+                }));
+            }
             this.configForm.markAsDirty();
             this.displayContaDialog = false;
         }
     }
 
-    removeConta(index: number) {
-        this.contas.removeAt(index);
-        this.configForm.markAsDirty();
+    removeConta(index: number, event?: Event) {
+        if (event) event.stopPropagation();
+        this.removendoContaIndex = index;
+        setTimeout(() => {
+            this.contas.removeAt(index);
+            this.removendoContaIndex = null;
+            this.configForm.markAsDirty();
+            this.cdr.detectChanges();
+        }, 200);
     }
 
     formatarContaLabel(conta: any): string {
