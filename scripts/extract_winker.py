@@ -614,16 +614,16 @@ def extract_inadimplencia_boleto(page, context):
         return None, None, None, administradora, telefone
         
     badge_btn = None
-    
-    # 1. Pegar o ÚLTIMO item que possui 'Ver boleto'
-    loc_ver_boleto = page.locator(".list-group-item:has(a:has-text('Ver boleto')) a:has-text('Ver boleto')")
-    if loc_ver_boleto.count() > 0:
-        badge_btn = loc_ver_boleto.last
+
+    # 1. Pegar o PRIMEIRO que possui 'Pago'
+    loc_pago = page.locator(".list-group-item:has(a:has-text('Pago')) a:has-text('Pago')")
+    if loc_pago.count() > 0:
+        badge_btn = loc_pago.first
     else:
-        # 2. Se não existir, pegar o PRIMEIRO que possui 'Pago'
-        loc_pago = page.locator(".list-group-item:has(a:has-text('Pago')) a:has-text('Pago')")
-        if loc_pago.count() > 0:
-            badge_btn = loc_pago.first
+        # 2. Pegar o ÚLTIMO item que possui 'Ver boleto'
+        loc_ver_boleto = page.locator(".list-group-item:has(a:has-text('Ver boleto')) a:has-text('Ver boleto')")
+        if loc_ver_boleto.count() > 0:
+            badge_btn = loc_ver_boleto.last
         else:
             # 3. Se não existir, pegar o PRIMEIRO que possui 'a.badge'
             loc_badge = page.locator(".list-group-item:has(a.badge) a.badge")
@@ -701,30 +701,6 @@ def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor
     except Exception as e:
         logger.error(f"Erro ao salvar dados do condomínio: {e}")
 
-def save_prestacao_contas(mes_id, caminho_local, nome_original, extensao, consistente, motivo_inconsistencia):
-    """
-    Salva o registro do PDF da prestação de contas mensal no banco.
-    """
-    try:
-        models.PrestacoesContas.create(
-            mes_id=mes_id, caminho_local=caminho_local, nome_original=nome_original,
-            extensao=extensao, consistente=consistente, motivo_inconsistencia=motivo_inconsistencia
-        )
-        if caminho_local:
-            mes = models.Meses.get(models.Meses.id == mes_id)
-            mes.anexos += 1
-            if mes.motivo_inconsistencia:
-                reasons = json.loads(mes.motivo_inconsistencia)
-                if "Mês sem prestação de contas" in reasons:
-                    reasons.remove("Mês sem prestação de contas")
-                    if not reasons:
-                        mes.consistente = 1
-                        mes.motivo_inconsistencia = None
-                    else:
-                        mes.motivo_inconsistencia = json.dumps(reasons, ensure_ascii=False)
-            mes.save()
-    except Exception as e:
-        logger.error(f"Erro ao salvar prestação de contas no banco: {e}")
 
 def get_ip_address():
     url_list = ["https://api.ipify.org", "https://www.meuip.com/api/meuip.php", "https://ipinfo.io/ip"]
@@ -960,7 +936,7 @@ def evaluate_entity_consistency(entity_type, **kwargs):
     else:
         raise ValueError(f"Tipo de entidade desconhecido para validação de consistência: {entity_type}")
 
-def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root, condominio_id=None):
+def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root, condominio_id=None, prestacao_contas_info=None):
     db_conn = models.db
     anexos_para_mover = []
     exibicao = f"{nome_mes_abbr}/{ano_item}"
@@ -972,33 +948,40 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
             soma_cat_rec = sum(parse_currency(cat['valor']) for cat in detalhes_mes["receitas"])
             soma_cat_desp = sum(parse_currency(cat['valor']) for cat in detalhes_mes["despesas"])
             
+            anexos = 1 if prestacao_contas_info else 0
+            
             mes_consistente, mes_motivo = evaluate_entity_consistency(
                 'mes', rec_total_mes=rec_total_mes, soma_cat_rec=soma_cat_rec,
-                desp_total_mes=des_total_mes, soma_cat_desp=soma_cat_desp
+                desp_total_mes=des_total_mes, soma_cat_desp=soma_cat_desp,
+                anexos=anexos
             )
             
-            if not mes_consistente:
-                logger.debug(f"    [AVISO CONSISTÊNCIA] Inconsistência no Mês {nome_mes_abbr}/{ano_item}:")
-                if mes_motivo:
-                    try:
-                        motivos = json.loads(mes_motivo)
-                        for m in motivos:
-                            logger.debug(f"      - Motivo: {m}")
-                    except Exception:
-                        pass
-                
-                if mes_motivo and "Divergência" in mes_motivo:
-                    logger.debug(f"      - Receitas: Total informado = R$ {rec_total_mes:.2f} | Soma categorias = R$ {soma_cat_rec:.2f}")
-                    logger.debug(f"      - Despesas: Total informado = R$ {des_total_mes:.2f} | Soma categorias = R$ {soma_cat_desp:.2f}")
+            if not mes_consistente and mes_motivo and "Divergência" in mes_motivo:
+                logger.debug(f"    [AVISO CONSISTÊNCIA] Receitas (R$ {rec_total_mes:.2f} / R$ {soma_cat_rec:.2f}). Despesas (R$ {des_total_mes:.2f} / R$ {soma_cat_desp:.2f}).")
 
             competencia = get_competencia(exibicao)
             
             mes = models.Meses.create(
                 condominio_id=condominio_id, exibicao=exibicao, competencia=competencia,
-                receita_total=rec_total_mes, despesa_total=des_total_mes,
+                receita_total=rec_total_mes, despesa_total=des_total_mes, anexos=anexos,
                 consistente=mes_consistente, motivo_inconsistencia=mes_motivo, revisado_usuario=mes_consistente
             )
             mes_id = mes.id
+            
+            if prestacao_contas_info:
+                models.PrestacoesContas.create(
+                    mes_id=mes_id,
+                    caminho_local=prestacao_contas_info["caminho_rel"],
+                    nome_original=prestacao_contas_info["nome_orig_pdf"],
+                    extensao=prestacao_contas_info["extensao"],
+                    consistente=prestacao_contas_info["pc_consistente"],
+                    motivo_inconsistencia=prestacao_contas_info["pc_motivo"],
+                    revisado_usuario=prestacao_contas_info["pc_consistente"]
+                )
+                anexos_para_mover.append({
+                    "temp_path": prestacao_contas_info["temp_path"],
+                    "caminho_final": prestacao_contas_info["caminho_final"]
+                })
             
             for t_key in ["receitas", "despesas"]:
                 tipo_flag = "R" if t_key == "receitas" else "D"
@@ -1125,6 +1108,9 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
         browser = p.chromium.launch(headless=headless)
         context = browser.new_context()
         page = context.new_page()
+        page_pc = context.new_page()
+
+        page.bring_to_front()
 
         def handle_response(response):
             if "api.winker.com.br/v1/me" in response.url:
@@ -1194,14 +1180,38 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
 
             # 4. Navega para o Balancete
             balancete_url = "https://app.winker.com.br/intra/meuCondominio/balancete"
+            
+            # --- Aba principal (Transações) ---
+
             page.goto(balancete_url, wait_until="networkidle")
             page.wait_for_selector("iframe[name='pageIframe']", timeout=20000)
             
             iframe = page.frame(name="pageIframe") or page.frame(url=lambda u: "financial-summary" in u)
             if not iframe:
-                logger.error("Erro: Não foi possível carregar o iframe do Balancete.")
+                logger.error("Erro: Não foi possível carregar o iframe do Balancete na aba principal.")
                 return
             iframe.wait_for_load_state("domcontentloaded")
+            
+            # --- Aba secundária (Prestações de contas) ---
+            page_pc.bring_to_front()
+            page_pc.goto(balancete_url, wait_until="networkidle")
+            page_pc.wait_for_selector("iframe[name='pageIframe']", timeout=20000)
+            
+            iframe_pc = page_pc.frame(name="pageIframe") or page_pc.frame(url=lambda u: "financial-summary" in u)
+            if not iframe_pc:
+                logger.error("Erro: Não foi possível carregar o iframe do Balancete na aba secundária.")
+                return
+            iframe_pc.wait_for_load_state("domcontentloaded")
+            
+            tab_pc = iframe_pc.locator("super-tab-button:has-text('PRESTAÇÃO DE CONTAS')")
+            if "selected" not in (tab_pc.get_attribute("class") or ""):
+                tab_pc.click()
+                try:
+                    iframe_pc.locator("button:has-text('VISUALIZAR')").first.wait_for(state="visible", timeout=15000)
+                except Exception:
+                    time.sleep(3)
+            
+            page.bring_to_front()
             
             # Atualiza auditoria com dados obtidos (ex: user_data)
             update_current_audit()
@@ -1209,6 +1219,7 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
             # Itera sobre os períodos mensais (chunks)
             chunks = get_date_chunks(start_date_obj, end_date_obj)
             for chunk_start, chunk_end in chunks:
+                page.bring_to_front()
                 tab_apresentacao = iframe.locator("super-tab-button:has-text('APRESENTAÇÃO')")
                 if "selected" not in (tab_apresentacao.get_attribute("class") or ""):
                     tab_apresentacao.click()
@@ -1217,9 +1228,9 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                 logger.info(f"Filtrando período {chunk_start.strftime('%m/%Y')} a {chunk_end.strftime('%m/%Y')}")
                 set_ion_datetime(iframe, 0, chunk_start.strftime("%m"), chunk_start.strftime("%Y"))
                 set_ion_datetime(iframe, 1, chunk_end.strftime("%m"), chunk_end.strftime("%Y"))
-                time.sleep(5) # Ajustado: Atualização chunk data
                 
-                processed_months_in_chunk = []
+
+                time.sleep(5) # Ajustado: Atualização chunk data
                 month_buttons = iframe.locator("button.item.item-block.item-md").all()
                 for btn_index in range(len(month_buttons)):
                     current_btn = iframe.locator("button.item.item-block.item-md").nth(btn_index)
@@ -1304,11 +1315,92 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                             sys.stdout.write("\n")
                             sys.stdout.flush()
                                 
+                        # 3. Extração da Prestação de contas do mês atual (na segunda aba)
+                        page_pc.bring_to_front()
+
+                        prestacao_contas_info = None
+
+                        meses_portugues = {
+                            1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+                            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+                        }
+
+                        mes_ext = f"{meses_portugues[mes_num]} {ano_item}"
+                        col_locator = iframe_pc.locator("ion-col").filter(has_text=mes_ext).first
+                        visualizar_btn = col_locator.locator("button:has-text('VISUALIZAR')")
+
+                        if col_locator.count() > 0 and visualizar_btn.count() > 0:
+                            try:
+                                visualizar_btn.click()
+
+                                action_sheet_btn = iframe_pc.locator("button.action-sheet-button:has-text('Visualizar')")
+                                action_sheet_btn.wait_for(state="visible", timeout=10000)
+
+                                # Intercepta a resposta da API de register-access para obter o token/link direto
+                                created_pages = []
+                                def catch_page(p):
+                                    created_pages.append(p)
+                                context.on("page", catch_page)
+
+                                try:
+                                    with page_pc.expect_response("**/register-access*", timeout=15000) as response_info:
+                                        action_sheet_btn.click()
+                                    response = response_info.value
+                                finally:
+                                    context.remove_listener("page", catch_page)
+
+                                # Fecha abas/popups extras criados por essa ação
+                                for cp in created_pages:
+                                    try:
+                                        cp.close()
+                                    except:
+                                        pass
+
+                                res_data = response.json()
+                                target_url = res_data.get("return", {}).get("document_link", "")
+
+                                if target_url and target_url.startswith("http") and "default/login" not in target_url:
+                                    mes_dir = os.path.join(project_root, "anexos", "temp") # Será movido abaixo
+                                    default_pdf_name = f"Prestação de contas {mes_ext}"
+
+                                    # Baixa o arquivo direto na pasta temporária (será movido se o banco de dados commitar)
+                                    temp_path, nome_orig_pdf = download_http_file(
+                                        context, target_url, mes_dir,
+                                        filename_prefix="", default_filename=default_pdf_name
+                                    )
+
+                                    # Extrai a extensão real
+                                    ext_real = get_extensao(nome_orig_pdf) or "pdf"
+                                    # Renomeia para o padrão da prestação de contas do mês
+                                    caminho_final = os.path.join(project_root, "anexos", str(condo_id_extraido), chave_unica, f"{chave_unica}_prestacao_contas.{ext_real}")
+                                    caminho_rel = f"anexos/{condo_id_extraido}/{chave_unica}/{chave_unica}_prestacao_contas.{ext_real}"
+
+                                    pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', extensao=ext_real)
+
+                                    prestacao_contas_info = {
+                                        "temp_path": temp_path,
+                                        "caminho_final": caminho_final,
+                                        "nome_orig_pdf": nome_orig_pdf,
+                                        "extensao": ext_real,
+                                        "caminho_rel": caminho_rel,
+                                        "pc_consistente": pc_consistente,
+                                        "pc_motivo": pc_motivo
+                                    }
+                                    total_downloads_prestacoes += 1
+                                else:
+                                    logger.error("  Não foi possível obter URL final de download da prestação de contas.")
+                            except Exception as err:
+                                logger.error(f"    Erro ao extrair prestação de contas de {mes_ext}: {err}")
+                        else:
+                            logger.warning(f"    [AVISO CONSISTÊNCIA] Prestação de contas indisponível.")
+
+                        page.bring_to_front() # Volta para a aba principal
+
                         try:
-                            # 3. Salva no banco de dados e move anexos temporários
+                            # 4. Salva no banco de dados e move anexos temporários (incluindo prestação de contas)
                             mes_id, anexos_para_mover = save_extraction_data_to_db(
                                 chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root,
-                                condominio_id=condo_id_extraido
+                                condominio_id=condo_id_extraido, prestacao_contas_info=prestacao_contas_info
                             )
                             if anexos_para_mover:
                                 total_downloads_anexos += len(anexos_para_mover)
@@ -1328,108 +1420,12 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                                         except Exception as err_move:
                                             logger.error(f"  Erro ao mover anexo {t_path} para {f_path}: {err_move}")
                             
-                            # Armazena mes_id (inteiro) junto com chave_unica (usada para dirs de anexos)
-                            processed_months_in_chunk.append((mes_num, ano_item, chave_unica, mes_id))
                             update_current_audit()
                         except Exception as e:
                             # A exceção foi tratada internamente em save_extraction_data_to_db
                             pass
                             
                         close_last_modal(iframe)
-                
-                # 4. Extração de Prestações de Contas no final do chunk
-                if processed_months_in_chunk:
-                    tab_pc = iframe.locator("super-tab-button:has-text('PRESTAÇÃO DE CONTAS')")
-                    if tab_pc.count() > 0:
-                        tab_pc.click()
-                        try:
-                            iframe.locator("button:has-text('VISUALIZAR')").first.wait_for(state="visible", timeout=10000)
-                        except Exception:
-                            time.sleep(3) # Fallback para carregar a página
-                        
-                        meses_portugues = {
-                            1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-                            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-                        }
-                        meses_abbr_map = {
-                            1: "JAN", 2: "FEV", 3: "MAR", 4: "ABR", 5: "MAI", 6: "JUN",
-                            7: "JUL", 8: "AGO", 9: "SET", 10: "OUT", 11: "NOV", 12: "DEZ"
-                        }
-                        
-                        for mes_num, ano_item, chave_unica, mes_id in processed_months_in_chunk:
-                            mes_ext = f"{meses_portugues[mes_num]} {ano_item}"
-                            mes_abbr = meses_abbr_map[mes_num]
-                            col_locator = iframe.locator("ion-col").filter(has_text=mes_ext).first
-                            visualizar_btn = col_locator.locator("button:has-text('VISUALIZAR')")
-                            
-                            if col_locator.count() > 0 and visualizar_btn.count() > 0:
-                                try:
-                                    logger.info(f"  Fazendo download da prestação de contas de {mes_abbr}/{ano_item}")
-                                    visualizar_btn.click()
-                                    
-                                    action_sheet_btn = iframe.locator("button.action-sheet-button:has-text('Visualizar')")
-                                    action_sheet_btn.wait_for(state="visible", timeout=10000)
-                                    
-                                    # Intercepta a resposta da API de register-access para obter o token/link direto
-                                    created_pages = []
-                                    def catch_page(p):
-                                        created_pages.append(p)
-                                    context.on("page", catch_page)
-                                    
-                                    try:
-                                        with page.expect_response("**/register-access*", timeout=15000) as response_info:
-                                            action_sheet_btn.click()
-                                        response = response_info.value
-                                    finally:
-                                        context.remove_listener("page", catch_page)
-                                        
-                                    # Fecha abas/popups extras criados por essa ação
-                                    for cp in created_pages:
-                                        try:
-                                            cp.close()
-                                        except:
-                                            pass
-                                            
-                                    res_data = response.json()
-                                    target_url = res_data.get("return", {}).get("document_link", "")
-                                    
-                                    if target_url and target_url.startswith("http") and "default/login" not in target_url:
-                                        mes_dir = os.path.join(project_root, "anexos", str(condo_id_extraido), chave_unica)
-                                        default_pdf_name = f"Prestação de contas {mes_ext}"
-                                        
-                                        # Baixa o arquivo direto na pasta final
-                                        temp_path, nome_orig_pdf = download_http_file(
-                                            context, target_url, mes_dir,
-                                            filename_prefix="", default_filename=default_pdf_name
-                                        )
-                                        
-                                        # Extrai a extensão real
-                                        ext_real = get_extensao(nome_orig_pdf) or "pdf"
-                                        
-                                        # Renomeia para o padrão da prestação de contas do mês
-                                        caminho_final = os.path.join(mes_dir, f"{chave_unica}_prestacao_contas.{ext_real}")
-                                        if os.path.exists(caminho_final):
-                                            os.remove(caminho_final)
-                                        os.rename(temp_path, caminho_final)
-                                        
-                                        caminho_rel = f"anexos/{condo_id_extraido}/{chave_unica}/{chave_unica}_prestacao_contas.{ext_real}"
-                                        extensao = ext_real
-                                        
-                                        # Avalia consistência da prestação de contas de forma centralizada
-                                        pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', extensao=extensao)
-                                        save_prestacao_contas(mes_id, caminho_rel, nome_orig_pdf, extensao, pc_consistente, pc_motivo)
-                                        total_downloads_prestacoes += 1
-                                    else:
-                                        raise Exception("Não foi possível obter URL final de download (redirecionamento falhou/timeout)")
-                                except Exception as err:
-                                    logger.error(f"    Erro ao extrair prestação de contas de {mes_ext}: {err}")
-                            else:
-                                logger.warning(f"  Prestação de contas de {mes_ext} não encontrada ou indisponível.")
-                            
-                            # Atualiza auditoria após cada prestação de contas processada e comitada
-                            update_current_audit()
-                    else:
-                        logger.warning("  Aba PRESTAÇÃO DE CONTAS não encontrada no iframe.")
             
             # Salvar dados de auditoria
             update_current_audit()
