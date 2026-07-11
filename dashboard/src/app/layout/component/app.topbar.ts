@@ -1,5 +1,6 @@
-import { Component, inject, OnInit, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, inject, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { MenuItem } from 'primeng/api';
+import { Subscription } from 'rxjs';
 import { RouterModule, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { StyleClassModule } from 'primeng/styleclass';
@@ -8,11 +9,12 @@ import { LayoutService } from '@/app/layout/service/layout.service';
 import { SkeletonModule } from 'primeng/skeleton';
 import { OverlayBadgeModule } from 'primeng/overlaybadge';
 import { MenuModule } from 'primeng/menu';
+import { TooltipModule } from 'primeng/tooltip';
 
 @Component({
     selector: 'app-topbar',
     standalone: true,
-    imports: [RouterModule, CommonModule, StyleClassModule, AppConfigurator, SkeletonModule, OverlayBadgeModule, MenuModule],
+    imports: [RouterModule, CommonModule, StyleClassModule, AppConfigurator, SkeletonModule, OverlayBadgeModule, MenuModule, TooltipModule],
     styles: [`
         ::ng-deep .icon-small {
             font-size: 0.5rem !important;
@@ -60,12 +62,13 @@ import { MenuModule } from 'primeng/menu';
 
             <div class="layout-topbar-menu hidden lg:block">
                 <div class="layout-topbar-menu-content">
-                    <button type="button" class="layout-topbar-action">
-                        <p-overlayBadge [value]="inconsistenciesCount.toString()" badgeSize="small" *ngIf="inconsistenciesCount > 0">
-                            <i class="pi pi-inbox"></i>
+                    <button type="button" class="layout-topbar-action" routerLink="/revisao"
+                            [pTooltip]="'Há ' + pendenciasCount + ' registros para revisar'" tooltipPosition="bottom">
+                        <p-overlayBadge [value]="pendenciasCount.toString()" badgeSize="small" *ngIf="pendenciasCount > 0">
+                            <i class="pi pi-check-square"></i>
                         </p-overlayBadge>
-                        <i class="pi pi-inbox" *ngIf="inconsistenciesCount === 0"></i>
-                        <span>Notificações</span>
+                        <i class="pi pi-check-square" *ngIf="pendenciasCount === 0"></i>
+                        <span>Pendências</span>
                     </button>
                     <button type="button" class="layout-topbar-action" (click)="toggleUserMenu($event)">
                         <i class="pi pi-user"></i>
@@ -79,13 +82,14 @@ import { MenuModule } from 'primeng/menu';
         </div>
     </div>`
 })
-export class AppTopbar implements OnInit {
+export class AppTopbar implements OnInit, OnDestroy {
     items!: MenuItem[];
+    reviewSub!: Subscription;
     userMenuItems: MenuItem[] = [];
     condominios: any[] = [];
     currentCondoId: string | null = null;
     condoName: string | null = null;
-    inconsistenciesCount: number = 0;
+    pendenciasCount: number = 0;
 
     @ViewChild('userMenu') userMenu: any;
 
@@ -95,6 +99,15 @@ export class AppTopbar implements OnInit {
 
     ngOnInit() {
         this.loadCondoData();
+        this.reviewSub = this.layoutService.onReviewSaved.subscribe(() => {
+            this.fetchFromApi();
+        });
+    }
+
+    ngOnDestroy() {
+        if (this.reviewSub) {
+            this.reviewSub.unsubscribe();
+        }
     }
 
     loadCondoData() {
@@ -135,21 +148,24 @@ export class AppTopbar implements OnInit {
             }).catch(() => {
                 console.error('Falha ao buscar condomínio na Topbar.');
             });
-            pywebview.api.get_inconsistencies_count().then((res: any) => {
+            pywebview.api.get_pendencias_revisao_count().then((res: any) => {
                 if (res.status === 'success' && res.data) {
-                    this.inconsistenciesCount = res.data.count || 0;
+                    this.pendenciasCount = res.data.count || 0;
                 } else {
-                    this.inconsistenciesCount = 0;
+                    this.pendenciasCount = 0;
                 }
                 this.cdr.detectChanges();
             });
         } else if (window.location.hostname === 'localhost') {
             // MOCK MODE
+            if (typeof (window as any).__mockHasInconsistencies === 'undefined') {
+                (window as any).__mockHasInconsistencies = Math.random() > 0.5;
+            }
             setTimeout(() => {
                 if (!this.currentCondoId) this.currentCondoId = '1';
                 this.condoName = this.currentCondoId === '1' ? 'Condomínio Residencial Alpha (Mock)' :
                                  this.currentCondoId === '2' ? 'Edifício Beta (Mock)' : 'Vila Gama (Mock)';
-                this.inconsistenciesCount = 3;
+                this.pendenciasCount = (window as any).__mockHasInconsistencies ? 12 : 0;
                 this.cdr.detectChanges();
             }, 500);
         }

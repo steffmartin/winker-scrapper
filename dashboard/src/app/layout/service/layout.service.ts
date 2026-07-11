@@ -1,4 +1,5 @@
 import { Injectable, effect, signal, computed } from '@angular/core';
+import { Subject } from 'rxjs';
 
 export interface LayoutConfig {
     preset: string;
@@ -51,6 +52,8 @@ export class LayoutService {
     isOverlay = computed(() => this.layoutConfig().menuMode === 'overlay');
 
     transitionComplete = signal<boolean>(false);
+    
+    onReviewSaved = new Subject<void>();
 
     private initialized = false;
 

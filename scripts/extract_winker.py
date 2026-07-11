@@ -948,10 +948,13 @@ def evaluate_entity_consistency(entity_type, **kwargs):
         return consistente, motivo
 
     elif entity_type == 'prestacao_contas':
-        sucesso = kwargs.get('sucesso', False)
-        consistente = 1 if sucesso else 0
-        motivo = None if sucesso else json.dumps(["Prestação de contas indisponível"], ensure_ascii=False)
+        extensao = kwargs.get('extensao', '')
+        consistente = 1 if extensao and re.match(r"^[a-zA-Z0-9]{2,5}$", extensao) else 0
         
+        motivo = None
+        if not consistente:
+            motivo = json.dumps(["Extensão de arquivo inválida ou ausente"], ensure_ascii=False)
+            
         return consistente, motivo
 
     else:
@@ -1413,23 +1416,15 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                                         extensao = ext_real
                                         
                                         # Avalia consistência da prestação de contas de forma centralizada
-                                        pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=True)
+                                        pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', extensao=extensao)
                                         save_prestacao_contas(mes_id, caminho_rel, nome_orig_pdf, extensao, pc_consistente, pc_motivo)
                                         total_downloads_prestacoes += 1
                                     else:
                                         raise Exception("Não foi possível obter URL final de download (redirecionamento falhou/timeout)")
                                 except Exception as err:
                                     logger.error(f"    Erro ao extrair prestação de contas de {mes_ext}: {err}")
-                                    pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=False)
-                                    save_prestacao_contas(
-                                        mes_id, None, None, None, pc_consistente, pc_motivo
-                                    )
                             else:
                                 logger.warning(f"  Prestação de contas de {mes_ext} não encontrada ou indisponível.")
-                                pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', sucesso=False)
-                                save_prestacao_contas(
-                                    mes_id, None, None, None, pc_consistente, pc_motivo
-                                )
                             
                             # Atualiza auditoria após cada prestação de contas processada e comitada
                             update_current_audit()

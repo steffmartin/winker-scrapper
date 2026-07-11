@@ -30,7 +30,7 @@ describe('AppTopbar', () => {
         (window as any).pywebview = {
             api: {
                 get_nome_condominio: () => Promise.resolve({ status: 'success', data: { nome: 'Condominio Pywebview' } }),
-                get_inconsistencies_count: () => Promise.resolve({ status: 'success', data: { count: 5 } })
+                get_pendencias_revisao_count: () => Promise.resolve({ status: 'success', data: { count: 5, details: { lancamentos: 5, categorias: 0, subcategorias: 0, meses: 0, documentos: 0 } } })
             }
         };
 
@@ -40,6 +40,6 @@ describe('AppTopbar', () => {
         await new Promise(resolve => setTimeout(resolve, 0));
 
         expect(component.condoName).toBe('Condominio Pywebview');
-        expect(component.inconsistenciesCount).toBe(5);
+        expect(component.pendenciasCount).toBe(5);
     });
 });

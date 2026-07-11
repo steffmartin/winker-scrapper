@@ -214,14 +214,20 @@
                                 <ng-container *ngIf="rowNode.node.children === undefined">
                                     <i *ngIf="rowData.anexos > 0" class="pi pi-paperclip text-inherit mr-3 text-lg cursor-pointer" [pTooltip]="rowData.anexos + ' documento(s)'" tooltipPosition="left" (click)="abrirAnexos(rowData, $event)"></i>
                                     <i *ngIf="rowData.consistente" class="pi pi-check-circle text-primary-500 text-lg" pTooltip="Lançamento consistente" tooltipPosition="right"></i>
-                                    <i *ngIf="!rowData.consistente" class="pi pi-times-circle text-red-500 text-lg" pTooltip="Lançamento inconsistente" tooltipPosition="right"></i>
+                                    <ng-container *ngIf="!rowData.consistente">
+                                        <i *ngIf="rowData.revisado_usuario" class="pi pi-verified text-blue-500 text-lg" pTooltip="Lançamento revisado" tooltipPosition="right"></i>
+                                        <i *ngIf="!rowData.revisado_usuario" class="pi pi-times-circle text-red-500 text-lg" pTooltip="Lançamento inconsistente" tooltipPosition="right"></i>
+                                    </ng-container>
                                 </ng-container>
                                 <ng-container *ngIf="rowData.tipo_node === 'mes'">
                                     <i *ngIf="rowData.anexos > 0" class="pi pi-paperclip text-inherit mr-3 text-lg cursor-pointer" [pTooltip]="rowData.anexos + ' documento(s)'" tooltipPosition="left" (click)="abrirAnexos(rowData, $event)"></i>
                                     <i *ngIf="rowData.consistente" class="pi pi-check-circle text-primary-500 text-lg" pTooltip="Mês consistente" tooltipPosition="right"></i>
                                     <ng-container *ngIf="!rowData.consistente">
-                                        <i *ngIf="!isMonthOpen(rowData)" class="pi pi-times-circle text-red-500 text-lg" pTooltip="Mês inconsistente" tooltipPosition="right"></i>
-                                        <i *ngIf="isMonthOpen(rowData)" class="pi pi-clock text-gray-500 text-lg" pTooltip="Mês em aberto" tooltipPosition="right"></i>
+                                        <i *ngIf="rowData.revisado_usuario" class="pi pi-verified text-blue-500 text-lg" pTooltip="Mês revisado" tooltipPosition="right"></i>
+                                        <ng-container *ngIf="!rowData.revisado_usuario">
+                                            <i *ngIf="isMonthOpen(rowData)" class="pi pi-clock text-gray-500 text-lg" pTooltip="Mês em aberto" tooltipPosition="right"></i>
+                                            <i *ngIf="!isMonthOpen(rowData)" class="pi pi-times-circle text-red-500 text-lg" pTooltip="Mês inconsistente" tooltipPosition="right"></i>
+                                        </ng-container>
                                     </ng-container>
                                 </ng-container>
                             </div>

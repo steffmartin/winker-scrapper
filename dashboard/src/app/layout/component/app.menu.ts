@@ -28,8 +28,11 @@ export class AppMenu {
                 items: [{ label: 'Dashboard', icon: 'pi pi-fw pi-home', routerLink: ['/'] }]
             },
             {
-                label: 'Gerencial',
-                items: [{ label: 'Configurações', icon: 'pi pi-fw pi-cog', routerLink: ['/configuracoes'] }]
+                label: 'Gestão e Operações',
+                items: [
+                    { label: 'Revisão', icon: 'pi pi-fw pi-check-square', routerLink: ['/revisao'] },
+                    { label: 'Configurações', icon: 'pi pi-fw pi-cog', routerLink: ['/configuracoes'] }
+                ]
             }
         ];
     }

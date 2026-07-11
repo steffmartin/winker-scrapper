@@ -10,8 +10,13 @@ export const appRoutes: Routes = [
         children: [
             { path: '', component: Dashboard },
             { 
+                path: 'revisao', 
+                loadComponent: () => import('./app/pages/revisao/revisao').then(m => m.RevisaoComponent)
+            },
+            { 
                 path: 'configuracoes', 
                 loadComponent: () => import('./app/pages/configuracoes/configuracoes').then(m => m.ConfiguracoesComponent),
+                // Previne que o usuário saia da página de configurações se houver edições não salvas no formulário
                 canDeactivate: [(component: any) => {
                     return component.canDeactivate ? component.canDeactivate() : true;
                 }]

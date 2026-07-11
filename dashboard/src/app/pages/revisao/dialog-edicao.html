@@ -1,0 +1,91 @@
+<form [formGroup]="form" (ngSubmit)="salvar()" class="flex flex-col gap-4 mt-2">
+    
+    <!-- Campos Meses -->
+    <ng-container *ngIf="tipo_tabela === 'meses'">
+        <div class="flex flex-col gap-2">
+            <label class="font-semibold text-sm">Receitas</label>
+            <p-inputNumber formControlName="receita_total" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+        </div>
+        <div class="flex flex-col gap-2">
+            <label class="font-semibold text-sm">Despesas</label>
+            <p-inputNumber formControlName="despesa_total" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+        </div>
+        <div class="flex flex-col gap-2">
+            <label class="font-semibold text-sm">Prestação de Contas</label>
+            <div class="flex items-center justify-start flex-wrap gap-2 mt-1">
+                <p-chip *ngFor="let doc of documentos; let i = index"
+                        [label]="doc.nome_original"
+                        icon="pi pi-file"
+                        [removable]="canUpload"
+                        (onRemove)="removerDocumento(i)"
+                        [pTooltip]="doc.caminho_local" tooltipPosition="bottom"
+                        styleClass="bg-primary text-primary-contrast text-sm font-medium">
+                </p-chip>
+                <p-chip *ngIf="documentos.length === 0" label="Nenhuma prestação de contas adicionada" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
+                <p-button icon="pi pi-plus" [rounded]="true" size="small" pTooltip="Adicionar documento" tooltipPosition="right" (onClick)="addDocumento()" [disabled]="!canUpload"></p-button>
+            </div>
+        </div>
+    </ng-container>
+
+    <!-- Campos Categorias / Subcategorias -->
+    <ng-container *ngIf="tipo_tabela === 'categorias' || tipo_tabela === 'subcategorias'">
+        <div class="flex flex-col gap-2">
+            <label class="font-semibold text-sm">Valor Total</label>
+            <p-inputNumber formControlName="valor" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+        </div>
+    </ng-container>
+
+    <!-- Campos Lançamentos -->
+    <ng-container *ngIf="tipo_tabela === 'lancamentos'">
+        <div class="flex flex-col gap-2" *ngIf="registro.tipo === 'R'">
+            <label class="font-semibold text-sm">Apartamento</label>
+            <input pInputText formControlName="apartamento" type="text" class="w-full" />
+        </div>
+        <div class="flex flex-col gap-2" *ngIf="registro.tipo === 'R'">
+            <label class="font-semibold text-sm">Competência</label>
+            <p-datePicker formControlName="competencia" view="month" dateFormat="mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn"></p-datePicker>
+        </div>
+        <div class="flex flex-col gap-2" *ngIf="registro.tipo === 'D'">
+            <label class="font-semibold text-sm">Fornecedor</label>
+            <input pInputText formControlName="fornecedor" type="text" class="w-full" />
+        </div>
+        <div class="flex flex-col gap-2">
+            <label class="font-semibold text-sm">Conta</label>
+            <input pInputText formControlName="conta" type="text" class="w-full" />
+        </div>
+        <div class="flex flex-col gap-2" *ngIf="registro.tipo === 'D' || (registro.tipo === 'R' && registro.motivo_inconsistencia?.includes('Quantidade de anexos divergente'))">
+            <label class="font-semibold text-sm">Documentos (Anexos)</label>
+            <div class="flex items-center justify-start flex-wrap gap-2 mt-1">
+                <p-chip *ngFor="let doc of documentos; let i = index"
+                        [label]="doc.nome_original"
+                        icon="pi pi-file"
+                        [removable]="canUpload"
+                        (onRemove)="removerDocumento(i)"
+                        [pTooltip]="doc.caminho_local" tooltipPosition="bottom"
+                        styleClass="bg-primary text-primary-contrast text-sm font-medium">
+                </p-chip>
+                <p-chip *ngIf="documentos.length === 0" label="Nenhum comprovante adicionado" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
+                <p-button icon="pi pi-plus" [rounded]="true" size="small" pTooltip="Adicionar documento" tooltipPosition="right" (onClick)="addDocumento()" [disabled]="!canUpload"></p-button>
+            </div>
+        </div>
+    </ng-container>
+
+    <!-- Documentos -->
+    <ng-container *ngIf="tipo_tabela === 'documentos'">
+        <div class="flex flex-col gap-2">
+            <label for="extensao" class="font-semibold">Extensão do Arquivo</label>
+            <input pInputText id="extensao" formControlName="extensao" placeholder="Ex: pdf, png, jpg" class="w-full" />
+        </div>
+    </ng-container>
+
+    <div class="flex items-center justify-between border-t border-surface-200 dark:border-surface-700 pt-4 mt-2">
+        <div class="flex items-center gap-2">
+            <p-toggleSwitch formControlName="revisado_usuario"></p-toggleSwitch>
+            <span class="font-medium text-sm">Marcar como revisado</span>
+        </div>
+        <div class="flex gap-2">
+            <p-button label="Cancelar" severity="secondary" [text]="true" (onClick)="cancelar()"></p-button>
+            <p-button label="Salvar" type="submit" [loading]="saving"></p-button>
+        </div>
+    </div>
+</form>

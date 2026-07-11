@@ -1,0 +1,278 @@
+<div class="card shadow-sm border rounded-xl w-full">
+    <h4 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">Revisão de Registros</h4>
+    <p-toast position="bottom-right"></p-toast>
+    <p-confirmDialog [style]="{width: '450px'}"></p-confirmDialog>
+
+    <div *ngIf="loadingCounts" class="flex justify-center p-4">
+        <i class="pi pi-spin pi-spinner text-2xl text-primary"></i>
+    </div>
+
+    <div *ngIf="!loadingCounts && !hasPendencias()" class="flex flex-col items-center justify-center p-8 text-center bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 my-4">
+        <i class="pi pi-check-circle text-6xl text-green-500 mb-4"></i>
+        <h5 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Tudo Certo!</h5>
+        <p class="text-slate-600 dark:text-slate-400">Não há registros inconsistentes aguardando revisão.</p>
+    </div>
+
+    <p-tabs [value]="activeTab" [lazy]="true" (valueChange)="onTabChange($event)" *ngIf="!loadingCounts && hasPendencias()">
+        <p-tablist>
+            <p-tab value="3" [disabled]="pendenciasCounts.meses === 0">
+                <div class="flex items-center gap-2">
+                    <i class="pi pi-calendar"></i>
+                    <span>Meses</span>
+                    <p-badge [value]="pendenciasCounts.meses" *ngIf="pendenciasCounts.meses > 0" severity="danger"></p-badge>
+                </div>
+            </p-tab>
+            <p-tab value="2" [disabled]="pendenciasCounts.categorias === 0">
+                <div class="flex items-center gap-2">
+                    <i class="pi pi-tags"></i>
+                    <span>Categorias</span>
+                    <p-badge [value]="pendenciasCounts.categorias" *ngIf="pendenciasCounts.categorias > 0" severity="danger"></p-badge>
+                </div>
+            </p-tab>
+            <p-tab value="1" [disabled]="pendenciasCounts.subcategorias === 0">
+                <div class="flex items-center gap-2">
+                    <i class="pi pi-sitemap"></i>
+                    <span>Subcategorias</span>
+                    <p-badge [value]="pendenciasCounts.subcategorias" *ngIf="pendenciasCounts.subcategorias > 0" severity="danger"></p-badge>
+                </div>
+            </p-tab>
+            <p-tab value="0" [disabled]="pendenciasCounts.lancamentos === 0">
+                <div class="flex items-center gap-2">
+                    <i class="pi pi-list"></i>
+                    <span>Lançamentos</span>
+                    <p-badge [value]="pendenciasCounts.lancamentos" *ngIf="pendenciasCounts.lancamentos > 0" severity="danger"></p-badge>
+                </div>
+            </p-tab>
+            <p-tab value="4" [disabled]="pendenciasCounts.documentos === 0">
+                <div class="flex items-center gap-2">
+                    <i class="pi pi-file"></i>
+                    <span>Documentos</span>
+                    <p-badge [value]="pendenciasCounts.documentos" *ngIf="pendenciasCounts.documentos > 0" severity="danger"></p-badge>
+                </div>
+            </p-tab>
+        </p-tablist>
+
+        <p-tabpanels style="padding: 0 !important;" class="!p-0">
+            <!-- Lançamentos -->
+            <p-tabpanel value="0">
+                @defer (when pendenciasCounts.lancamentos > 0) {
+                    <p-table #dtLancamentos [value]="lancamentos" [paginator]="true" [rows]="10" [loading]="loadingLancamentos" 
+                             [globalFilterFields]="['mes_exibicao', 'data', 'descricao', 'valor', 'motivo_inconsistencia']" 
+                             styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
+                             stateStorage="session" stateKey="winker-revisao-lancamentos"
+                             rowHover="true" selectionMode="single" (onRowSelect)="editRow($event.data, 'lancamentos')">
+                        <ng-template pTemplate="header">
+                            <tr>
+                                <th pSortableColumn="tipo" style="width: 3rem"><p-sortIcon field="tipo"></p-sortIcon></th>
+                                <th pSortableColumn="mes_competencia">Período <p-sortIcon field="mes_competencia"></p-sortIcon></th>
+                                <th pSortableColumn="data_sort">Data <p-sortIcon field="data_sort"></p-sortIcon></th>
+                                <th pSortableColumn="descricao">Descrição <p-sortIcon field="descricao"></p-sortIcon></th>
+                                <th pSortableColumn="valor">Valor <p-sortIcon field="valor"></p-sortIcon></th>
+                                <th pSortableColumn="inconsistencias_count">Inconsistências <p-sortIcon field="inconsistencias_count"></p-sortIcon></th>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="body" let-rowData>
+                            <tr [pSelectableRow]="rowData" class="cursor-pointer">
+                                <td>
+                                    <p-avatar [label]="rowData.tipo === 'R' ? 'R' : 'D'" shape="circle" size="normal" 
+                                              [style]="{'background-color': rowData.tipo === 'R' ? '#22c55e' : '#ef4444', 'color': '#ffffff'}">
+                                    </p-avatar>
+                                </td>
+                                <td>{{ rowData.mes_exibicao }}</td>
+                                <td>{{ rowData.data }}</td>
+                                <td>{{ rowData.descricao }}</td>
+                                <td [ngClass]="rowData.tipo === 'R' ? 'text-green-600' : 'text-red-600'">
+                                    {{ rowData.valor | currency:'BRL':'symbol':'1.2-2' }}
+                                </td>
+                                <td>
+                                    <div class="flex flex-wrap gap-1">
+                                        <p-chip *ngFor="let inc of getInconsistenciasList(rowData.motivo_inconsistencia)" [label]="inc" styleClass="text-xs font-semibold" [style]="{'background-color': 'color-mix(in srgb, var(--p-primary-color) 15%, transparent)', 'color': 'var(--p-primary-color)'}"></p-chip>
+                                    </div>
+                                </td>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="emptymessage">
+                            <tr>
+                                <td colspan="6" class="text-center p-4">Nenhum registro pendente encontrado.</td>
+                            </tr>
+                        </ng-template>
+                    </p-table>
+                }
+            </p-tabpanel>
+
+            <!-- Subcategorias -->
+            <p-tabpanel value="1">
+                @defer (when pendenciasCounts.subcategorias > 0) {
+                    <p-table #dtSubcategorias [value]="subcategorias" [paginator]="true" [rows]="10" [loading]="loadingSubcategorias"
+                             [globalFilterFields]="['mes_exibicao', 'nome', 'valor', 'motivo_inconsistencia']"
+                             styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
+                             stateStorage="session" stateKey="winker-revisao-subcategorias"
+                             rowHover="true" selectionMode="single" (onRowSelect)="editRow($event.data, 'subcategorias')">
+                        <ng-template pTemplate="header">
+                            <tr>
+                                <th pSortableColumn="tipo" style="width: 3rem"><p-sortIcon field="tipo"></p-sortIcon></th>
+                                <th pSortableColumn="mes_competencia">Período <p-sortIcon field="mes_competencia"></p-sortIcon></th>
+                                <th pSortableColumn="nome">Descrição <p-sortIcon field="nome"></p-sortIcon></th>
+                                <th pSortableColumn="valor">Valor Total <p-sortIcon field="valor"></p-sortIcon></th>
+                                <th pSortableColumn="inconsistencias_count">Inconsistências <p-sortIcon field="inconsistencias_count"></p-sortIcon></th>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="body" let-rowData>
+                            <tr [pSelectableRow]="rowData" class="cursor-pointer">
+                                <td>
+                                    <p-avatar [label]="rowData.tipo === 'R' ? 'R' : 'D'" shape="circle" size="normal" 
+                                              [style]="{'background-color': rowData.tipo === 'R' ? '#22c55e' : '#ef4444', 'color': '#ffffff'}">
+                                    </p-avatar>
+                                </td>
+                                <td>{{ rowData.mes_exibicao }}</td>
+                                <td>{{ rowData.nome }}</td>
+                                <td [ngClass]="rowData.tipo === 'R' ? 'text-green-600' : 'text-red-600'">
+                                    {{ rowData.valor | currency:'BRL':'symbol':'1.2-2' }}
+                                </td>
+                                <td>
+                                    <div class="flex flex-wrap gap-1">
+                                        <p-chip *ngFor="let inc of getInconsistenciasList(rowData.motivo_inconsistencia)" [label]="inc" styleClass="text-xs font-semibold" [style]="{'background-color': 'color-mix(in srgb, var(--p-primary-color) 15%, transparent)', 'color': 'var(--p-primary-color)'}"></p-chip>
+                                    </div>
+                                </td>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="emptymessage">
+                            <tr>
+                                <td colspan="5" class="text-center p-4">Nenhum registro pendente encontrado.</td>
+                            </tr>
+                        </ng-template>
+                    </p-table>
+                }
+            </p-tabpanel>
+
+            <!-- Categorias -->
+            <p-tabpanel value="2">
+                @defer (when pendenciasCounts.categorias > 0) {
+                    <p-table #dtCategorias [value]="categorias" [paginator]="true" [rows]="10" [loading]="loadingCategorias"
+                             [globalFilterFields]="['mes_exibicao', 'nome', 'valor', 'motivo_inconsistencia']"
+                             styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
+                             stateStorage="session" stateKey="winker-revisao-categorias"
+                             rowHover="true" selectionMode="single" (onRowSelect)="editRow($event.data, 'categorias')">
+                        <ng-template pTemplate="header">
+                            <tr>
+                                <th pSortableColumn="tipo" style="width: 3rem"><p-sortIcon field="tipo"></p-sortIcon></th>
+                                <th pSortableColumn="mes_competencia">Período <p-sortIcon field="mes_competencia"></p-sortIcon></th>
+                                <th pSortableColumn="nome">Descrição <p-sortIcon field="nome"></p-sortIcon></th>
+                                <th pSortableColumn="valor">Valor Total <p-sortIcon field="valor"></p-sortIcon></th>
+                                <th pSortableColumn="inconsistencias_count">Inconsistências <p-sortIcon field="inconsistencias_count"></p-sortIcon></th>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="body" let-rowData>
+                            <tr [pSelectableRow]="rowData" class="cursor-pointer">
+                                <td>
+                                    <p-avatar [label]="rowData.tipo === 'R' ? 'R' : 'D'" shape="circle" size="normal" 
+                                              [style]="{'background-color': rowData.tipo === 'R' ? '#22c55e' : '#ef4444', 'color': '#ffffff'}">
+                                    </p-avatar>
+                                </td>
+                                <td>{{ rowData.mes_exibicao }}</td>
+                                <td>{{ rowData.nome }}</td>
+                                <td [ngClass]="rowData.tipo === 'R' ? 'text-green-600' : 'text-red-600'">
+                                    {{ rowData.valor | currency:'BRL':'symbol':'1.2-2' }}
+                                </td>
+                                <td>
+                                    <div class="flex flex-wrap gap-1">
+                                        <p-chip *ngFor="let inc of getInconsistenciasList(rowData.motivo_inconsistencia)" [label]="inc" styleClass="text-xs font-semibold" [style]="{'background-color': 'color-mix(in srgb, var(--p-primary-color) 15%, transparent)', 'color': 'var(--p-primary-color)'}"></p-chip>
+                                    </div>
+                                </td>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="emptymessage">
+                            <tr>
+                                <td colspan="5" class="text-center p-4">Nenhum registro pendente encontrado.</td>
+                            </tr>
+                        </ng-template>
+                    </p-table>
+                }
+            </p-tabpanel>
+
+            <!-- Meses -->
+            <p-tabpanel value="3">
+                @defer (when pendenciasCounts.meses > 0) {
+                    <p-table #dtMeses [value]="meses" [paginator]="true" [rows]="10" [loading]="loadingMeses"
+                             [globalFilterFields]="['exibicao', 'receita_total', 'despesa_total', 'motivo_inconsistencia']"
+                             styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
+                             stateStorage="session" stateKey="winker-revisao-meses"
+                             rowHover="true" selectionMode="single" (onRowSelect)="editRow($event.data, 'meses')">
+                        <ng-template pTemplate="header">
+                            <tr>
+                                <th pSortableColumn="competencia" style="width: 3rem"><p-sortIcon field="competencia"></p-sortIcon></th>
+                                <th pSortableColumn="competencia">Período <p-sortIcon field="competencia"></p-sortIcon></th>
+                                <th pSortableColumn="receita_total">Receitas <p-sortIcon field="receita_total"></p-sortIcon></th>
+                                <th pSortableColumn="despesa_total">Despesas <p-sortIcon field="despesa_total"></p-sortIcon></th>
+                                <th pSortableColumn="inconsistencias_count">Inconsistências <p-sortIcon field="inconsistencias_count"></p-sortIcon></th>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="body" let-rowData>
+                            <tr [pSelectableRow]="rowData" class="cursor-pointer">
+                                <td>
+                                    <p-avatar [label]="getAvatarLabelMes(rowData.competencia)" shape="circle" size="normal" 
+                                              [style]="{'background-color': getAvatarColor(rowData.competencia), 'color': '#ffffff'}">
+                                    </p-avatar>
+                                </td>
+                                <td>{{ rowData.exibicao }}</td>
+                                <td class="text-green-600">{{ rowData.receita_total | currency:'BRL':'symbol':'1.2-2' }}</td>
+                                <td class="text-red-600">{{ rowData.despesa_total | currency:'BRL':'symbol':'1.2-2' }}</td>
+                                <td>
+                                    <div class="flex flex-wrap gap-1">
+                                        <p-chip *ngFor="let inc of getInconsistenciasList(rowData.motivo_inconsistencia)" [label]="inc" styleClass="text-xs font-semibold" [style]="{'background-color': 'color-mix(in srgb, var(--p-primary-color) 15%, transparent)', 'color': 'var(--p-primary-color)'}"></p-chip>
+                                    </div>
+                                </td>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="emptymessage">
+                            <tr>
+                                <td colspan="5" class="text-center p-4">Nenhum registro pendente encontrado.</td>
+                            </tr>
+                        </ng-template>
+                    </p-table>
+                }
+            </p-tabpanel>
+
+            <!-- Documentos -->
+            <p-tabpanel value="4">
+                @defer (when pendenciasCounts.documentos > 0) {
+                    <p-table #dtDocumentos [value]="documentos" [paginator]="true" [rows]="10" [loading]="loadingDocumentos"
+                             [globalFilterFields]="['mes_exibicao', 'nome_original', 'motivo_inconsistencia']"
+                             styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
+                             stateStorage="session" stateKey="winker-revisao-documentos"
+                             rowHover="true" selectionMode="single" (onRowSelect)="editRow($event.data, 'documentos')">
+                        <ng-template pTemplate="header">
+                            <tr>
+                                <th pSortableColumn="tipo_doc" style="width: 3rem"><p-sortIcon field="tipo_doc"></p-sortIcon></th>
+                                <th pSortableColumn="mes_competencia">Período <p-sortIcon field="mes_competencia"></p-sortIcon></th>
+                                <th pSortableColumn="nome_original">Nome <p-sortIcon field="nome_original"></p-sortIcon></th>
+                                <th pSortableColumn="inconsistencias_count">Inconsistências <p-sortIcon field="inconsistencias_count"></p-sortIcon></th>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="body" let-rowData>
+                            <tr [pSelectableRow]="rowData" class="cursor-pointer">
+                                <td>
+                                    <p-avatar [label]="rowData.tipo_doc === 'C' ? 'C' : 'P'" shape="circle" size="normal" 
+                                              [style]="{'background-color': rowData.tipo_doc === 'C' ? '#3b82f6' : '#f97316', 'color': '#ffffff'}">
+                                    </p-avatar>
+                                </td>
+                                <td>{{ rowData.mes_exibicao }}</td>
+                                <td>{{ rowData.nome_original }}</td>
+                                <td>
+                                    <div class="flex flex-wrap gap-1">
+                                        <p-chip *ngFor="let inc of getInconsistenciasList(rowData.motivo_inconsistencia)" [label]="inc" styleClass="text-xs font-semibold" [style]="{'background-color': 'color-mix(in srgb, var(--p-primary-color) 15%, transparent)', 'color': 'var(--p-primary-color)'}"></p-chip>
+                                    </div>
+                                </td>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="emptymessage">
+                            <tr>
+                                <td colspan="4" class="text-center p-4">Nenhum registro pendente encontrado.</td>
+                            </tr>
+                        </ng-template>
+                    </p-table>
+                }
+            </p-tabpanel>
+        </p-tabpanels>
+    </p-tabs>
+</div>
