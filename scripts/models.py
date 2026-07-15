@@ -159,10 +159,24 @@ class PreferenciasUsuario(BaseModel):
     class Meta:
         table_name = 'preferencias_usuario'
 
+class TaxasOrdinarias(BaseModel):
+    condominio_id = ForeignKeyField(Condominio, backref='taxas_ordinarias', on_delete='CASCADE', db_column='condominio_id')
+    competencia = CharField(null=True)
+    exibicao = CharField(null=True)
+    vencimento = CharField(null=True)
+    descricao = CharField(null=True)
+    valor_original = FloatField(default=0.0)
+    desconto_vista = FloatField(default=0.0)
+    multa_atraso = FloatField(default=0.0)
+    juros_dia_atraso = FloatField(default=0.0)
+
+    class Meta:
+        table_name = 'taxas_ordinarias'
+
 def init_models(db_path):
     db.init(db_path, pragmas={'foreign_keys': 1})
     db.connect(reuse_if_open=True)
     db.create_tables([
         Condominio, MembrosGestao, Contas, Meses, Categorias, Subcategorias, 
-        Transacoes, Anexos, PrestacoesContas, Auditoria, PreferenciasUsuario
+        Transacoes, Anexos, PrestacoesContas, Auditoria, PreferenciasUsuario, TaxasOrdinarias
     ], safe=True)

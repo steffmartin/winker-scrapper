@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import json
+import calendar
 from datetime import datetime
 
 # Módulos internos independentes
@@ -779,6 +780,91 @@ class Api:
                     reg.save()
                     
             return {"status": "success", "message": "Registro atualizado com sucesso."}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def get_taxas_ordinarias(self):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            taxas = list(models.TaxasOrdinarias.select().where(models.TaxasOrdinarias.condominio_id == self.condo_id).order_by(models.TaxasOrdinarias.competencia.desc()).dicts())
+            return {"status": "success", "data": taxas}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def delete_taxa_ordinaria(self, taxa_id):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            models.TaxasOrdinarias.delete().where(models.TaxasOrdinarias.id == taxa_id).execute()
+            return {"status": "success"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def update_taxa_ordinaria(self, taxa_id, payload):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            taxa = models.TaxasOrdinarias.get_by_id(taxa_id)
+            if 'competencia' in payload: taxa.competencia = payload['competencia']
+            if 'exibicao' in payload: taxa.exibicao = payload['exibicao']
+            if 'vencimento' in payload: taxa.vencimento = payload['vencimento']
+            if 'descricao' in payload: taxa.descricao = payload['descricao']
+            if 'valor_original' in payload: taxa.valor_original = payload['valor_original']
+            if 'desconto_vista' in payload: taxa.desconto_vista = payload['desconto_vista']
+            if 'multa_atraso' in payload: taxa.multa_atraso = payload['multa_atraso']
+            if 'juros_dia_atraso' in payload: taxa.juros_dia_atraso = payload['juros_dia_atraso']
+            taxa.save()
+            return {"status": "success"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def insert_taxa_ordinaria(self, payload):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            meses_repeticao = payload.get('meses_repeticao', 1)
+            base_competencia = payload.get('competencia')
+            base_vencimento = payload.get('vencimento')
+            descricao = payload.get('descricao')
+            valor_original = payload.get('valor_original', 0.0)
+            desconto_vista = payload.get('desconto_vista', 0.0)
+            multa_atraso = payload.get('multa_atraso', 0.0)
+            juros_dia_atraso = payload.get('juros_dia_atraso', 0.0)
+            
+            def add_months(d, months):
+                month = d.month - 1 + months
+                year = d.year + month // 12
+                month = month % 12 + 1
+                day = min(d.day, calendar.monthrange(year, month)[1])
+                return d.replace(year=year, month=month, day=day)
+            
+            dt_comp = datetime.strptime(base_competencia, '%Y-%m') if base_competencia else datetime.now()
+            dt_venc = datetime.strptime(base_vencimento, '%d/%m/%Y') if base_vencimento else datetime.now()
+            
+            meses_map_inv = {1: 'JAN', 2: 'FEV', 3: 'MAR', 4: 'ABR', 5: 'MAI', 6: 'JUN', 7: 'JUL', 8: 'AGO', 9: 'SET', 10: 'OUT', 11: 'NOV', 12: 'DEZ'}
+
+            with models.db.atomic():
+                for i in range(meses_repeticao):
+                    curr_comp = add_months(dt_comp, i)
+                    curr_venc = add_months(dt_venc, i)
+                    
+                    comp_str = curr_comp.strftime('%Y-%m')
+                    venc_str = curr_venc.strftime('%d/%m/%Y')
+                    exib_str = f"{meses_map_inv[curr_comp.month]}/{curr_comp.year}"
+                    
+                    models.TaxasOrdinarias.create(
+                        condominio_id=self.condo_id,
+                        competencia=comp_str,
+                        exibicao=exib_str,
+                        vencimento=venc_str,
+                        descricao=descricao,
+                        valor_original=valor_original,
+                        desconto_vista=desconto_vista,
+                        multa_atraso=multa_atraso,
+                        juros_dia_atraso=juros_dia_atraso
+                    )
+            return {"status": "success"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
 

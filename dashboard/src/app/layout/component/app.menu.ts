@@ -31,6 +31,7 @@ export class AppMenu {
                 label: 'Gestão e Operações',
                 items: [
                     { label: 'Revisão', icon: 'pi pi-fw pi-check-square', routerLink: ['/revisao'] },
+                    { label: 'Cobranças', icon: 'pi pi-fw pi-money-bill', routerLink: ['/cobrancas'] },
                     { label: 'Configurações', icon: 'pi pi-fw pi-cog', routerLink: ['/configuracoes'] }
                 ]
             }

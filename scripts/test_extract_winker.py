@@ -68,12 +68,13 @@ class TestExtractWinker(unittest.TestCase):
         self.assertEqual(parse_fornecedor("Seguro Predial SulAmerica - NF: 334"), "SEGURO PREDIAL SULAMERICA")
 
     def test_parse_conta(self):
-        self.assertEqual(parse_conta("Recebimento Apto - 301 Competência AGO 2024 - Conta: CONTA CORRENTE - SICOOB"), "CONTA CORRENTE")
-        self.assertEqual(parse_conta("Pagamento Guardian Condo Serv De Port. Remota Ltda Doc.: 4929 - Conta: CONTA CORRENTE - SICOOB - Código de barra/Qr Code"), "CONTA CORRENTE")
-        self.assertEqual(parse_conta("UND: Apto / 402 - FEV 2025 - CTA. PGTO: CONTA CORRENTE - SICOOB"), "CONTA CORRENTE")
-        self.assertEqual(parse_conta("Pagamento Flavio Borges Gonçalves - Conta: CONTA CORRENTE - SICOOB - Pix"), "CONTA CORRENTE")
-        self.assertEqual(parse_conta("Pagamento Guardian Condo Serv De Port. Remota Ltda - Doc.: 5894 - Conta: CONTA CORRENTE - SICOOB - DÉB.TIT.COMPE EFETIVADO"), "CONTA CORRENTE")
-        self.assertIsNone(parse_conta("Sem conta na descrição"))
+        contas = ["CONTA CORRENTE", "CTA. PGTO"]
+        self.assertEqual(parse_conta("Recebimento Apto - 301 Competência AGO 2024 - Conta: CONTA CORRENTE - SICOOB", contas), "CONTA CORRENTE")
+        self.assertEqual(parse_conta("Pagamento Guardian Condo Serv De Port. Remota Ltda Doc.: 4929 - Conta: CONTA CORRENTE - SICOOB - Código de barra/Qr Code", contas), "CONTA CORRENTE")
+        self.assertEqual(parse_conta("UND: Apto / 402 - FEV 2025 - CTA. PGTO: CONTA CORRENTE - SICOOB", contas), "CONTA CORRENTE")
+        self.assertEqual(parse_conta("Pagamento Flavio Borges Gonçalves - Conta: CONTA CORRENTE - SICOOB - Pix", contas), "CONTA CORRENTE")
+        self.assertEqual(parse_conta("Pagamento Guardian Condo Serv De Port. Remota Ltda - Doc.: 5894 - Conta: CONTA CORRENTE - SICOOB - DÉB.TIT.COMPE EFETIVADO", contas), "CONTA CORRENTE")
+        self.assertIsNone(parse_conta("Sem conta na descrição", contas))
 
     def test_get_date_chunks(self):
         start = datetime(2025, 1, 1)
@@ -148,7 +149,7 @@ class TestExtractWinker(unittest.TestCase):
         # Receita consistente
         res = evaluate_entity_consistency(
             'transacao', tipo_flag="R", desc_completa="Taxa Apto - 101 JUN 2026 - Conta: CONTA CORRENTE - SICOOB", desc_f="Taxa Apto - 101 JUN 2026 - Conta: CONTA CORRENTE - SICOOB",
-            anexos_esperados=1, anexos_baixados=1, despesa_anexo_valido=True
+            anexos_esperados=1, anexos_baixados=1, despesa_anexo_valido=True, contas_list=["CONTA CORRENTE"]
         )
         consistente, motivo, apto, comp, fornecedor, conta = res
         self.assertEqual(consistente, 1)
@@ -160,7 +161,7 @@ class TestExtractWinker(unittest.TestCase):
         # Receita inconsistente
         res = evaluate_entity_consistency(
             'transacao', tipo_flag="R", desc_completa="Taxa Avulsa", desc_f="Taxa Avulsa",
-            anexos_esperados=1, anexos_baixados=0, despesa_anexo_valido=True
+            anexos_esperados=1, anexos_baixados=0, despesa_anexo_valido=True, contas_list=["CONTA CORRENTE"]
         )
         consistente, motivo, apto, comp, fornecedor, conta = res
         self.assertEqual(consistente, 0)
@@ -174,7 +175,7 @@ class TestExtractWinker(unittest.TestCase):
         # Despesa consistente
         res = evaluate_entity_consistency(
             'transacao', tipo_flag="D", desc_completa="Pagamento Cemig - Conta Energia - Conta: CONTA CORRENTE - SICOOB", desc_f="Pagamento Cemig - Conta: CONTA CORRENTE - SICOOB",
-            anexos_esperados=1, anexos_baixados=1, despesa_anexo_valido=True
+            anexos_esperados=1, anexos_baixados=1, despesa_anexo_valido=True, contas_list=["CONTA CORRENTE"]
         )
         consistente, motivo, apto, comp, fornecedor, conta = res
         self.assertEqual(consistente, 1)
@@ -185,7 +186,7 @@ class TestExtractWinker(unittest.TestCase):
         # Despesa inconsistente por falta de comprovantes (regra nova), fornecedor ausente e conta ausente
         res = evaluate_entity_consistency(
             'transacao', tipo_flag="D", desc_completa="Copa", desc_f="Copa",
-            anexos_esperados=0, anexos_baixados=0, despesa_anexo_valido=False
+            anexos_esperados=0, anexos_baixados=0, despesa_anexo_valido=False, contas_list=["CONTA CORRENTE"]
         )
         consistente, motivo, apto, comp, fornecedor, conta = res
         self.assertEqual(consistente, 0)

@@ -1,0 +1,136 @@
+<div class="card shadow-sm border rounded-xl w-full relative">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+        <h4 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-0">Cobranças</h4>
+    </div>
+    
+    <p-toast position="bottom-right"></p-toast>
+    <p-confirmDialog [style]="{width: '450px'}"></p-confirmDialog>
+
+    <p-tabs [value]="activeTab" (valueChange)="onTabChange($event)">
+        <p-tablist>
+            <p-tab value="comuns">
+                <div class="flex items-center gap-2">
+                    <i class="pi pi-users"></i>
+                    <span>Comuns</span>
+                </div>
+            </p-tab>
+            <p-tab value="individuais" [disabled]="true">
+                <div class="flex items-center gap-2">
+                    <i class="pi pi-user"></i>
+                    <span>Individuais</span>
+                </div>
+            </p-tab>
+        </p-tablist>
+
+        <p-tabpanels style="padding: 0 !important;" class="!p-0">
+            <p-tabpanel value="comuns">
+                <p-table *ngIf="loading || (taxas && taxas.length > 0)" #dtTaxas [value]="taxas" [paginator]="true" [rows]="10" [loading]="loading" 
+                         [globalFilterFields]="['exibicao', 'vencimento', 'descricao']" 
+                         styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
+                         rowHover="true" selectionMode="single" (onRowSelect)="editTaxa($event.data)">
+                    <ng-template pTemplate="header">
+                        <tr>
+                            <th pSortableColumn="competencia" style="width: 3.5rem"><p-sortIcon field="competencia"></p-sortIcon></th>
+                            <th pSortableColumn="competencia">Período <p-sortIcon field="competencia"></p-sortIcon></th>
+                            <th pSortableColumn="vencimento_sort">Vencimento <p-sortIcon field="vencimento_sort"></p-sortIcon></th>
+                            <th pSortableColumn="descricao">Descrição <p-sortIcon field="descricao"></p-sortIcon></th>
+                            <th pSortableColumn="valor_original">Valor <p-sortIcon field="valor_original"></p-sortIcon></th>
+                            <th pSortableColumn="desconto_vista">Desconto <p-sortIcon field="desconto_vista"></p-sortIcon></th>
+                            <th pSortableColumn="valor_a_vista">À vista <p-sortIcon field="valor_a_vista"></p-sortIcon></th>
+                            <th pSortableColumn="multa_atraso">Multa <p-sortIcon field="multa_atraso"></p-sortIcon></th>
+                            <th pSortableColumn="juros_dia_atraso">Juros Diários <p-sortIcon field="juros_dia_atraso"></p-sortIcon></th>
+                        </tr>
+                    </ng-template>
+                    <ng-template pTemplate="body" let-rowData>
+                        <tr [pSelectableRow]="rowData" class="cursor-pointer">
+                            <td>
+                                <p-avatar [label]="getAvatarLabelMes(rowData.competencia)" shape="circle" size="normal" 
+                                          [style]="{'background-color': getAvatarColor(rowData.competencia), 'color': '#ffffff'}">
+                                </p-avatar>
+                            </td>
+                            <td>{{ rowData.exibicao }}</td>
+                            <td>{{ rowData.vencimento }}</td>
+                            <td>{{ rowData.descricao }}</td>
+                            <td class="text-slate-700 dark:text-slate-300">{{ rowData.valor_original | currency:'BRL':'symbol':'1.2-2' }}</td>
+                            <td>{{ rowData.desconto_vista | currency:'BRL':'symbol':'1.2-2' }}</td>
+                            <td class="font-medium text-slate-700 dark:text-slate-300">{{ rowData.valor_a_vista | currency:'BRL':'symbol':'1.2-2' }}</td>
+                            <td>{{ rowData.multa_atraso | currency:'BRL':'symbol':'1.2-2' }}</td>
+                            <td>{{ rowData.juros_dia_atraso | currency:'BRL':'symbol':'1.2-2' }}</td>
+                        </tr>
+                    </ng-template>
+                </p-table>
+
+                <div *ngIf="!loading && (!taxas || taxas.length === 0)" class="flex flex-col items-center justify-center p-8 text-center bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 my-4 mx-4">
+                    <i class="pi pi-inbox text-6xl text-slate-400 mb-4"></i>
+                    <h5 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Nenhuma taxa cadastrada</h5>
+                    <p class="text-slate-600 dark:text-slate-400">
+                        Nenhuma taxa comum foi encontrada. Utilize o botão inferior direito para adicionar.
+                    </p>
+                </div>
+
+                <!-- Botão flutuante para adicionar nova taxa -->
+                <button pButton pRipple type="button" icon="pi pi-plus" 
+                        class="p-button-rounded p-button-primary shadow-lg !absolute !bottom-4 !right-4 z-50 w-14 h-14"
+                        (click)="addTaxa()"></button>
+            </p-tabpanel>
+        </p-tabpanels>
+    </p-tabs>
+
+    <p-dialog [(visible)]="displayDialog" [header]="dialogTitle" [modal]="true" [style]="{width: '500px'}"
+              [breakpoints]="{'960px': '75vw', '640px': '90vw'}" [closable]="true" [dismissableMask]="true">
+        <ng-template pTemplate="header">
+            <div class="flex items-center gap-2">
+                <span class="font-bold text-lg">{{ dialogTitle }}</span>
+                <p-button *ngIf="isEdit" icon="pi pi-trash" styleClass="p-button-rounded p-button-danger p-button-text ml-4" (click)="deleteTaxa()"></p-button>
+            </div>
+        </ng-template>
+
+        <div class="flex flex-col gap-4 mt-2" *ngIf="currentTaxa">
+            <div class="grid grid-cols-2 gap-4">
+                <div class="flex flex-col gap-2">
+                    <label for="competencia" class="font-semibold text-sm">Competência</label>
+                    <p-datepicker id="competencia" [(ngModel)]="competenciaDate" view="month" dateFormat="mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn" class="w-full"></p-datepicker>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="vencimento" class="font-semibold text-sm">Vencimento</label>
+                    <p-datepicker id="vencimento" [(ngModel)]="vencimentoDate" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn" class="w-full"></p-datepicker>
+                </div>
+            </div>
+            <div class="flex flex-col gap-2">
+                <label for="descricao" class="font-semibold text-sm">Descrição</label>
+                <input pInputText id="descricao" [(ngModel)]="currentTaxa.descricao" class="w-full" />
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="flex flex-col gap-2">
+                    <label for="valor" class="font-semibold text-sm">Valor Total</label>
+                    <p-inputNumber id="valor" [(ngModel)]="currentTaxa.valor_original" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="desconto" class="font-semibold text-sm">Desconto à Vista</label>
+                    <p-inputNumber id="desconto" [(ngModel)]="currentTaxa.desconto_vista" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="multa" class="font-semibold text-sm">Multa por Atraso</label>
+                    <p-inputNumber id="multa" [(ngModel)]="currentTaxa.multa_atraso" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="juros" class="font-semibold text-sm">Juros Diários</label>
+                    <p-inputNumber id="juros" [(ngModel)]="currentTaxa.juros_dia_atraso" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4 mt-4" *ngIf="!isEdit">
+                <div></div>
+                <div class="flex flex-col gap-2">
+                    <label for="mesesRepeticao" class="font-semibold text-sm">Repetir taxa</label>
+                    <p-inputNumber id="mesesRepeticao" [(ngModel)]="mesesRepeticao" [min]="1" [max]="120" [showButtons]="true" suffix=" vez(es)" styleClass="primary-inputnumber-btn" class="w-full"></p-inputNumber>
+                </div>
+            </div>
+            
+            <div class="flex items-center justify-end border-t border-surface-200 dark:border-surface-700 pt-4 mt-2 gap-2">
+                <p-button label="Cancelar" severity="secondary" [text]="true" (onClick)="displayDialog = false"></p-button>
+                <p-button label="Salvar" (onClick)="saveTaxa()"></p-button>
+            </div>
+        </div>
+    </p-dialog>
+</div>
