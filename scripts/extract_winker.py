@@ -1193,6 +1193,18 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                 return
             iframe.wait_for_load_state("domcontentloaded")
             
+            # ---> CAPTURA DO SALDO DECLARADO (Antes de aplicar os filtros por mês)
+            try:
+                saldo_el = iframe.locator("ion-card-content", has_text="Saldo final").locator("p > strong").first
+                saldo_el.wait_for(state="visible", timeout=10000)
+                saldo_text = saldo_el.inner_text().strip()
+                saldo_declarado = parse_currency(saldo_text)
+                
+                # Atualiza o saldo_declarado no banco
+                models.Condominio.update(saldo_declarado=saldo_declarado).where(models.Condominio.id == condo_id_extraido).execute()
+            except Exception as e:
+                logger.error(f"Erro ao capturar saldo declarado: {e}")
+            
             # --- Aba secundária (Prestações de contas) ---
             page_pc.bring_to_front()
             page_pc.goto(balancete_url, wait_until="networkidle")

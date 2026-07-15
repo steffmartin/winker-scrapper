@@ -19,6 +19,7 @@ erDiagram
         TEXT telefone_administradora
         TEXT ultima_atualizacao
         INTEGER prazo_fechamento
+        REAL saldo_declarado
     }
 
     contas {

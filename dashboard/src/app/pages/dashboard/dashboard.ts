@@ -322,6 +322,7 @@ export class Dashboard implements OnInit {
             },
             saldos: {
                 saldo_total: 0,
+                saldo_declarado: 0,
                 contas: [
                     { nome: 'Conta Corrente Padrão', saldo: 0 },
                     { nome: 'Fundo de Reserva', saldo: 0 }

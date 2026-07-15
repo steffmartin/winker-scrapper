@@ -302,8 +302,9 @@ class Api:
             saldo_total = saldo_inicial_total + tr - td
 
             saldos = {
-                "saldo_total": saldo_total,
-                "count_contas": count_contas
+                "saldo_total": round(saldo_total, 2) if saldo_total else 0,
+                "count_contas": count_contas,
+                "saldo_declarado": round(condo.saldo_declarado, 2) if condo.saldo_declarado is not None else None
             }
             
             current_date_str = datetime.now().strftime("%Y-%m")

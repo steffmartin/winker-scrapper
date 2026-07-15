@@ -81,8 +81,18 @@
             <div class="font-bold text-3xl my-2 text-cyan-950 dark:text-cyan-50">
                 {{ kpis.saldos?.saldo_total | currency:'BRL':'symbol':'1.2-2' }}
             </div>
-            <div class="text-base mt-2 text-cyan-900/70 dark:text-cyan-200/70">
-                Total de <span class="font-bold text-cyan-600 dark:text-cyan-300">{{ kpis.saldos?.count_contas || 0 }}</span> contas e reservas
+            <div class="flex justify-between items-center text-base mt-2 text-cyan-900/70 dark:text-cyan-200/70">
+                <div>
+                    Total de <span class="font-bold text-cyan-600 dark:text-cyan-300">{{ kpis.saldos?.count_contas || 0 }}</span> contas e reservas
+                </div>
+                <div *ngIf="kpis.saldos?.saldo_declarado !== undefined && kpis.saldos?.saldo_declarado !== null" class="flex items-center">
+                    <i *ngIf="kpis.saldos?.saldo_total === kpis.saldos?.saldo_declarado"
+                       class="pi pi-check-circle text-cyan-600 dark:text-cyan-400 text-lg cursor-pointer"
+                       pTooltip="O saldo declarado está correto" tooltipPosition="bottom"></i>
+                    <i *ngIf="kpis.saldos?.saldo_total !== kpis.saldos?.saldo_declarado"
+                       class="pi pi-exclamation-circle text-red-500 dark:text-red-400 text-lg cursor-pointer"
+                       [pTooltip]="'O saldo declarado é de ' + (kpis.saldos?.saldo_declarado | currency:'BRL':'symbol':'1.2-2')" tooltipPosition="bottom"></i>
+                </div>
             </div>
         </div>
 
