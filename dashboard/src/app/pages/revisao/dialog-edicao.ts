@@ -9,6 +9,7 @@ import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { ButtonModule } from 'primeng/button';
 import { ChipModule } from 'primeng/chip';
 import { TooltipModule } from 'primeng/tooltip';
+import { SelectModule } from 'primeng/select';
 import { ConfirmationService, MessageService } from 'primeng/api';
 
 @Component({
@@ -27,7 +28,7 @@ import { ConfirmationService, MessageService } from 'primeng/api';
     `],
     imports: [
         CommonModule, ReactiveFormsModule, InputTextModule, InputNumberModule,
-        DatePickerModule, ToggleSwitchModule, ButtonModule, ChipModule, TooltipModule
+        DatePickerModule, ToggleSwitchModule, ButtonModule, ChipModule, TooltipModule, SelectModule
     ],
     templateUrl: './dialog-edicao.html'
 })
@@ -37,6 +38,7 @@ export class DialogEdicaoComponent implements OnInit {
     tipo_tabela: string = '';
     motivos: string[] = [];
     canUpload: boolean = true;
+    contasList: string[] = [];
     
     documentos: any[] = [];
     saving = false;
@@ -58,6 +60,23 @@ export class DialogEdicaoComponent implements OnInit {
             this.motivos = JSON.parse(this.registro.motivo_inconsistencia || '[]');
         } catch(e) {}
         this.buildForm();
+        
+        if (this.tipo_tabela === 'lancamentos') {
+            const pywebview = (window as any).pywebview;
+            if (pywebview && pywebview.api) {
+                pywebview.api.get_condominio_config().then((res: any) => {
+                    if (res.status === 'success' && res.data.contas) {
+                        this.contasList = res.data.contas.map((c: any) => c.conta);
+                        this.cdr.detectChanges();
+                    }
+                });
+            } else {
+                // Mock
+                if (window.location.hostname === 'localhost') {
+                    this.contasList = ['CONTA CORRENTE', 'POUPANÇA', 'FUNDO DE RESERVA'];
+                }
+            }
+        }
     }
 
     buildForm() {

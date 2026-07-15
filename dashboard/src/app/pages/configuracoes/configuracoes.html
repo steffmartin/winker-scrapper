@@ -54,7 +54,11 @@
                             <label for="prazo_fechamento" class="font-medium">Prazo de Fechamento do Mês</label>
                             <p-inputNumber id="prazo_fechamento" formControlName="prazo_fechamento" [min]="0" [showButtons]="true" suffix=" dias" styleClass="primary-inputnumber-btn"></p-inputNumber>
                         </div>
-                        <div class="flex flex-col gap-2 md:col-span-2">
+                        <div class="flex flex-col gap-2" formGroupName="condominio">
+                            <label for="saldo_declarado" class="font-medium">Saldo Declarado</label>
+                            <p-inputNumber id="saldo_declarado" formControlName="saldo_declarado" mode="currency" currency="BRL" locale="pt-BR"></p-inputNumber>
+                        </div>
+                        <div class="flex flex-col gap-2">
                             <label class="font-medium">Saldos iniciais</label>
                             <div formArrayName="contas">
                                 <div class="flex items-center justify-start flex-wrap gap-2 mt-1">

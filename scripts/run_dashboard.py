@@ -154,6 +154,7 @@ class Api:
                 if 'inadimplencia_data_corte' in condo_data: condo.inadimplencia_data_corte = condo_data['inadimplencia_data_corte']
                 if 'inadimplencia_unidades' in condo_data: condo.inadimplencia_unidades = condo_data['inadimplencia_unidades']
                 if 'inadimplencia_valor' in condo_data: condo.inadimplencia_valor = condo_data['inadimplencia_valor']
+                if 'saldo_declarado' in condo_data: condo.saldo_declarado = condo_data['saldo_declarado']
                 
                 condo.ultima_atualizacao = datetime.now().isoformat()
                 

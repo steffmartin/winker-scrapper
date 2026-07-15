@@ -80,7 +80,8 @@ export class ConfiguracoesComponent implements OnInit {
                 prazo_fechamento: [0, Validators.min(0)],
                 inadimplencia_data_corte: [null],
                 inadimplencia_unidades: [0],
-                inadimplencia_valor: [0]
+                inadimplencia_valor: [0],
+                saldo_declarado: [null]
             }),
             membros: this.fb.array([]),
             contas: this.fb.array([])

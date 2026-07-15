@@ -91,16 +91,20 @@ def parse_receita_info(descricao):
             
     return apto, competencia
 
-def parse_conta(descricao):
+def parse_conta(descricao, contas_list=None):
     """
-    Extrai a conta da descrição da transação.
+    Extrai a conta da descrição da transação verificando a lista de contas.
     """
-    if not descricao:
+    if not descricao or not contas_list:
         return None
-    match = re.search(r"(?:Conta|CTA\.\s*PGTO)\s*:\s*([^-\n]+)", descricao, re.IGNORECASE)
-    if match:
-        return match.group(1).strip().upper()
+        
+    desc_upper = descricao.upper()
+    for conta in contas_list:
+        if conta.upper() in desc_upper:
+            return conta
+            
     return None
+
 
 def parse_fornecedor(descricao):
     """
@@ -882,7 +886,8 @@ def evaluate_entity_consistency(entity_type, **kwargs):
             if not (fornecedor and fornecedor.strip()):
                 fields_ok = False
                 
-        conta = parse_conta(desc_completa)
+        contas_list = kwargs.get('contas_list', [])
+        conta = parse_conta(desc_completa, contas_list=contas_list)
         if not (conta and conta.strip()):
             fields_ok = False
             
@@ -936,7 +941,8 @@ def evaluate_entity_consistency(entity_type, **kwargs):
     else:
         raise ValueError(f"Tipo de entidade desconhecido para validação de consistência: {entity_type}")
 
-def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root, condominio_id=None, prestacao_contas_info=None):
+def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root, condominio_id=None, prestacao_contas_info=None, contas_list=None):
+    if contas_list is None: contas_list = []
     db_conn = models.db
     anexos_para_mover = []
     exibicao = f"{nome_mes_abbr}/{ano_item}"
@@ -1024,7 +1030,8 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                             
                             trans_consistente, trans_motivo, apto, comp, fornecedor, conta = evaluate_entity_consistency(
                                 'transacao', tipo_flag=tipo_flag, desc_completa=desc_completa, desc_f=desc_f,
-                                anexos_esperados=anexos_esperados, anexos_baixados=anexos_baixados, despesa_anexo_valido=despesa_anexo_valido
+                                anexos_esperados=anexos_esperados, anexos_baixados=anexos_baixados, despesa_anexo_valido=despesa_anexo_valido,
+                                contas_list=contas_list
                             )
 
                             if not trans_consistente:
@@ -1089,6 +1096,7 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
     auditoria_id = None
     user_data = {}
     condo_id_extraido = None  # Será preenchido após a extração obrigatória do condomínio
+    lista_contas_db = []
     
     def update_current_audit():
         if auditoria_id is not None:
@@ -1175,6 +1183,7 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
 
                 # 4. Atualiza condominio_id na auditoria assim que o id é obtido
                 update_auditoria_condominio_id(auditoria_id, condo_id_extraido)
+                lista_contas_db = [c.conta for c in models.Contas.select().where(models.Contas.condominio_id == condo_id_extraido)]
                 update_current_audit()
             except Exception as ex_condo:
                 logger.error(f"Erro ao extrair/salvar dados de gestão e inadimplência: {ex_condo}")
@@ -1466,7 +1475,7 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                             # 4. Salva no banco de dados e move anexos temporários (incluindo prestação de contas)
                             mes_id, anexos_para_mover = save_extraction_data_to_db(
                                 chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root,
-                                condominio_id=condo_id_extraido, prestacao_contas_info=prestacao_contas_info
+                                condominio_id=condo_id_extraido, prestacao_contas_info=prestacao_contas_info, contas_list=lista_contas_db
                             )
                             if anexos_para_mover:
                                 total_downloads_anexos += len(anexos_para_mover)
