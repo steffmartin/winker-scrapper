@@ -16,6 +16,7 @@ class BaseModel(Model):
 class Condominio(BaseModel):
     id = CharField(primary_key=True)
     nome = CharField(null=True)
+    apartamentos = CharField(null=True)
     inadimplencia_data_corte = CharField(null=True)
     inadimplencia_unidades = IntegerField(null=True)
     inadimplencia_valor = FloatField(null=True)

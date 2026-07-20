@@ -38,9 +38,29 @@
                                             class="text-sm font-medium">
                                     </p-chip>
 
-                                    <p-chip *ngIf="telefones.length === 0" label="Nenhum telefone cadastrado" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
+                                    <p-chip *ngIf="telefones.controls.length === 0" label="Nenhum telefone cadastrado" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
 
                                     <p-button icon="pi pi-plus" [rounded]="true" size="small" pTooltip="Adicionar telefone" tooltipPosition="right" (onClick)="showTelefoneDialog()"></p-button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-2 md:col-span-3">
+                            <label class="font-medium">Apartamentos</label>
+                            <div formArrayName="apartamentos">
+                                <div class="flex items-center justify-start flex-wrap gap-2 mt-1">
+                                    <p-chip *ngFor="let apto of apartamentos.controls; let i = index"
+                                            [label]="apto.value"
+                                            [removable]="true"
+                                            (onRemove)="removeApartamento(i)"
+                                            (click)="editarApartamento(i, $event)"
+                                            [ngClass]="removendoApartamentoIndex === i ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100'"
+                                            styleClass="bg-primary text-primary-contrast cursor-pointer transition-all duration-200"
+                                            class="text-sm font-medium">
+                                    </p-chip>
+
+                                    <p-chip *ngIf="apartamentos.controls.length === 0" label="Nenhum apartamento cadastrado" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
+
+                                    <p-button icon="pi pi-plus" [rounded]="true" size="small" pTooltip="Adicionar apartamento" tooltipPosition="right" (onClick)="showApartamentoDialog()"></p-button>
                                 </div>
                             </div>
                         </div>
@@ -73,7 +93,7 @@
                                             class="text-sm font-medium">
                                     </p-chip>
 
-                                    <p-chip *ngIf="contas.length === 0" label="Nenhum saldo inicial cadastrado" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
+                                    <p-chip *ngIf="contas.controls.length === 0" label="Nenhum saldo inicial cadastrado" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
 
                                     <p-button icon="pi pi-plus" [rounded]="true" size="small" pTooltip="Adicionar saldo" tooltipPosition="right" (onClick)="showContaDialog()"></p-button>
                                 </div>
@@ -124,7 +144,7 @@
                                     class="text-sm font-medium">
                             </p-chip>
 
-                            <p-chip *ngIf="membros.length === 0" label="Nenhum membro de gestão cadastrado" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
+                            <p-chip *ngIf="membros.controls.length === 0" label="Nenhum membro de gestão cadastrado" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
 
                             <p-button icon="pi pi-plus" [rounded]="true" size="small" pTooltip="Adicionar membro" tooltipPosition="right" (onClick)="showDialog()"></p-button>
                         </div>
@@ -179,6 +199,29 @@
                 <div class="flex justify-end gap-2 mt-4">
                     <p-button label="Cancelar" severity="secondary" (onClick)="displayTelefoneDialog = false" [text]="true"></p-button>
                     <p-button [label]="editandoTelefoneIndex !== null ? 'Salvar' : 'Adicionar'" type="submit" [disabled]="novoTelefoneForm.invalid"></p-button>
+                </div>
+            </div>
+        </form>
+    } @placeholder {
+        <div class="h-32 flex items-center justify-center">
+            <span class="text-surface-400 text-sm">Carregando formulário...</span>
+        </div>
+    }
+</p-dialog>
+
+<!-- Modal Adicionar/Editar Apartamento -->
+<p-dialog [header]="editandoApartamentoIndex !== null ? 'Editar Apartamento' : 'Adicionar Apartamento'" [modal]="true" [(visible)]="displayApartamentoDialog" [style]="{ width: '25rem' }">
+    @defer (on idle) {
+        <span class="text-surface-500 dark:text-surface-400 block mb-6 text-sm">Insira o número ou identificação do apartamento.</span>
+        <form [formGroup]="novoApartamentoForm" (ngSubmit)="salvarNovoApartamento()" (keydown.enter)="$event.preventDefault()">
+            <div class="flex flex-col gap-4">
+                <div class="flex flex-col gap-2">
+                    <label for="novo_apartamento" class="font-semibold text-sm">Apartamento</label>
+                    <input pInputText id="novo_apartamento" formControlName="numero" autocomplete="off" class="w-full" placeholder="Ex: 101" maxlength="20" />
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <p-button label="Cancelar" severity="secondary" (onClick)="displayApartamentoDialog = false" [text]="true"></p-button>
+                    <p-button [label]="editandoApartamentoIndex !== null ? 'Salvar' : 'Adicionar'" type="submit" [disabled]="novoApartamentoForm.invalid"></p-button>
                 </div>
             </div>
         </form>

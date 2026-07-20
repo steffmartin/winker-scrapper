@@ -127,6 +127,11 @@ class Api:
                         condo_data['telefone_administradora'] = json.loads(condo_data['telefone_administradora'])
                     except Exception:
                         pass
+                if condo_data.get('apartamentos'):
+                    try:
+                        condo_data['apartamentos'] = json.loads(condo_data['apartamentos'])
+                    except Exception:
+                        pass
                 membros = list(models.MembrosGestao.select().where(models.MembrosGestao.condominio_id == self.condo_id).dicts())
                 contas = list(models.Contas.select().where(models.Contas.condominio_id == self.condo_id).dicts())
                 return {"status": "success", "data": {"condominio": condo_data, "membros": membros, "contas": contas}}
@@ -151,6 +156,7 @@ class Api:
                 if 'nome' in condo_data: condo.nome = condo_data['nome']
                 if 'administradora' in condo_data: condo.administradora = condo_data['administradora']
                 if 'telefone_administradora' in condo_data: condo.telefone_administradora = json.dumps(condo_data['telefone_administradora'])
+                if 'apartamentos' in condo_data: condo.apartamentos = json.dumps(condo_data['apartamentos'])
                 if 'prazo_fechamento' in condo_data: condo.prazo_fechamento = condo_data['prazo_fechamento']
                 if 'inadimplencia_data_corte' in condo_data: condo.inadimplencia_data_corte = condo_data['inadimplencia_data_corte']
                 if 'inadimplencia_unidades' in condo_data: condo.inadimplencia_unidades = condo_data['inadimplencia_unidades']
@@ -713,7 +719,20 @@ class Api:
                     
                 elif tipo_tabela == 'lancamentos':
                     reg = models.Transacoes.get_by_id(registro_id)
-                    if 'apartamento' in payload: reg.apartamento = payload['apartamento']
+                    if 'apartamento' in payload:
+                        novo_apartamento = payload['apartamento']
+                        if novo_apartamento:
+                            mes = reg.subcategoria_id.categoria_id.mes_id
+                            condominio = mes.condominio_id
+                            if condominio.apartamentos:
+                                import json
+                                try:
+                                    aptos_list = json.loads(condominio.apartamentos)
+                                    if novo_apartamento not in aptos_list:
+                                        return {"status": "error", "message": f"Apartamento '{novo_apartamento}' não existe no condomínio."}
+                                except Exception:
+                                    pass
+                        reg.apartamento = novo_apartamento
                     if 'competencia' in payload: reg.competencia = payload['competencia']
                     if 'fornecedor' in payload: reg.fornecedor = payload['fornecedor']
                     if 'conta' in payload: reg.conta = payload['conta']

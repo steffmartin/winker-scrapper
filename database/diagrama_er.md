@@ -12,6 +12,7 @@ erDiagram
     condominio {
         TEXT id PK
         TEXT nome
+        TEXT apartamentos
         TEXT inadimplencia_data_corte
         INTEGER inadimplencia_unidades
         REAL inadimplencia_valor

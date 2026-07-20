@@ -39,6 +39,7 @@ export class DialogEdicaoComponent implements OnInit {
     motivos: string[] = [];
     canUpload: boolean = true;
     contasList: string[] = [];
+    apartamentosList: string[] = [];
     
     documentos: any[] = [];
     saving = false;
@@ -65,8 +66,13 @@ export class DialogEdicaoComponent implements OnInit {
             const pywebview = (window as any).pywebview;
             if (pywebview && pywebview.api) {
                 pywebview.api.get_condominio_config().then((res: any) => {
-                    if (res.status === 'success' && res.data.contas) {
-                        this.contasList = res.data.contas.map((c: any) => c.conta);
+                    if (res.status === 'success') {
+                        if (res.data.contas) {
+                            this.contasList = res.data.contas.map((c: any) => c.conta);
+                        }
+                        if (res.data.condominio && res.data.condominio.apartamentos) {
+                            this.apartamentosList = res.data.condominio.apartamentos;
+                        }
                         this.cdr.detectChanges();
                     }
                 });
@@ -74,6 +80,7 @@ export class DialogEdicaoComponent implements OnInit {
                 // Mock
                 if (window.location.hostname === 'localhost') {
                     this.contasList = ['CONTA CORRENTE', 'POUPANÇA', 'FUNDO DE RESERVA'];
+                    this.apartamentosList = ['201', '202', '301', '302'];
                 }
             }
         }
@@ -174,6 +181,12 @@ export class DialogEdicaoComponent implements OnInit {
 
     salvar() {
         const rawValues = this.form.getRawValue();
+        if (this.tipo_tabela === 'lancamentos' && rawValues.apartamento && this.apartamentosList && this.apartamentosList.length > 0) {
+            if (!this.apartamentosList.includes(rawValues.apartamento)) {
+                this.messageService.add({ severity: 'error', summary: 'Erro de Validação', detail: `O apartamento '${rawValues.apartamento}' não está cadastrado neste condomínio.` });
+                return;
+            }
+        }
         this.doSave(rawValues);
     }
 

@@ -61,6 +61,11 @@ export class ConfiguracoesComponent implements OnInit {
     editandoTelefoneIndex: number | null = null;
     removendoTelefoneIndex: number | null = null;
 
+    displayApartamentoDialog = false;
+    novoApartamentoForm: FormGroup;
+    editandoApartamentoIndex: number | null = null;
+    removendoApartamentoIndex: number | null = null;
+
     displayContaDialog = false;
     novoContaForm: FormGroup;
     editandoContaIndex: number | null = null;
@@ -77,6 +82,7 @@ export class ConfiguracoesComponent implements OnInit {
                 nome: ['', Validators.required],
                 administradora: [''],
                 telefone_administradora: this.fb.array([]),
+                apartamentos: this.fb.array([]),
                 prazo_fechamento: [0, Validators.min(0)],
                 inadimplencia_data_corte: [null],
                 inadimplencia_unidades: [0],
@@ -96,6 +102,10 @@ export class ConfiguracoesComponent implements OnInit {
             numero: ['', Validators.required]
         });
 
+        this.novoApartamentoForm = this.fb.group({
+            numero: ['', Validators.required]
+        });
+
         this.novoContaForm = this.fb.group({
             conta: ['', Validators.required],
             saldo_inicial: [0, Validators.required]
@@ -108,6 +118,10 @@ export class ConfiguracoesComponent implements OnInit {
 
     get telefones() {
         return this.configForm.get('condominio.telefone_administradora') as FormArray;
+    }
+
+    get apartamentos() {
+        return this.configForm.get('condominio.apartamentos') as FormArray;
     }
 
     get contas() {
@@ -164,12 +178,22 @@ export class ConfiguracoesComponent implements OnInit {
                     const telefonesList = condo.telefone_administradora || [];
                     delete condo.telefone_administradora;
 
+                    const apartamentosList = condo.apartamentos || [];
+                    delete condo.apartamentos;
+
                     this.configForm.get('condominio')?.patchValue(condo);
                     
                     this.telefones.clear();
                     if (Array.isArray(telefonesList)) {
                         telefonesList.forEach((t: string) => {
                             this.telefones.push(this.fb.control(t));
+                        });
+                    }
+
+                    this.apartamentos.clear();
+                    if (Array.isArray(apartamentosList)) {
+                        apartamentosList.forEach((a: string) => {
+                            this.apartamentos.push(this.fb.control(a));
                         });
                     }
 
@@ -243,9 +267,11 @@ export class ConfiguracoesComponent implements OnInit {
 
     removeMembro(index: number, event?: Event) {
         if (event) event.stopPropagation();
+        const control = this.membros.at(index);
         this.removendoMembroIndex = index;
         setTimeout(() => {
-            this.membros.removeAt(index);
+            const idx = this.membros.controls.indexOf(control);
+            if (idx !== -1) this.membros.removeAt(idx);
             this.removendoMembroIndex = null;
             this.configForm.markAsDirty();
             this.cdr.detectChanges();
@@ -298,9 +324,11 @@ export class ConfiguracoesComponent implements OnInit {
 
     removeTelefone(index: number, event?: Event) {
         if (event) event.stopPropagation();
+        const control = this.telefones.at(index);
         this.removendoTelefoneIndex = index;
         setTimeout(() => {
-            this.telefones.removeAt(index);
+            const idx = this.telefones.controls.indexOf(control);
+            if (idx !== -1) this.telefones.removeAt(idx);
             this.removendoTelefoneIndex = null;
             this.configForm.markAsDirty();
             this.cdr.detectChanges();
@@ -338,6 +366,49 @@ export class ConfiguracoesComponent implements OnInit {
         return tel;
     }
 
+    showApartamentoDialog() {
+        this.editandoApartamentoIndex = null;
+        this.novoApartamentoForm.reset();
+        this.displayApartamentoDialog = true;
+    }
+
+    editarApartamento(index: number, event?: Event) {
+        if (this.removendoApartamentoIndex === index) return;
+        if (event) event.stopPropagation();
+        this.editandoApartamentoIndex = index;
+        const apto = this.apartamentos.at(index).value || '';
+        this.novoApartamentoForm.patchValue({ numero: apto });
+        this.displayApartamentoDialog = true;
+    }
+
+    salvarNovoApartamento() {
+        if (this.novoApartamentoForm.valid) {
+            let numero = this.novoApartamentoForm.value.numero;
+            if (numero) {
+                if (this.editandoApartamentoIndex !== null) {
+                    this.apartamentos.at(this.editandoApartamentoIndex).setValue(numero);
+                } else {
+                    this.apartamentos.push(this.fb.control(numero));
+                }
+                this.configForm.markAsDirty();
+            }
+            this.displayApartamentoDialog = false;
+        }
+    }
+
+    removeApartamento(index: number, event?: Event) {
+        if (event) event.stopPropagation();
+        const control = this.apartamentos.at(index);
+        this.removendoApartamentoIndex = index;
+        setTimeout(() => {
+            const idx = this.apartamentos.controls.indexOf(control);
+            if (idx !== -1) this.apartamentos.removeAt(idx);
+            this.removendoApartamentoIndex = null;
+            this.configForm.markAsDirty();
+            this.cdr.detectChanges();
+        }, 200);
+    }
+
     showContaDialog() {
         this.editandoContaIndex = null;
         this.novoContaForm.reset({ saldo_inicial: 0 });
@@ -370,9 +441,11 @@ export class ConfiguracoesComponent implements OnInit {
 
     removeConta(index: number, event?: Event) {
         if (event) event.stopPropagation();
+        const control = this.contas.at(index);
         this.removendoContaIndex = index;
         setTimeout(() => {
-            this.contas.removeAt(index);
+            const idx = this.contas.controls.indexOf(control);
+            if (idx !== -1) this.contas.removeAt(idx);
             this.removendoContaIndex = null;
             this.configForm.markAsDirty();
             this.cdr.detectChanges();
