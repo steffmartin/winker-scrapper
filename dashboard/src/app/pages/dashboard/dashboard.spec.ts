@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Dashboard } from './dashboard';
 import { CommonModule } from '@angular/common';
+import { ActivatedRoute } from '@angular/router';
 
 describe('Dashboard', () => {
     let component: Dashboard;
@@ -8,7 +9,15 @@ describe('Dashboard', () => {
 
     beforeEach(async () => {
         await TestBed.configureTestingModule({
-            imports: [Dashboard, CommonModule]
+            imports: [Dashboard, CommonModule],
+            providers: [
+                {
+                    provide: ActivatedRoute,
+                    useValue: {
+                        snapshot: { paramMap: { get: () => null } }
+                    }
+                }
+            ]
         }).compileComponents();
 
         fixture = TestBed.createComponent(Dashboard);
@@ -35,7 +44,7 @@ describe('Dashboard', () => {
         (window as any).pywebview = { 
             api: {
                 get_dashboard_kpis: () => Promise.resolve({ status: 'success', data: {} }),
-                get_transacoes: () => Promise.resolve({ status: 'success', data: [] })
+                get_transacoes: () => Promise.resolve({ status: 'success', data: { tree: [] } })
             } 
         };
         
