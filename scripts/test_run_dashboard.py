@@ -38,6 +38,12 @@ class TestRunDashboard(unittest.TestCase):
         self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 'Despesas', '2023-01-10', 'Transação Teste', 100, '101', '2023-01', 'Fornecedor A', 1, 0, 'Erro Transação', 0)")
         self.cursor.execute("INSERT INTO anexos (id, transacao_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Anexo', 0)")
         self.cursor.execute("INSERT INTO prestacoes_contas (id, mes_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Prestação', 0)")
+        
+        self.cursor.execute("INSERT INTO taxas_ordinarias (condominio_id, competencia, exibicao, vencimento, descricao, valor_original, desconto_vista, multa_atraso, juros_dia_atraso) VALUES (?, '2023-01', 'JAN/2023', '15/01/2023', 'Taxa Condomínio', 300.0, 10.0, 6.0, 0.5)", (self.condo_id,))
+        self.cursor.execute("UPDATE condominio SET apartamentos = '[\"101\", \"102\"]' WHERE id = ?", (self.condo_id,))
+        # Adicionar uma transação que abate a taxa (receita para apto 102) - pago com desconto
+        self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia, revisado_usuario) VALUES (2, 1, 'R', '14/01/2023', 'Pagamento', 290.0, '102', '2023-01', 'Morador', 0, 1, NULL, 1)")
+        
         self.conn.commit()
         
         # Avoid file check failing by patching os.path.exists during init
@@ -120,10 +126,28 @@ class TestRunDashboard(unittest.TestCase):
         self.assertEqual(sub_node["data"]["tipo_node"], "subcategoria")
         self.assertEqual(sub_node["data"]["descricao"], "Sub 1")
         
-        trans_node = sub_node["children"][0]
-        self.assertEqual(trans_node["data"]["tipo_node"], "transacao")
-        self.assertEqual(trans_node["data"]["descricao"], "Transação Teste")
-        self.assertEqual(trans_node["data"]["valor"], 100)
+        trans_nodes = sub_node["children"]
+        trans_teste = next((n for n in trans_nodes if n["data"]["descricao"] == "Transação Teste"), None)
+        self.assertIsNotNone(trans_teste)
+        self.assertEqual(trans_teste["data"]["tipo_node"], "transacao")
+        self.assertEqual(trans_teste["data"]["valor"], 100)
 
+    def test_get_inadimplencia(self):
+        result = self.api.get_inadimplencia(data_corte="2023-01-20")
+        self.assertEqual(result["status"], "success", result.get("message"))
+        data = result["data"]
+        
+        # Apto 101 não pagou, deve estar na inadimplencia
+        # Apto 102 pagou a taxa, não deve aparecer (ou ter a taxa na lista)
+        # 102 is omitted because it has no unpaid fees
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["unidade"], "101")
+        
+        taxas = data[0]["taxas"]
+        self.assertEqual(len(taxas), 1)
+        self.assertEqual(taxas[0]["valor"], 300.0)
+        self.assertEqual(taxas[0]["dias_vencidos"], 5) # (20 - 15) = 5
+        self.assertEqual(taxas[0]["juros_total"], 2.5) # 5 * 0.5
+        
 if __name__ == '__main__':
     unittest.main()

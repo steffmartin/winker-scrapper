@@ -1,0 +1,104 @@
+<div class="card shadow-sm border rounded-xl w-full relative">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+        <h4 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-0">Inadimplência</h4>
+        
+        <div class="flex items-center gap-2">
+            <span class="font-medium text-slate-700 dark:text-slate-300">Data de corte</span>
+            <p-datepicker #dp [(ngModel)]="dataCorte" dateFormat="dd/mm/yy" [showIcon]="true" 
+                          (onSelect)="onDataCorteChange()"
+                          (onClear)="onDataCorteChange()"
+                          [readonlyInput]="true"
+                          [maxDate]="hoje"
+                          [showButtonBar]="true"
+                          styleClass="primary-datepicker-btn w-[350px]"
+                          inputStyleClass="w-full">
+                <ng-template #buttonbar>
+                    <div class="flex gap-2 w-full justify-end px-2 pb-2">
+                        <p-button size="small" icon="pi pi-times" severity="danger" variant="text" (click)="setDiaAtual(dp, $event)" pTooltip="Hoje" tooltipPosition="bottom"/>
+                    </div>
+                </ng-template>
+            </p-datepicker>
+        </div>
+    </div>
+    
+    <p-toast position="bottom-right"></p-toast>
+
+    <div *ngIf="loading" class="mt-4">
+        <p-skeleton width="100%" height="40px" class="mb-2"></p-skeleton>
+        <p-skeleton width="100%" height="150px"></p-skeleton>
+    </div>
+
+    <div *ngIf="!loading && (!inadimplencias || inadimplencias.length === 0)" class="flex flex-col items-center justify-center p-8 text-center bg-surface-50 dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 my-4">
+        <i class="pi pi-check-circle text-6xl text-green-500 mb-4"></i>
+        <h5 class="text-xl font-bold text-surface-800 dark:text-surface-100 mb-2">Sem Inadimplência</h5>
+        <p class="text-surface-600 dark:text-surface-400">
+            Nenhuma taxa vencida e não paga foi encontrada para a data selecionada.
+        </p>
+    </div>
+
+    <p-tabs *ngIf="!loading && inadimplencias && inadimplencias.length > 0" [value]="activeTab">
+        <p-tablist>
+            <p-tab *ngFor="let unidade of inadimplencias" [value]="unidade.unidade">
+                <div class="flex items-center gap-2">
+                    <span class="font-bold">{{ unidade.unidade }}</span>
+                    <p-badge [value]="unidade.taxas.length.toString()" severity="danger"></p-badge>
+                </div>
+            </p-tab>
+        </p-tablist>
+
+        <p-tabpanels style="padding: 0 !important;" class="!p-0">
+            <p-tabpanel *ngFor="let unidade of inadimplencias" [value]="unidade.unidade">
+                
+                <p-table [value]="unidade.taxas" 
+                         [globalFilterFields]="['exibicao', 'vencimento', 'descricao']" 
+                         styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
+                         rowHover="true">
+                    
+                    <ng-template pTemplate="header">
+                        <tr>
+                            <th style="width: 3.5rem" pSortableColumn="competencia"><p-sortIcon field="competencia"></p-sortIcon></th>
+                            <th pSortableColumn="competencia">Competência <p-sortIcon field="competencia"></p-sortIcon></th>
+                            <th pSortableColumn="descricao">Descrição <p-sortIcon field="descricao"></p-sortIcon></th>
+                            <th pSortableColumn="vencimento_sort">Vencimento <p-sortIcon field="vencimento_sort"></p-sortIcon></th>
+                            <th pSortableColumn="dias_vencidos">Dias de atraso <p-sortIcon field="dias_vencidos"></p-sortIcon></th>
+                            <th pSortableColumn="valor">Valor Original <p-sortIcon field="valor"></p-sortIcon></th>
+                            <th pSortableColumn="multa">Multa <p-sortIcon field="multa"></p-sortIcon></th>
+                            <th pSortableColumn="juros_total">Juros <p-sortIcon field="juros_total"></p-sortIcon></th>
+                            <th pSortableColumn="total">Total <p-sortIcon field="total"></p-sortIcon></th>
+                        </tr>
+                    </ng-template>
+                    
+                    <ng-template pTemplate="body" let-rowData>
+                        <tr>
+                            <td>
+                                <p-avatar [label]="getAvatarLabelMes(rowData.competencia)" shape="circle" size="normal" 
+                                          [style]="{'background-color': getAvatarColor(rowData.competencia), 'color': '#ffffff'}">
+                                </p-avatar>
+                            </td>
+                            <td>{{ rowData.exibicao }}</td>
+                            <td>{{ rowData.descricao }}</td>
+                            <td>{{ rowData.vencimento }}</td>
+                            <td>{{ rowData.dias_vencidos }}</td>
+                            <td class="text-slate-700 dark:text-slate-300">{{ rowData.valor | currency:'BRL':'symbol':'1.2-2' }}</td>
+                            <td class="text-slate-700 dark:text-slate-300">{{ rowData.multa | currency:'BRL':'symbol':'1.2-2' }}</td>
+                            <td class="text-surface-700 dark:text-surface-300">{{ rowData.juros_total | currency:'BRL':'symbol':'1.2-2' }}</td>
+                            <td class="font-bold text-surface-800 dark:text-surface-100">{{ rowData.total | currency:'BRL':'symbol':'1.2-2' }}</td>
+                        </tr>
+                    </ng-template>
+                    
+                    <ng-template pTemplate="footer">
+                        <tr>
+                            <td colspan="5" class="text-right font-bold">Total:</td>
+                            <td class="font-bold">{{ somarColuna(unidade, 'valor') | currency:'BRL':'symbol':'1.2-2' }}</td>
+                            <td class="font-bold">{{ somarColuna(unidade, 'multa') | currency:'BRL':'symbol':'1.2-2' }}</td>
+                            <td class="font-bold">{{ somarColuna(unidade, 'juros_total') | currency:'BRL':'symbol':'1.2-2' }}</td>
+                            <td class="font-bold text-red-600 dark:text-red-400">{{ somarColuna(unidade, 'total') | currency:'BRL':'symbol':'1.2-2' }}</td>
+                        </tr>
+                    </ng-template>
+                    
+                </p-table>
+                
+            </p-tabpanel>
+        </p-tabpanels>
+    </p-tabs>
+</div>

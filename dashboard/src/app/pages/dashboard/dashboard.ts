@@ -1,5 +1,6 @@
 import { Component, OnInit, ChangeDetectorRef, LOCALE_ID, inject, ViewChild } from '@angular/core';
 import { CommonModule, CurrencyPipe, DatePipe, registerLocaleData } from '@angular/common';
+import { RouterModule } from '@angular/router';
 import { SkeletonModule } from 'primeng/skeleton';
 import { ChipModule } from 'primeng/chip';
 import { TreeTableModule } from 'primeng/treetable';
@@ -28,6 +29,7 @@ import { LayoutService } from '@/app/layout/service/layout.service';
     selector: 'app-dashboard',
     standalone: true,
     imports: [
+        RouterModule,
         CommonModule,
         CurrencyPipe,
         SkeletonModule,

@@ -802,6 +802,160 @@ class Api:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    def get_inadimplencia(self, data_corte=None):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+            
+        try:
+            # Se data de corte não for informada, utiliza a data do sistema
+            hoje_dt = datetime.now()
+            if data_corte:
+                corte_dt = datetime.strptime(data_corte, "%Y-%m-%d")
+            else:
+                corte_dt = hoje_dt
+                data_corte = hoje_dt.strftime("%Y-%m-%d")
+                
+            hoje_str = hoje_dt.strftime("%Y-%m-%d")
+            
+            condo = models.Condominio.get_or_none(models.Condominio.id == self.condo_id)
+            if not condo:
+                return {"status": "error", "message": "Condomínio não encontrado."}
+                
+            apartamentos = []
+            if condo.apartamentos:
+                apartamentos = json.loads(condo.apartamentos)
+                
+            taxas = list(models.TaxasOrdinarias.select().where(
+                (models.TaxasOrdinarias.condominio_id == self.condo_id)
+            ).dicts())
+            
+            # Pre-filter taxas by date in Python to avoid SQLite string format issues
+            # vencimento is stored as DD/MM/YYYY
+            taxas_filtradas = []
+            for t in taxas:
+                try:
+                    v_dt = datetime.strptime(t['vencimento'], "%d/%m/%Y")
+                    # Se vencimento for menor que a data_corte (já venceu naquela data)
+                    if v_dt < corte_dt:
+                        t['_venc_dt'] = v_dt
+                        taxas_filtradas.append(t)
+                except Exception:
+                    pass
+            
+            # Buscar transações de recebimento (tipo 'R') do condomínio
+            todas_transacoes = list(models.Transacoes.select(
+                models.Transacoes.apartamento,
+                models.Transacoes.competencia,
+                models.Transacoes.valor,
+                models.Transacoes.data
+            ).join(models.Subcategorias).join(models.Categorias).join(models.Meses).where(
+                (models.Meses.condominio_id == self.condo_id) &
+                (models.Transacoes.tipo == 'R') &
+                (models.Transacoes.apartamento.is_null(False)) &
+                (models.Transacoes.competencia.is_null(False))
+            ).dicts())
+            
+            # Filtrar transações por data_corte no Python, já que SQLite não suporta string compare para DD/MM/YYYY
+            transacoes = []
+            for t in todas_transacoes:
+                try:
+                    t_data = datetime.strptime(t['data'], "%d/%m/%Y").date()
+                except Exception:
+                    try:
+                        t_data = datetime.strptime(t['data'], "%Y-%m-%d").date()
+                    except Exception:
+                        continue
+                
+                if t_data <= corte_dt.date():
+                    transacoes.append(t)
+            
+            resultado = []
+            
+            for apto in apartamentos:
+                taxas_apto = [t for t in taxas_filtradas] # Taxas aplicam-se a todos
+                
+                # Agrupar transações do apartamento por competência para evitar iteração linear excessiva
+                transacoes_apto_map = {}
+                for t in transacoes:
+                    if t['apartamento'] == apto:
+                        comp = t['competencia']
+                        if comp not in transacoes_apto_map:
+                            transacoes_apto_map[comp] = []
+                        transacoes_apto_map[comp].append(t)
+                
+                taxas_nao_pagas = []
+                for taxa in taxas_apto:
+                    pagamento_encontrado = False
+                    comp_taxa = taxa['competencia']
+                    
+                    if comp_taxa in transacoes_apto_map:
+                        transacoes_comp = transacoes_apto_map[comp_taxa]
+                        # Encontrar se houve pagamento exato correspondente considerando desconto_vista
+                        for idx, transacao in enumerate(transacoes_comp):
+                            try:
+                                t_data = datetime.strptime(transacao['data'], "%d/%m/%Y").date()
+                            except Exception:
+                                # Fallback em caso de formato inesperado
+                                try:
+                                    t_data = datetime.strptime(transacao['data'], "%Y-%m-%d").date()
+                                except Exception:
+                                    continue
+                            
+                            v_date = taxa['_venc_dt'].date()
+                            if t_data <= v_date:
+                                valor_esperado = taxa['valor_original'] - (taxa['desconto_vista'] or 0)
+                            else:
+                                valor_esperado = taxa['valor_original']
+                                
+                            if abs(transacao['valor'] - valor_esperado) < 0.01:
+                                pagamento_encontrado = True
+                                # Remover a transação para não dar match duplo
+                                transacoes_comp.pop(idx)
+                                break
+                            
+                    if not pagamento_encontrado:
+                        taxa_venc_dt = taxa['_venc_dt']
+                        dias_atraso = (corte_dt.date() - taxa_venc_dt.date()).days
+                        if dias_atraso < 0:
+                            dias_atraso = 0
+                            
+                        juros_total = dias_atraso * (taxa['juros_dia_atraso'] or 0)
+                        
+                        taxas_nao_pagas.append({
+                            "competencia": taxa['competencia'],
+                            "exibicao": taxa['exibicao'],
+                            "valor": taxa['valor_original'],
+                            "vencimento": taxa['vencimento'],
+                            "descricao": taxa['descricao'],
+                            "multa": taxa['multa_atraso'],
+                            "juros_total": juros_total,
+                            "dias_vencidos": dias_atraso,
+                            "_venc_dt": taxa_venc_dt
+                        })
+                
+                if taxas_nao_pagas:
+                    # Ordenar taxas_nao_pagas por ordem crescente (do mais antigo para o mais recente)
+                    taxas_nao_pagas.sort(key=lambda x: x['_venc_dt'])
+                    # Remover campo auxiliar antes de devolver ao front
+                    for t in taxas_nao_pagas:
+                        t.pop('_venc_dt', None)
+                        
+                    resultado.append({
+                        "unidade": apto,
+                        "taxas": taxas_nao_pagas
+                    })
+                    
+            # Ordenar os apartamentos alfabeticamente
+            resultado.sort(key=lambda x: str(x['unidade']))
+            
+                    
+            return {"status": "success", "data": resultado}
+            
+        except Exception as e:
+            logger.error(f"Erro em get_inadimplencia: {e}")
+            return {"status": "error", "message": str(e)}
+
+
     def get_taxas_ordinarias(self):
         if self.init_error:
             return {"status": "error", "message": self.init_error}

@@ -18,6 +18,11 @@ export const appRoutes: Routes = [
                 loadComponent: () => import('./app/pages/cobrancas/cobrancas').then(m => m.CobrancasComponent)
             },
             { 
+                path: 'inadimplencia', 
+                loadComponent: () => import('./app/pages/inadimplencia/inadimplencia').then(m => m.InadimplenciaComponent)
+            },
+
+            { 
                 path: 'configuracoes', 
                 loadComponent: () => import('./app/pages/configuracoes/configuracoes').then(m => m.ConfiguracoesComponent),
                 // Previne que o usuário saia da página de configurações se houver edições não salvas no formulário
