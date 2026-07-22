@@ -12,8 +12,10 @@ import { DialogModule } from 'primeng/dialog';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ToastModule } from 'primeng/toast';
 import { AvatarModule } from 'primeng/avatar';
+import { SpeedDialModule } from 'primeng/speeddial';
+import { TooltipModule } from 'primeng/tooltip';
 import { FormsModule } from '@angular/forms';
-import { MessageService, ConfirmationService } from 'primeng/api';
+import { MessageService, ConfirmationService, MenuItem } from 'primeng/api';
 
 @Component({
     selector: 'app-cobrancas',
@@ -21,7 +23,7 @@ import { MessageService, ConfirmationService } from 'primeng/api';
     imports: [
         CommonModule, CardModule, TabsModule, TableModule, ButtonModule,
         InputTextModule, InputNumberModule, DatePickerModule, InputMaskModule,
-        DialogModule, ConfirmDialogModule, ToastModule, AvatarModule, FormsModule
+        DialogModule, ConfirmDialogModule, ToastModule, AvatarModule, SpeedDialModule, TooltipModule, FormsModule
     ],
     providers: [MessageService, ConfirmationService],
     templateUrl: './cobrancas.html',
@@ -53,12 +55,24 @@ import { MessageService, ConfirmationService } from 'primeng/api';
         :host ::ng-deep .p-tabpanels {
             padding: 0 !important;
         }
+        :host ::ng-deep .p-speeddial-action {
+            background-color: var(--p-primary-color) !important;
+            color: var(--p-primary-contrast-color) !important;
+        }
+        :host ::ng-deep .p-speeddial-action:hover {
+            background-color: var(--p-primary-600) !important;
+        }
     `]
 })
 export class CobrancasComponent implements OnInit {
     activeTab: string = 'comuns';
-    taxas: any[] = [];
-    loading: boolean = false;
+    taxasComuns: any[] = [];
+    taxasIndividuais: any[] = [];
+    loadingComuns: boolean = false;
+    loadingIndividuais: boolean = false;
+    taxasIndividuaisLoaded: boolean = false;
+    apartamentos: string[] = [];
+    speedDialItems: MenuItem[] = [];
     
     displayDialog: boolean = false;
     isEdit: boolean = false;
@@ -76,52 +90,114 @@ export class CobrancasComponent implements OnInit {
     ) {}
 
     ngOnInit() {
-        this.loadTaxas();
+        this.speedDialItems = [
+            {
+                icon: 'pi pi-user',
+                label: 'Nova Taxa Individual',
+                tooltipOptions: { tooltipLabel: 'Nova Taxa Individual', tooltipPosition: 'left' },
+                command: () => {
+                    this.addTaxa('I');
+                }
+            },
+            {
+                icon: 'pi pi-refresh',
+                label: 'Nova Renegociação',
+                tooltipOptions: { tooltipLabel: 'Nova Renegociação', tooltipPosition: 'left' },
+                disabled: true,
+                command: () => {}
+            }
+        ];
+        
+        const pywebview = (window as any).pywebview;
+        if (pywebview && pywebview.api) {
+            pywebview.api.get_condominio_config().then((res: any) => {
+                if (res.status === 'success' && res.data && res.data.condominio && res.data.condominio.apartamentos) {
+                    this.apartamentos = res.data.condominio.apartamentos;
+                }
+                this.loadTaxasComuns();
+            });
+        } else {
+            this.apartamentos = ['101', '102', '103'];
+            this.loadTaxasComuns();
+        }
     }
 
     onTabChange(event: any) {
         this.activeTab = event;
+        if (event === 'individuais' && !this.taxasIndividuaisLoaded) {
+            this.loadTaxasIndividuais();
+        }
     }
 
-    loadTaxas() {
-        this.loading = true;
+    processTaxas(res: any) {
+        if (res.status === 'success') {
+            return res.data.map((t: any) => {
+                if (t.vencimento) {
+                    const parts = t.vencimento.split('/');
+                    if (parts.length === 3) {
+                        t.vencimento_sort = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                    }
+                }
+                t.valor_a_vista = (t.valor_original || 0) - (t.desconto_vista || 0);
+                return t;
+            });
+        } else {
+            this.messageService.add({ severity: 'error', summary: 'Erro', detail: res.message });
+            return [];
+        }
+    }
+
+    loadTaxasComuns() {
+        this.loadingComuns = true;
         const pywebview = (window as any).pywebview;
         if (pywebview && pywebview.api) {
-            pywebview.api.get_taxas_ordinarias().then((res: any) => {
-                this.loading = false;
-                if (res.status === 'success') {
-                    this.taxas = res.data.map((t: any) => {
-                        if (t.vencimento) {
-                            const parts = t.vencimento.split('/');
-                            if (parts.length === 3) {
-                                t.vencimento_sort = `${parts[2]}-${parts[1]}-${parts[0]}`;
-                            }
-                        }
-                        t.valor_a_vista = (t.valor_original || 0) - (t.desconto_vista || 0);
-                        return t;
-                    });
-                } else {
-                    this.messageService.add({ severity: 'error', summary: 'Erro', detail: res.message });
-                }
+            pywebview.api.get_taxas_ordinarias(['C']).then((res: any) => {
+                this.loadingComuns = false;
+                this.taxasComuns = this.processTaxas(res);
                 this.cdr.detectChanges();
             }).catch(() => {
-                this.loading = false;
+                this.loadingComuns = false;
                 this.cdr.detectChanges();
             });
         } else {
-            this.loading = false;
+            this.loadingComuns = false;
             if (window.location.hostname === 'localhost') {
-                this.taxas = [
-                    { id: 1, competencia: '2026-07', exibicao: 'JUL/2026', vencimento: '14/07/2026', descricao: 'Taxa Ordinária', valor_original: 1500, desconto_vista: 0, multa_atraso: 0, juros_dia_atraso: 0 }
+                this.taxasComuns = [
+                    { id: 1, tipo: 'C', apartamento: null, competencia: '2026-07', exibicao: 'JUL/2026', vencimento: '14/07/2026', descricao: 'Taxa Ordinária', valor_original: 1500, desconto_vista: 0, multa_atraso: 0, juros_dia_atraso: 0 }
                 ];
             }
         }
     }
 
-    addTaxa() {
+    loadTaxasIndividuais() {
+        this.loadingIndividuais = true;
+        const pywebview = (window as any).pywebview;
+        if (pywebview && pywebview.api) {
+            pywebview.api.get_taxas_ordinarias(['I']).then((res: any) => {
+                this.loadingIndividuais = false;
+                this.taxasIndividuaisLoaded = true;
+                this.taxasIndividuais = this.processTaxas(res);
+                this.cdr.detectChanges();
+            }).catch(() => {
+                this.loadingIndividuais = false;
+                this.taxasIndividuaisLoaded = true;
+                this.cdr.detectChanges();
+            });
+        } else {
+            this.loadingIndividuais = false;
+            this.taxasIndividuaisLoaded = true;
+            if (window.location.hostname === 'localhost') {
+                this.taxasIndividuais = [];
+            }
+        }
+    }
+
+    addTaxa(tipo: string = 'C') {
         this.isEdit = false;
-        this.dialogTitle = 'Nova Taxa Comum';
+        this.dialogTitle = tipo === 'C' ? 'Nova Taxa Comum' : 'Nova Taxa Individual';
         this.currentTaxa = {
+            tipo: tipo,
+            apartamento: null,
             descricao: '',
             valor_original: 0,
             desconto_vista: 0,
@@ -136,7 +212,7 @@ export class CobrancasComponent implements OnInit {
 
     editTaxa(taxa: any) {
         this.isEdit = true;
-        this.dialogTitle = 'Editar Taxa Comum';
+        this.dialogTitle = taxa.tipo === 'C' ? 'Editar Taxa Comum' : 'Editar Taxa Individual';
         this.currentTaxa = { ...taxa };
         
         // Converter competencia de YYYY-MM para Date
@@ -178,6 +254,17 @@ export class CobrancasComponent implements OnInit {
             this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: 'Preencha o valor total.' });
             return;
         }
+
+        if (this.currentTaxa.tipo === 'I') {
+            if (!this.currentTaxa.apartamento || this.currentTaxa.apartamento.trim() === '') {
+                this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: 'Preencha o apartamento.' });
+                return;
+            }
+            if (!this.apartamentos.includes(this.currentTaxa.apartamento.trim())) {
+                this.messageService.add({ severity: 'error', summary: 'Atenção', detail: `O apartamento ${this.currentTaxa.apartamento} não existe no condomínio.` });
+                return;
+            }
+        }
         
         this.currentTaxa.desconto_vista = this.currentTaxa.desconto_vista ?? 0;
         this.currentTaxa.multa_atraso = this.currentTaxa.multa_atraso ?? 0;
@@ -206,7 +293,8 @@ export class CobrancasComponent implements OnInit {
                 if (res.status === 'success') {
                     this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Registro salvo com sucesso.' });
                     this.displayDialog = false;
-                    this.loadTaxas();
+                    if (this.currentTaxa.tipo === 'I') this.loadTaxasIndividuais();
+                    else this.loadTaxasComuns();
                 } else {
                     this.messageService.add({ severity: 'error', summary: 'Erro', detail: res.message });
                 }
@@ -214,7 +302,8 @@ export class CobrancasComponent implements OnInit {
         } else {
             // Mock
             this.displayDialog = false;
-            this.loadTaxas();
+            if (this.currentTaxa.tipo === 'I') this.loadTaxasIndividuais();
+            else this.loadTaxasComuns();
         }
     }
 
@@ -234,7 +323,8 @@ export class CobrancasComponent implements OnInit {
                         if (res.status === 'success') {
                             this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: 'Registro excluído com sucesso.' });
                             this.displayDialog = false;
-                            this.loadTaxas();
+                            if (this.currentTaxa.tipo === 'I') this.loadTaxasIndividuais();
+                            else this.loadTaxasComuns();
                         } else {
                             this.messageService.add({ severity: 'error', summary: 'Erro', detail: res.message });
                         }

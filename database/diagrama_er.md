@@ -41,6 +41,8 @@ erDiagram
         REAL desconto_vista
         REAL multa_atraso
         REAL juros_dia_atraso
+        TEXT apartamento
+        TEXT tipo
     }
 
     meses {

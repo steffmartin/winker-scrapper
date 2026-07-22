@@ -64,7 +64,7 @@
             <!-- Lançamentos -->
             <p-tabpanel value="0">
                 @defer (when pendenciasCounts.lancamentos > 0) {
-                    <p-table #dtLancamentos [value]="lancamentos" [paginator]="true" [rows]="10" [loading]="loadingLancamentos" 
+                    <p-table #dtLancamentos [value]="lancamentos" [paginator]="true" [rows]="10" [loading]="loadingLancamentos" sortMode="multiple" 
                              [globalFilterFields]="['mes_exibicao', 'data', 'descricao', 'valor', 'motivo_inconsistencia']" 
                              styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
                              stateStorage="session" stateKey="winker-revisao-lancamentos"
@@ -111,7 +111,7 @@
             <!-- Subcategorias -->
             <p-tabpanel value="1">
                 @defer (when pendenciasCounts.subcategorias > 0) {
-                    <p-table #dtSubcategorias [value]="subcategorias" [paginator]="true" [rows]="10" [loading]="loadingSubcategorias"
+                    <p-table #dtSubcategorias [value]="subcategorias" [paginator]="true" [rows]="10" [loading]="loadingSubcategorias" sortMode="multiple"
                              [globalFilterFields]="['mes_exibicao', 'nome', 'valor', 'motivo_inconsistencia']"
                              styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
                              stateStorage="session" stateKey="winker-revisao-subcategorias"
@@ -156,7 +156,7 @@
             <!-- Categorias -->
             <p-tabpanel value="2">
                 @defer (when pendenciasCounts.categorias > 0) {
-                    <p-table #dtCategorias [value]="categorias" [paginator]="true" [rows]="10" [loading]="loadingCategorias"
+                    <p-table #dtCategorias [value]="categorias" [paginator]="true" [rows]="10" [loading]="loadingCategorias" sortMode="multiple"
                              [globalFilterFields]="['mes_exibicao', 'nome', 'valor', 'motivo_inconsistencia']"
                              styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
                              stateStorage="session" stateKey="winker-revisao-categorias"
@@ -201,7 +201,7 @@
             <!-- Meses -->
             <p-tabpanel value="3">
                 @defer (when pendenciasCounts.meses > 0) {
-                    <p-table #dtMeses [value]="meses" [paginator]="true" [rows]="10" [loading]="loadingMeses"
+                    <p-table #dtMeses [value]="meses" [paginator]="true" [rows]="10" [loading]="loadingMeses" sortMode="multiple"
                              [globalFilterFields]="['exibicao', 'receita_total', 'despesa_total', 'motivo_inconsistencia']"
                              styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
                              stateStorage="session" stateKey="winker-revisao-meses"
@@ -244,7 +244,7 @@
             <!-- Documentos -->
             <p-tabpanel value="4">
                 @defer (when pendenciasCounts.documentos > 0) {
-                    <p-table #dtDocumentos [value]="documentos" [paginator]="true" [rows]="10" [loading]="loadingDocumentos"
+                    <p-table #dtDocumentos [value]="documentos" [paginator]="true" [rows]="10" [loading]="loadingDocumentos" sortMode="multiple"
                              [globalFilterFields]="['mes_exibicao', 'nome_original', 'motivo_inconsistencia']"
                              styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
                              stateStorage="session" stateKey="winker-revisao-documentos"

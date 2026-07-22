@@ -49,7 +49,7 @@
         <p-tabpanels style="padding: 0 !important;" class="!p-0">
             <p-tabpanel *ngFor="let unidade of inadimplencias" [value]="unidade.unidade">
                 
-                <p-table [value]="unidade.taxas" 
+                <p-table [value]="unidade.taxas" sortMode="multiple" 
                          [globalFilterFields]="['exibicao', 'vencimento', 'descricao']" 
                          styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
                          rowHover="true">

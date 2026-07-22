@@ -826,19 +826,29 @@ class Api:
                 apartamentos = json.loads(condo.apartamentos)
                 
             taxas = list(models.TaxasOrdinarias.select().where(
-                (models.TaxasOrdinarias.condominio_id == self.condo_id)
+                (models.TaxasOrdinarias.condominio_id == self.condo_id) &
+                (models.TaxasOrdinarias.tipo.in_(['C', 'I']))
             ).dicts())
             
             # Pre-filter taxas by date in Python to avoid SQLite string format issues
             # vencimento is stored as DD/MM/YYYY
-            taxas_filtradas = []
+            taxas_comuns_filtradas = []
+            taxas_individuais_map = {}
+            
             for t in taxas:
                 try:
                     v_dt = datetime.strptime(t['vencimento'], "%d/%m/%Y")
                     # Se vencimento for menor que a data_corte (já venceu naquela data)
                     if v_dt < corte_dt:
                         t['_venc_dt'] = v_dt
-                        taxas_filtradas.append(t)
+                        if t['tipo'] == 'C':
+                            taxas_comuns_filtradas.append(t)
+                        elif t['tipo'] == 'I':
+                            apto_taxa = t.get('apartamento')
+                            if apto_taxa:
+                                if apto_taxa not in taxas_individuais_map:
+                                    taxas_individuais_map[apto_taxa] = []
+                                taxas_individuais_map[apto_taxa].append(t)
                 except Exception:
                     pass
             
@@ -872,7 +882,9 @@ class Api:
             resultado = []
             
             for apto in apartamentos:
-                taxas_apto = [t for t in taxas_filtradas] # Taxas aplicam-se a todos
+                taxas_apto = [t for t in taxas_comuns_filtradas] # Taxas aplicam-se a todos
+                if apto in taxas_individuais_map:
+                    taxas_apto.extend(taxas_individuais_map[apto])
                 
                 # Agrupar transações do apartamento por competência para evitar iteração linear excessiva
                 transacoes_apto_map = {}
@@ -956,11 +968,16 @@ class Api:
             return {"status": "error", "message": str(e)}
 
 
-    def get_taxas_ordinarias(self):
+    def get_taxas_ordinarias(self, tipos=None):
+        if tipos is None:
+            tipos = ['C']
         if self.init_error:
             return {"status": "error", "message": self.init_error}
         try:
-            taxas = list(models.TaxasOrdinarias.select().where(models.TaxasOrdinarias.condominio_id == self.condo_id).order_by(models.TaxasOrdinarias.competencia.desc()).dicts())
+            taxas = list(models.TaxasOrdinarias.select().where(
+                (models.TaxasOrdinarias.condominio_id == self.condo_id) &
+                (models.TaxasOrdinarias.tipo.in_(tipos))
+            ).order_by(models.TaxasOrdinarias.competencia.desc()).dicts())
             return {"status": "success", "data": taxas}
         except Exception as e:
             return {"status": "error", "message": str(e)}
@@ -987,6 +1004,8 @@ class Api:
             if 'desconto_vista' in payload: taxa.desconto_vista = payload['desconto_vista']
             if 'multa_atraso' in payload: taxa.multa_atraso = payload['multa_atraso']
             if 'juros_dia_atraso' in payload: taxa.juros_dia_atraso = payload['juros_dia_atraso']
+            if 'tipo' in payload: taxa.tipo = payload['tipo']
+            if 'apartamento' in payload: taxa.apartamento = payload['apartamento']
             taxa.save()
             return {"status": "success"}
         except Exception as e:
@@ -1004,6 +1023,8 @@ class Api:
             desconto_vista = payload.get('desconto_vista', 0.0)
             multa_atraso = payload.get('multa_atraso', 0.0)
             juros_dia_atraso = payload.get('juros_dia_atraso', 0.0)
+            tipo = payload.get('tipo', 'C')
+            apartamento = payload.get('apartamento')
             
             def add_months(d, months):
                 month = d.month - 1 + months
@@ -1035,7 +1056,9 @@ class Api:
                         valor_original=valor_original,
                         desconto_vista=desconto_vista,
                         multa_atraso=multa_atraso,
-                        juros_dia_atraso=juros_dia_atraso
+                        juros_dia_atraso=juros_dia_atraso,
+                        tipo=tipo,
+                        apartamento=apartamento
                     )
             return {"status": "success"}
         except Exception as e:

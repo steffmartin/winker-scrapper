@@ -170,6 +170,8 @@ class TaxasOrdinarias(BaseModel):
     desconto_vista = FloatField(default=0.0)
     multa_atraso = FloatField(default=0.0)
     juros_dia_atraso = FloatField(default=0.0)
+    apartamento = CharField(null=True)
+    tipo = CharField(null=True)
 
     class Meta:
         table_name = 'taxas_ordinarias'
