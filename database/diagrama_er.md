@@ -30,9 +30,10 @@ erDiagram
         REAL saldo_inicial
     }
 
-    taxas_ordinarias {
+    taxas {
         INTEGER id PK
         TEXT condominio_id FK
+        INTEGER taxa_id FK
         TEXT competencia
         TEXT exibicao
         TEXT descricao
@@ -162,7 +163,8 @@ erDiagram
     condominio ||--o{ meses: "condominio_id"
     condominio ||--o{ membros_gestao: "condominio_id"
     condominio ||--o{ contas: "condominio_id"
-    condominio ||--o{ taxas_ordinarias: "condominio_id"
+    condominio ||--o{ taxas: "condominio_id"
+    taxas ||--o{ taxas: "taxa_id"
     meses ||--o{ categorias: "mes_id"
     meses ||--o{ prestacoes_contas: "mes_id"
     categorias ||--o{ subcategorias: "categoria_id"
@@ -184,7 +186,7 @@ condominio  ← tabela raiz
  │    └── prestacoes_contas
  ├── membros_gestao
  ├── contas
- └── taxas_ordinarias
+ └── taxas
 ```
 
 ## Resumo das Tabelas
@@ -195,7 +197,7 @@ condominio  ← tabela raiz
 | `preferencias_usuario` | `id` (INTEGER) | —                  | **Global** | Configurações visuais do dashboard           |
 | `condominio`           | `id` (TEXT)    | —                  | **Raiz**   | Dados cadastrais do condomínio               |
 | `contas`               | `id` (INTEGER) | `condominio.id`    | Dependente | Saldos iniciais por conta                    |
-| `taxas_ordinarias`     | `id` (INTEGER) | `condominio.id`    | Dependente | Configuração manual de taxas comuns regulares|
+| `taxas`                | `id` (INTEGER) | `condominio.id`    | Dependente | Configuração manual de taxas comuns, individuais e descontos|
 | `meses`                | `id` (INTEGER) | `condominio.id`    | Dependente | Período mensal com totais de receita/despesa |
 | `categorias`           | `id` (INTEGER) | `meses.id`         | Dependente | Categorias financeiras por mês               |
 | `subcategorias`        | `id` (INTEGER) | `categorias.id`    | Dependente | Subcategorias dentro de uma categoria        |

@@ -160,8 +160,9 @@ class PreferenciasUsuario(BaseModel):
     class Meta:
         table_name = 'preferencias_usuario'
 
-class TaxasOrdinarias(BaseModel):
-    condominio_id = ForeignKeyField(Condominio, backref='taxas_ordinarias', on_delete='CASCADE', db_column='condominio_id')
+class Taxas(BaseModel):
+    condominio_id = ForeignKeyField(Condominio, backref='taxas', on_delete='CASCADE', db_column='condominio_id')
+    taxa_id = ForeignKeyField('self', backref='taxas_vinculadas', on_delete='CASCADE', db_column='taxa_id', null=True)
     competencia = CharField(null=True)
     exibicao = CharField(null=True)
     vencimento = CharField(null=True)
@@ -174,12 +175,12 @@ class TaxasOrdinarias(BaseModel):
     tipo = CharField(null=True)
 
     class Meta:
-        table_name = 'taxas_ordinarias'
+        table_name = 'taxas'
 
 def init_models(db_path):
     db.init(db_path, pragmas={'foreign_keys': 1})
     db.connect(reuse_if_open=True)
     db.create_tables([
         Condominio, MembrosGestao, Contas, Meses, Categorias, Subcategorias, 
-        Transacoes, Anexos, PrestacoesContas, Auditoria, PreferenciasUsuario, TaxasOrdinarias
+        Transacoes, Anexos, PrestacoesContas, Auditoria, PreferenciasUsuario, Taxas
     ], safe=True)

@@ -825,9 +825,9 @@ class Api:
             if condo.apartamentos:
                 apartamentos = json.loads(condo.apartamentos)
                 
-            taxas = list(models.TaxasOrdinarias.select().where(
-                (models.TaxasOrdinarias.condominio_id == self.condo_id) &
-                (models.TaxasOrdinarias.tipo.in_(['C', 'I']))
+            taxas = list(models.Taxas.select().where(
+                (models.Taxas.condominio_id == self.condo_id) &
+                (models.Taxas.tipo.in_(['C', 'I', 'D', 'E']))
             ).dicts())
             
             # Pre-filter taxas by date in Python to avoid SQLite string format issues
@@ -835,13 +835,27 @@ class Api:
             taxas_comuns_filtradas = []
             taxas_individuais_map = {}
             
+            descontos_agregados = {}
+            
             for t in taxas:
+                if t['tipo'] == 'D':
+                    key = (t.get('apartamento'), t.get('taxa_id'))
+                    if key not in descontos_agregados:
+                        descontos_agregados[key] = {
+                            'valor_original': 0, 'desconto_vista': 0, 
+                            'multa_atraso': 0, 'juros_dia_atraso': 0
+                        }
+                    d_agg = descontos_agregados[key]
+                    d_agg['valor_original'] += (t.get('valor_original') or 0)
+                    d_agg['desconto_vista'] += (t.get('desconto_vista') or 0)
+                    d_agg['multa_atraso'] += (t.get('multa_atraso') or 0)
+                    d_agg['juros_dia_atraso'] += (t.get('juros_dia_atraso') or 0)
+                    continue
                 try:
                     v_dt = datetime.strptime(t['vencimento'], "%d/%m/%Y")
-                    # Se vencimento for menor que a data_corte (já venceu naquela data)
                     if v_dt < corte_dt:
                         t['_venc_dt'] = v_dt
-                        if t['tipo'] == 'C':
+                        if t['tipo'] in ['C', 'E']:
                             taxas_comuns_filtradas.append(t)
                         elif t['tipo'] == 'I':
                             apto_taxa = t.get('apartamento')
@@ -882,9 +896,19 @@ class Api:
             resultado = []
             
             for apto in apartamentos:
-                taxas_apto = [t for t in taxas_comuns_filtradas] # Taxas aplicam-se a todos
+                taxas_apto = [dict(t) for t in taxas_comuns_filtradas] # Cópia independente
                 if apto in taxas_individuais_map:
-                    taxas_apto.extend(taxas_individuais_map[apto])
+                    taxas_apto.extend([dict(t) for t in taxas_individuais_map[apto]])
+                    
+                # Aplicar descontos na memória
+                for t_apto in taxas_apto:
+                    key = (apto, t_apto['id'])
+                    if key in descontos_agregados:
+                        d_agg = descontos_agregados[key]
+                        t_apto['valor_original'] = max(0, t_apto['valor_original'] - d_agg['valor_original'])
+                        t_apto['desconto_vista'] = max(0, (t_apto['desconto_vista'] or 0) - d_agg['desconto_vista'])
+                        t_apto['multa_atraso'] = max(0, (t_apto['multa_atraso'] or 0) - d_agg['multa_atraso'])
+                        t_apto['juros_dia_atraso'] = max(0, (t_apto['juros_dia_atraso'] or 0) - d_agg['juros_dia_atraso'])
                 
                 # Agrupar transações do apartamento por competência para evitar iteração linear excessiva
                 transacoes_apto_map = {}
@@ -897,6 +921,8 @@ class Api:
                 
                 taxas_nao_pagas = []
                 for taxa in taxas_apto:
+                    if taxa['valor_original'] == 0:
+                        continue # Deduzido a zero, considerada paga
                     pagamento_encontrado = False
                     comp_taxa = taxa['competencia']
                     
@@ -968,37 +994,78 @@ class Api:
             return {"status": "error", "message": str(e)}
 
 
-    def get_taxas_ordinarias(self, tipos=None):
+
+    def get_taxas_por_apartamento(self, apartamento, competencia, tipos=None):
+        if tipos is None:
+            tipos = ['C','E','I']
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            query = models.Taxas.select().where(
+                (models.Taxas.condominio_id == self.condo_id) &
+                (models.Taxas.competencia == competencia) &
+                (models.Taxas.tipo.in_(tipos))
+            )
+            # Only common ('C','E') or specific to the apartment
+            query = query.where(
+                (models.Taxas.tipo.in_(['C', 'E'])) |
+                (models.Taxas.apartamento == apartamento)
+            )
+            taxas = list(query.order_by(models.Taxas.competencia.desc()).dicts())
+            return {"status": "success", "data": taxas}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def get_taxas(self, tipos=None):
         if tipos is None:
             tipos = ['C']
         if self.init_error:
             return {"status": "error", "message": self.init_error}
         try:
-            taxas = list(models.TaxasOrdinarias.select().where(
-                (models.TaxasOrdinarias.condominio_id == self.condo_id) &
-                (models.TaxasOrdinarias.tipo.in_(tipos))
-            ).order_by(models.TaxasOrdinarias.competencia.desc()).dicts())
+            taxas = list(models.Taxas.select().where(
+                (models.Taxas.condominio_id == self.condo_id) &
+                (models.Taxas.tipo.in_(tipos))
+            ).order_by(models.Taxas.competencia.desc()).dicts())
             return {"status": "success", "data": taxas}
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    def delete_taxa_ordinaria(self, taxa_id):
+    def delete_taxa(self, taxa_id):
         if self.init_error:
             return {"status": "error", "message": self.init_error}
         try:
-            models.TaxasOrdinarias.delete().where(models.TaxasOrdinarias.id == taxa_id).execute()
+            models.Taxas.delete().where(models.Taxas.id == taxa_id).execute()
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    def update_taxa_ordinaria(self, taxa_id, payload):
+    def update_taxa(self, taxa_id, payload):
         if self.init_error:
             return {"status": "error", "message": self.init_error}
         try:
-            taxa = models.TaxasOrdinarias.get_by_id(taxa_id)
-            if 'competencia' in payload: taxa.competencia = payload['competencia']
-            if 'exibicao' in payload: taxa.exibicao = payload['exibicao']
-            if 'vencimento' in payload: taxa.vencimento = payload['vencimento']
+            taxa = models.Taxas.get_by_id(taxa_id)
+            if 'competencia' in payload: 
+                taxa.competencia = payload['competencia']
+                try:
+                    comp_dt = datetime.strptime(taxa.competencia, '%Y-%m')
+                    meses_map_inv = {1: 'JAN', 2: 'FEV', 3: 'MAR', 4: 'ABR', 5: 'MAI', 6: 'JUN', 7: 'JUL', 8: 'AGO', 9: 'SET', 10: 'OUT', 11: 'NOV', 12: 'DEZ'}
+                    taxa.exibicao = f"{meses_map_inv[comp_dt.month]}/{comp_dt.year}"
+                except:
+                    if 'exibicao' in payload: taxa.exibicao = payload['exibicao']
+            elif 'exibicao' in payload: 
+                taxa.exibicao = payload['exibicao']
+            
+            tipo = payload.get('tipo', taxa.tipo)
+            taxa_vinculada_id = payload.get('taxa_id', taxa.taxa_id)
+            
+            if tipo == 'D' and taxa_vinculada_id:
+                taxa_pai = models.Taxas.get_by_id(taxa_vinculada_id)
+                taxa.vencimento = taxa_pai.vencimento
+                taxa.taxa_id = taxa_vinculada_id
+            else:
+                if 'vencimento' in payload: taxa.vencimento = payload['vencimento']
+                taxa.taxa_id = None
+                
             if 'descricao' in payload: taxa.descricao = payload['descricao']
             if 'valor_original' in payload: taxa.valor_original = payload['valor_original']
             if 'desconto_vista' in payload: taxa.desconto_vista = payload['desconto_vista']
@@ -1011,19 +1078,25 @@ class Api:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    def insert_taxa_ordinaria(self, payload):
+    def insert_taxa(self, payload):
         if self.init_error:
             return {"status": "error", "message": self.init_error}
         try:
             meses_repeticao = payload.get('meses_repeticao', 1)
             base_competencia = payload.get('competencia')
+            tipo = payload.get('tipo', 'C')
+            taxa_id_ref = payload.get('taxa_id')
+            
             base_vencimento = payload.get('vencimento')
+            if tipo == 'D' and taxa_id_ref:
+                taxa_pai = models.Taxas.get_by_id(taxa_id_ref)
+                base_vencimento = taxa_pai.vencimento
+                
             descricao = payload.get('descricao')
             valor_original = payload.get('valor_original', 0.0)
             desconto_vista = payload.get('desconto_vista', 0.0)
             multa_atraso = payload.get('multa_atraso', 0.0)
             juros_dia_atraso = payload.get('juros_dia_atraso', 0.0)
-            tipo = payload.get('tipo', 'C')
             apartamento = payload.get('apartamento')
             
             def add_months(d, months):
@@ -1047,7 +1120,7 @@ class Api:
                     venc_str = curr_venc.strftime('%d/%m/%Y')
                     exib_str = f"{meses_map_inv[curr_comp.month]}/{curr_comp.year}"
                     
-                    models.TaxasOrdinarias.create(
+                    models.Taxas.create(
                         condominio_id=self.condo_id,
                         competencia=comp_str,
                         exibicao=exib_str,
@@ -1058,7 +1131,8 @@ class Api:
                         multa_atraso=multa_atraso,
                         juros_dia_atraso=juros_dia_atraso,
                         tipo=tipo,
-                        apartamento=apartamento
+                        apartamento=apartamento,
+                        taxa_id=taxa_id_ref if tipo == 'D' else None
                     )
             return {"status": "success"}
         except Exception as e:
