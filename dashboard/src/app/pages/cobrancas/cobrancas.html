@@ -45,7 +45,7 @@
                         <tr [pSelectableRow]="rowData" class="cursor-pointer">
                             <td>
                                 <p-avatar [label]="rowData.tipo" shape="circle" size="normal" 
-                                          [style]="{'background-color': rowData.tipo === 'D' ? '#ef4444' : (rowData.tipo === 'E' ? '#8b5cf6' : '#3b82f6'), 'color': '#ffffff'}">
+                                          [style]="{'background-color': getTipoAvatarColor(rowData.tipo), 'color': '#ffffff'}">
                                 </p-avatar>
                             </td>
                             <td>{{ rowData.exibicao }}</td>
@@ -94,7 +94,7 @@
                         <tr [pSelectableRow]="rowData" class="cursor-pointer">
                             <td>
                                 <p-avatar [label]="rowData.tipo" shape="circle" size="normal" 
-                                          [style]="{'background-color': rowData.tipo === 'D' ? '#ef4444' : '#3b82f6', 'color': '#ffffff'}">
+                                          [style]="{'background-color': getTipoAvatarColor(rowData.tipo), 'color': '#ffffff'}">
                                 </p-avatar>
                             </td>
                             <td>{{ rowData.exibicao }}</td>
@@ -179,7 +179,7 @@
                                 Total: {{taxa.valor_original|currency:'BRL'}} | 
                                 Desc: {{taxa.desconto_vista|currency:'BRL'}} | 
                                 Multa: {{taxa.multa_atraso|currency:'BRL'}} | 
-                                Juros: {{taxa.juros_dia_atraso|currency:'BRL'}}
+                                Juros/dia: {{taxa.juros_dia_atraso|currency:'BRL'}}
                             </small>
                         </div>
                     </ng-template>
@@ -239,4 +239,199 @@
             </div>
         </div>
     </p-dialog>
+
+    @defer (when displayDialogRenegociacao) {
+    <p-dialog [(visible)]="displayDialogRenegociacao" [modal]="true" [style]="{width: '65vw'}" [draggable]="false" [resizable]="false" [dismissableMask]="true" [closable]="true">
+        <ng-template pTemplate="header">
+            <div class="flex items-center gap-2">
+                <span class="font-bold text-lg">{{ isEdit ? 'Editar Renegociação' : 'Nova Renegociação' }}</span>
+                <p-button *ngIf="isEdit" icon="pi pi-trash" styleClass="p-button-rounded p-button-danger p-button-text ml-4" (click)="deleteRenegociacao()"></p-button>
+            </div>
+        </ng-template>
+        <div class="flex flex-col gap-6 pt-2">
+            
+            <div class="grid grid-cols-4 gap-4">
+                <div class="flex flex-col gap-2">
+                    <label for="ren-data" class="font-semibold text-sm">Data da Renegociação</label>
+                    <p-datepicker id="ren-data" [(ngModel)]="dataRenegociacaoDate" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn" class="w-full" [maxDate]="todayDate" (ngModelChange)="onRenegociacaoFormChange()"></p-datepicker>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="ren-numero" class="font-semibold text-sm">Número da Renegociação</label>
+                    <input pInputText id="ren-numero" [(ngModel)]="currentRenegociacao.numero" class="w-full" />
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="ren-apartamento" class="font-semibold text-sm">Apartamento</label>
+                    <input pInputText id="ren-apartamento" [(ngModel)]="currentRenegociacao.apartamento" class="w-full" placeholder="Ex: 101" (ngModelChange)="onRenegociacaoFormChange()" />
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="ren-competencia" class="font-semibold text-sm">Competência</label>
+                    <p-datepicker id="ren-competencia" [(ngModel)]="competenciaRenegociacaoRange" selectionMode="range" view="month" dateFormat="mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn" class="w-full" [maxDate]="dataRenegociacaoDate" (ngModelChange)="onRenegociacaoFormChange()"></p-datepicker>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-2">
+                <label for="ren-taxas" class="font-semibold text-sm">Taxas a Renegociar</label>
+                <p-multiSelect id="ren-taxas" [options]="taxasOriginaisParaRenegociacao" [(ngModel)]="taxasOriginaisSelecionadas" placeholder="Selecione as taxas" styleClass="w-full" [showClear]="true" [filter]="true" filterBy="descricao,numero,vencimento" emptyMessage="Nenhuma taxa encontrada" emptyFilterMessage="Nenhuma taxa encontrada" (ngModelChange)="onTaxasOriginaisChange()">
+                    <ng-template let-value pTemplate="selectedItems">
+                        <div *ngIf="value && value.length > 0">
+                            {{ value[0].descricao }} <span *ngIf="value.length > 1">(+ {{value.length - 1}} taxas)</span>
+                        </div>
+                    </ng-template>
+                    <ng-template let-taxa pTemplate="item">
+                        <div class="flex flex-col">
+                            <span>{{ taxa.vencimento }} - {{ taxa.descricao }}</span>
+                            <small class="text-slate-500 dark:text-slate-400">
+                                Total: {{taxa.valor_original|currency:'BRL'}} | 
+                                Multa: {{taxa.multa_atraso|currency:'BRL'}} | 
+                                Juros/dia: {{taxa.juros_dia_atraso|currency:'BRL'}}
+                            </small>
+                        </div>
+                    </ng-template>
+                </p-multiSelect>
+                <small class="text-slate-500 dark:text-slate-400 mt-1 block">
+                    <span *ngIf="taxasOriginaisSelecionadas && taxasOriginaisSelecionadas.length > 0; else noTaxasLabel">
+                        <i class="pi pi-info-circle text-xs mr-1"></i> Total: {{selectedTaxasDetalhesSum.valor|currency:'BRL'}} | 
+                        Multa: {{selectedTaxasDetalhesSum.multa|currency:'BRL'}} | 
+                        Juros: {{selectedTaxasDetalhesSum.juros|currency:'BRL'}}
+                    </span>
+                    <ng-template #noTaxasLabel>
+                        <span><i class="pi pi-info-circle text-xs mr-1"></i> Selecione uma ou mais taxas</span>
+                    </ng-template>
+                </small>
+            </div>
+
+            <div class="grid grid-cols-4 gap-4">
+                <div class="flex flex-col gap-2">
+                    <label for="ren-despesas" class="font-semibold text-sm">Despesas da Renegociação</label>
+                    <p-inputNumber id="ren-despesas" [(ngModel)]="despesasAdicionais" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="ren-descadicional" class="font-semibold text-sm">Descontos da Renegociação</label>
+                    <p-inputNumber id="ren-descadicional" [(ngModel)]="descontosAdicionais" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="ren-vencprimeira" class="font-semibold text-sm">Vencimento da 1ª Parcela</label>
+                    <p-datepicker id="ren-vencprimeira" [(ngModel)]="vencimentoPrimeiraParcelaDate" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn" class="w-full" [minDate]="dataRenegociacaoDate"></p-datepicker>
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="ren-qtd" class="font-semibold text-sm">Quantidade de Parcelas</label>
+                    <p-inputgroup>
+                        <p-inputNumber id="ren-qtd" [(ngModel)]="quantidadeParcelas" [min]="1" class="w-full"></p-inputNumber>
+                        <button pButton label="Criar" icon="pi pi-cog" (click)="gerarParcelasRenegociacao()" [disabled]="!taxasOriginaisSelecionadas || taxasOriginaisSelecionadas.length === 0 || !vencimentoPrimeiraParcelaDate || quantidadeParcelas < 1"></button>
+                    </p-inputgroup>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-2">
+                <label class="font-semibold text-sm">Parcelas</label>
+                <p-table [value]="parcelasGeradas" [scrollable]="true" scrollHeight="300px" [tableStyle]="{ 'min-width': '60rem' }" sortMode="multiple">
+                    <ng-template pTemplate="header">
+                        <tr>
+                            <th pSortableColumn="competencia" style="width: 10%">Período <p-sortIcon field="competencia"></p-sortIcon></th>
+                            <th pSortableColumn="vencimento" style="width: 12%">Vencimento <p-sortIcon field="vencimento"></p-sortIcon></th>
+                            <th pSortableColumn="descricao" style="width: 22%">Descrição <p-sortIcon field="descricao"></p-sortIcon></th>
+                            <th pSortableColumn="valor_original" style="width: 12%">Valor <p-sortIcon field="valor_original"></p-sortIcon></th>
+                            <th pSortableColumn="desconto_vista" style="width: 11%">Desconto <p-sortIcon field="desconto_vista"></p-sortIcon></th>
+                            <th pSortableColumn="valor_a_vista" style="width: 11%">À vista <p-sortIcon field="valor_a_vista"></p-sortIcon></th>
+                            <th pSortableColumn="multa_atraso" style="width: 11%">Multa <p-sortIcon field="multa_atraso"></p-sortIcon></th>
+                            <th pSortableColumn="juros_dia_atraso" style="width: 11%">Juros Diários <p-sortIcon field="juros_dia_atraso"></p-sortIcon></th>
+                        </tr>
+                    </ng-template>
+                    <ng-template pTemplate="body" let-p let-editing="editing" let-ri="rowIndex">
+                        <tr>
+                            <td pEditableColumn>
+                                <p-cellEditor>
+                                    <ng-template pTemplate="input">
+                                        <p-datepicker [(ngModel)]="p.competencia" view="month" dateFormat="mm/yy" appendTo="body" styleClass="w-full" inputStyleClass="w-full" [minDate]="dataRenegociacaoDate"></p-datepicker>
+                                    </ng-template>
+                                    <ng-template pTemplate="output">
+                                        {{p.competencia | date:'MM/yyyy'}}
+                                    </ng-template>
+                                </p-cellEditor>
+                            </td>
+                            <td pEditableColumn>
+                                <p-cellEditor>
+                                    <ng-template pTemplate="input">
+                                        <p-datepicker [(ngModel)]="p.vencimento" dateFormat="dd/mm/yy" appendTo="body" styleClass="w-full" inputStyleClass="w-full" [minDate]="dataRenegociacaoDate"></p-datepicker>
+                                    </ng-template>
+                                    <ng-template pTemplate="output">
+                                        {{p.vencimento | date:'dd/MM/yyyy'}}
+                                    </ng-template>
+                                </p-cellEditor>
+                            </td>
+                            <td pEditableColumn>
+                                <p-cellEditor>
+                                    <ng-template pTemplate="input">
+                                        <input pInputText type="text" [(ngModel)]="p.descricao" class="w-full" />
+                                    </ng-template>
+                                    <ng-template pTemplate="output">
+                                        {{p.descricao}}
+                                    </ng-template>
+                                </p-cellEditor>
+                            </td>
+                            <td pEditableColumn>
+                                <p-cellEditor>
+                                    <ng-template pTemplate="input">
+                                        <p-inputNumber [(ngModel)]="p.valor_original" (ngModelChange)="updateValorAVista(p)" mode="currency" currency="BRL" locale="pt-BR" class="w-full" styleClass="w-full" inputStyleClass="w-full"></p-inputNumber>
+                                    </ng-template>
+                                    <ng-template pTemplate="output">
+                                        {{p.valor_original|currency:'BRL'}}
+                                    </ng-template>
+                                </p-cellEditor>
+                            </td>
+                            <td pEditableColumn>
+                                <p-cellEditor>
+                                    <ng-template pTemplate="input">
+                                        <p-inputNumber [(ngModel)]="p.desconto_vista" (ngModelChange)="updateValorAVista(p)" mode="currency" currency="BRL" locale="pt-BR" class="w-full" styleClass="w-full" inputStyleClass="w-full"></p-inputNumber>
+                                    </ng-template>
+                                    <ng-template pTemplate="output">
+                                        {{p.desconto_vista|currency:'BRL'}}
+                                    </ng-template>
+                                </p-cellEditor>
+                            </td>
+                            <td>{{ p.valor_a_vista | currency:'BRL' }}</td>
+                            <td pEditableColumn>
+                                <p-cellEditor>
+                                    <ng-template pTemplate="input">
+                                        <p-inputNumber [(ngModel)]="p.multa_atraso" mode="currency" currency="BRL" locale="pt-BR" class="w-full" styleClass="w-full" inputStyleClass="w-full"></p-inputNumber>
+                                    </ng-template>
+                                    <ng-template pTemplate="output">
+                                        {{p.multa_atraso|currency:'BRL'}}
+                                    </ng-template>
+                                </p-cellEditor>
+                            </td>
+                            <td pEditableColumn>
+                                <p-cellEditor>
+                                    <ng-template pTemplate="input">
+                                        <p-inputNumber [(ngModel)]="p.juros_dia_atraso" mode="currency" currency="BRL" locale="pt-BR" class="w-full" styleClass="w-full" inputStyleClass="w-full"></p-inputNumber>
+                                    </ng-template>
+                                    <ng-template pTemplate="output">
+                                        {{p.juros_dia_atraso|currency:'BRL'}}
+                                    </ng-template>
+                                </p-cellEditor>
+                            </td>
+
+                        </tr>
+                    </ng-template>
+                    <ng-template pTemplate="footer">
+                        <tr>
+                            <td colspan="3" class="text-right">Total das Parcelas</td>
+                            <td>{{parcelasSum|currency:'BRL'}}</td>
+                            <td>{{parcelasDescontoSum|currency:'BRL'}}</td>
+                            <td>{{ (parcelasSum - parcelasDescontoSum) | currency:'BRL' }}</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </ng-template>
+                </p-table>
+            </div>
+            
+            <div class="flex items-center justify-end border-t border-surface-200 dark:border-surface-700 pt-4 mt-2 gap-2">
+                <p-button label="Cancelar" severity="secondary" [text]="true" (onClick)="displayDialogRenegociacao = false"></p-button>
+                <div [pTooltip]="(!isRenegociacaoValid && parcelasGeradas.length > 0) ? 'A soma das parcelas deve ser igual ao total a parcelar.' : ''" tooltipPosition="bottom">
+                    <p-button label="Salvar" (onClick)="saveRenegociacao()" [disabled]="!isRenegociacaoValid"></p-button>
+                </div>
+            </div>
+        </div>
+    </p-dialog>
+    }
 </div>

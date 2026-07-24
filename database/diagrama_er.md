@@ -9,6 +9,20 @@
 
 ```mermaid
 erDiagram
+    renegociacao {
+        INTEGER id PK
+        TEXT condominio_id FK
+        TEXT apartamento
+        TEXT competencia_inicial
+        TEXT competencia_final
+        TEXT numero
+        TEXT data_renegociacao
+        TEXT vencimento_primeira_parcela
+        INTEGER quantidade_parcelas
+        REAL despesas_adicionais
+        REAL descontos_adicionais
+    }
+
     condominio {
         TEXT id PK
         TEXT nome
@@ -164,6 +178,8 @@ erDiagram
     condominio ||--o{ membros_gestao: "condominio_id"
     condominio ||--o{ contas: "condominio_id"
     condominio ||--o{ taxas: "condominio_id"
+    condominio ||--o{ renegociacao: "condominio_id"
+    renegociacao ||--o{ taxas: "renegociacao_id"
     taxas ||--o{ taxas: "taxa_id"
     meses ||--o{ categorias: "mes_id"
     meses ||--o{ prestacoes_contas: "mes_id"

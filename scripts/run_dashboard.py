@@ -17,7 +17,7 @@ install_dependencies()
 import webview
 
 import models
-
+from peewee import JOIN
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 
@@ -825,10 +825,15 @@ class Api:
             if condo.apartamentos:
                 apartamentos = json.loads(condo.apartamentos)
                 
-            taxas = list(models.Taxas.select().where(
+            taxas_query = models.Taxas.select(
+                models.Taxas, models.Renegociacao.data_renegociacao
+            ).join(
+                models.Renegociacao, JOIN.LEFT_OUTER, on=(models.Taxas.renegociacao_id == models.Renegociacao.id)
+            ).where(
                 (models.Taxas.condominio_id == self.condo_id) &
-                (models.Taxas.tipo.in_(['C', 'I', 'D', 'E']))
-            ).dicts())
+                (models.Taxas.tipo.in_(['C', 'I', 'D', 'E', 'P', 'R']))
+            )
+            taxas = list(taxas_query.dicts())
             
             # Pre-filter taxas by date in Python to avoid SQLite string format issues
             # vencimento is stored as DD/MM/YYYY
@@ -838,7 +843,20 @@ class Api:
             descontos_agregados = {}
             
             for t in taxas:
-                if t['tipo'] == 'D':
+                if t['tipo'] in ['P', 'R']:
+                    if t.get('data_renegociacao'):
+                        try:
+                            # Tenta parsear formato do bd
+                            dt_ren = datetime.strptime(t['data_renegociacao'], "%d/%m/%Y")
+                        except Exception:
+                            try:
+                                dt_ren = datetime.strptime(t['data_renegociacao'], "%Y-%m-%d")
+                            except Exception:
+                                dt_ren = None
+                        if dt_ren and corte_dt.date() < dt_ren.date():
+                            continue # descarta
+                            
+                if t['tipo'] in ['D', 'R']:
                     key = (t.get('apartamento'), t.get('taxa_id'))
                     if key not in descontos_agregados:
                         descontos_agregados[key] = {
@@ -857,7 +875,7 @@ class Api:
                         t['_venc_dt'] = v_dt
                         if t['tipo'] in ['C', 'E']:
                             taxas_comuns_filtradas.append(t)
-                        elif t['tipo'] == 'I':
+                        elif t['tipo'] in ['I', 'P']:
                             apto_taxa = t.get('apartamento')
                             if apto_taxa:
                                 if apto_taxa not in taxas_individuais_map:
@@ -1003,9 +1021,9 @@ class Api:
         try:
             query = models.Taxas.select().where(
                 (models.Taxas.condominio_id == self.condo_id) &
-                (models.Taxas.competencia == competencia) &
                 (models.Taxas.tipo.in_(tipos))
             )
+            query = query.where(models.Taxas.competencia.between(competencia[0], competencia[1]))
             # Only common ('C','E') or specific to the apartment
             query = query.where(
                 (models.Taxas.tipo.in_(['C', 'E'])) |
@@ -1034,7 +1052,10 @@ class Api:
         if self.init_error:
             return {"status": "error", "message": self.init_error}
         try:
-            models.Taxas.delete().where(models.Taxas.id == taxa_id).execute()
+            taxa = models.Taxas.get_by_id(taxa_id)
+            if taxa.tipo in ['P', 'R']:
+                return {"status": "error", "message": "Taxas de renegociação não podem ser excluídas individualmente. Exclua a renegociação inteira."}
+            taxa.delete_instance()
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
@@ -1044,6 +1065,8 @@ class Api:
             return {"status": "error", "message": self.init_error}
         try:
             taxa = models.Taxas.get_by_id(taxa_id)
+            if taxa.tipo in ['P', 'R']:
+                return {"status": "error", "message": "Taxas de renegociação não podem ser editadas individualmente. Edite a renegociação inteira."}
             if 'competencia' in payload: 
                 taxa.competencia = payload['competencia']
                 try:
@@ -1137,6 +1160,129 @@ class Api:
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
+
+    def get_renegociacao(self, renegociacao_id):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            ren = models.Renegociacao.get_by_id(renegociacao_id)
+            taxas = list(models.Taxas.select().where(models.Taxas.renegociacao_id == renegociacao_id).dicts())
+            parcelas = [t for t in taxas if t['tipo'] == 'P']
+            originais = [t for t in taxas if t['tipo'] == 'R']
+            
+            parcelas.sort(key=lambda p: datetime.strptime(p['vencimento'], '%d/%m/%Y') if p.get('vencimento') else datetime.max)
+            
+            return {
+                "status": "success", 
+                "data": {
+                    "id": ren.id,
+                    "apartamento": ren.apartamento,
+                    "competencia_inicial": ren.competencia_inicial,
+                    "competencia_final": ren.competencia_final,
+                    "numero": ren.numero,
+                    "data_renegociacao": ren.data_renegociacao,
+                    "vencimento_primeira_parcela": ren.vencimento_primeira_parcela,
+                    "quantidade_parcelas": ren.quantidade_parcelas,
+                    "despesas_adicionais": ren.despesas_adicionais,
+                    "descontos_adicionais": ren.descontos_adicionais,
+                    "parcelas": parcelas,
+                    "taxas_originais": originais
+                }
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def delete_renegociacao(self, renegociacao_id):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            models.Renegociacao.delete().where(models.Renegociacao.id == renegociacao_id).execute()
+            return {"status": "success"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def salvar_renegociacao(self, payload):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            ren_id = payload.get('id')
+            apartamento = payload.get('apartamento')
+            comp_ini = payload.get('competencia_inicial')
+            comp_fim = payload.get('competencia_final')
+            numero = payload.get('numero')
+            data_ren = payload.get('data_renegociacao')
+            venc_prim = payload.get('vencimento_primeira_parcela')
+            qtd_parc = payload.get('quantidade_parcelas', 1)
+            desp_add = payload.get('despesas_adicionais', 0.0)
+            desc_add = payload.get('descontos_adicionais', 0.0)
+            
+            taxas_originais = payload.get('taxas_originais', []) 
+            parcelas = payload.get('parcelas', [])
+            
+            meses_map_inv = {1: 'JAN', 2: 'FEV', 3: 'MAR', 4: 'ABR', 5: 'MAI', 6: 'JUN', 7: 'JUL', 8: 'AGO', 9: 'SET', 10: 'OUT', 11: 'NOV', 12: 'DEZ'}
+
+            with models.db.atomic():
+                if ren_id:
+                    models.Renegociacao.delete().where(models.Renegociacao.id == ren_id).execute()
+                
+                nova_ren = models.Renegociacao.create(
+                    condominio_id=self.condo_id,
+                    apartamento=apartamento,
+                    competencia_inicial=comp_ini,
+                    competencia_final=comp_fim,
+                    numero=numero,
+                    data_renegociacao=data_ren,
+                    vencimento_primeira_parcela=venc_prim,
+                    quantidade_parcelas=qtd_parc,
+                    despesas_adicionais=desp_add,
+                    descontos_adicionais=desc_add
+                )
+                
+                for p in parcelas:
+                    try:
+                        p_venc = datetime.strptime(p['vencimento'], '%d/%m/%Y')
+                        exib_str = f"{meses_map_inv[p_venc.month]}/{p_venc.year}"
+                    except:
+                        exib_str = ""
+                    p_comp = p.get('competencia') or (p_venc.strftime('%Y-%m') if 'p_venc' in locals() else "")
+                        
+                    models.Taxas.create(
+                        condominio_id=self.condo_id,
+                        renegociacao_id=nova_ren.id,
+                        competencia=p_comp,
+                        exibicao=exib_str,
+                        vencimento=p.get('vencimento'),
+                        descricao=p.get('descricao'),
+                        valor_original=p.get('valor_original', 0.0),
+                        desconto_vista=p.get('desconto_vista', 0.0),
+                        multa_atraso=p.get('multa_atraso', 0.0),
+                        juros_dia_atraso=p.get('juros_dia_atraso', 0.0),
+                        apartamento=apartamento,
+                        tipo='P'
+                    )
+                
+                for t_id in taxas_originais:
+                    t_orig = models.Taxas.get_by_id(t_id)
+                    models.Taxas.create(
+                        condominio_id=self.condo_id,
+                        renegociacao_id=nova_ren.id,
+                        taxa_id=t_orig.id,
+                        competencia=t_orig.competencia,
+                        exibicao=t_orig.exibicao,
+                        vencimento=t_orig.vencimento,
+                        descricao=f"Renegociado: {t_orig.descricao}",
+                        valor_original=t_orig.valor_original,
+                        desconto_vista=t_orig.desconto_vista,
+                        multa_atraso=t_orig.multa_atraso,
+                        juros_dia_atraso=t_orig.juros_dia_atraso,
+                        apartamento=apartamento,
+                        tipo='R'
+                    )
+                    
+            return {"status": "success"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
 
     def selecionar_arquivo(self):
         if self.init_error:

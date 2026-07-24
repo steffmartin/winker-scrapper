@@ -160,9 +160,25 @@ class PreferenciasUsuario(BaseModel):
     class Meta:
         table_name = 'preferencias_usuario'
 
+class Renegociacao(BaseModel):
+    condominio_id = ForeignKeyField(Condominio, backref='renegociacoes', on_delete='CASCADE', db_column='condominio_id')
+    apartamento = CharField(null=True)
+    competencia_inicial = CharField(null=True)
+    competencia_final = CharField(null=True)
+    numero = CharField(null=True)
+    data_renegociacao = CharField(null=True)
+    vencimento_primeira_parcela = CharField(null=True)
+    quantidade_parcelas = IntegerField(default=1)
+    despesas_adicionais = FloatField(default=0.0)
+    descontos_adicionais = FloatField(default=0.0)
+
+    class Meta:
+        table_name = 'renegociacao'
+
 class Taxas(BaseModel):
     condominio_id = ForeignKeyField(Condominio, backref='taxas', on_delete='CASCADE', db_column='condominio_id')
     taxa_id = ForeignKeyField('self', backref='taxas_vinculadas', on_delete='CASCADE', db_column='taxa_id', null=True)
+    renegociacao_id = ForeignKeyField(Renegociacao, backref='taxas_relacionadas', on_delete='CASCADE', db_column='renegociacao_id', null=True)
     competencia = CharField(null=True)
     exibicao = CharField(null=True)
     vencimento = CharField(null=True)
@@ -182,5 +198,5 @@ def init_models(db_path):
     db.connect(reuse_if_open=True)
     db.create_tables([
         Condominio, MembrosGestao, Contas, Meses, Categorias, Subcategorias, 
-        Transacoes, Anexos, PrestacoesContas, Auditoria, PreferenciasUsuario, Taxas
+        Transacoes, Anexos, PrestacoesContas, Auditoria, PreferenciasUsuario, Renegociacao, Taxas
     ], safe=True)
