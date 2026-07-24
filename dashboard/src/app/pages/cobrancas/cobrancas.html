@@ -171,7 +171,8 @@
                 <label for="taxaVinculada" class="font-semibold text-sm">Taxa Vinculada</label>
                 <p-select id="taxaVinculada" [options]="taxasParaDesconto" [(ngModel)]="currentTaxa.taxa_id" 
                           optionLabel="descricao" optionValue="id" [filter]="true" filterBy="descricao,vencimento" 
-                          [showClear]="true" placeholder="Selecione a taxa" styleClass="w-full">
+                          [showClear]="true" placeholder="Selecione a taxa" styleClass="w-full"
+                          emptyMessage="Nenhuma taxa encontrada" emptyFilterMessage="Nenhuma taxa encontrada">
                     <ng-template let-taxa pTemplate="item">
                         <div class="flex flex-col">
                             <span>{{ taxa.vencimento }} - {{ taxa.descricao }}</span>
