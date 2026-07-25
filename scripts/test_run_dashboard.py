@@ -39,7 +39,7 @@ class TestRunDashboard(unittest.TestCase):
         self.cursor.execute("INSERT INTO anexos (id, transacao_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Anexo', 0)")
         self.cursor.execute("INSERT INTO prestacoes_contas (id, mes_id, consistente, motivo_inconsistencia, revisado_usuario) VALUES (1, 1, 0, 'Erro Prestação', 0)")
         
-        self.cursor.execute("INSERT INTO taxas (condominio_id, competencia, exibicao, vencimento, descricao, valor_original, desconto_vista, multa_atraso, juros_dia_atraso, tipo) VALUES (?, '2023-01', 'JAN/2023', '15/01/2023', 'Taxa Condomínio', 300.0, 10.0, 6.0, 0.5, 'C')", (self.condo_id,))
+        self.cursor.execute("INSERT INTO taxas (condominio_id, competencia, exibicao, vencimento, descricao, valor_original, desconto_vista, multa_percentual, juros_mes_percentual, tipo) VALUES (?, '2023-01', 'JAN/2023', '15/01/2023', 'Taxa Condomínio', 300.0, 10.0, 2.0, 1.0, 'C')", (self.condo_id,))
         self.cursor.execute("UPDATE condominio SET apartamentos = '[\"101\", \"102\"]' WHERE id = ?", (self.condo_id,))
         # Adicionar uma transação que abate a taxa (receita para apto 102) - pago com desconto
         self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia, revisado_usuario) VALUES (2, 1, 'R', '14/01/2023', 'Pagamento', 290.0, '102', '2023-01', 'Morador', 0, 1, NULL, 1)")
@@ -147,7 +147,28 @@ class TestRunDashboard(unittest.TestCase):
         self.assertEqual(len(taxas), 1)
         self.assertEqual(taxas[0]["valor"], 300.0)
         self.assertEqual(taxas[0]["dias_vencidos"], 5) # (20 - 15) = 5
-        self.assertEqual(taxas[0]["juros_total"], 2.5) # 5 * 0.5
+        self.assertAlmostEqual(taxas[0]["juros_total"], 0.5) # 300 * (1% / 30) * 5 dias
         
+    def test_get_inadimplencia_multa_sobre_juros(self):
+        # Mudar para M (Multa sobre Juros)
+        self.cursor.execute("UPDATE condominio SET tipo_juros_multa = 'M' WHERE id = ?", (self.condo_id,))
+        self.conn.commit()
+        result = self.api.get_inadimplencia(data_corte="2023-01-20")
+        taxas = result["data"][0]["taxas"]
+        # Juros = 0.5
+        # Multa = (300 + 0.5) * 2% = 6.01
+        self.assertAlmostEqual(taxas[0]["juros_total"], 0.5)
+        self.assertAlmostEqual(taxas[0]["multa"], 6.01)
+
+    def test_get_inadimplencia_juros_sobre_multa(self):
+        # Mudar para J (Juros sobre Multa)
+        self.cursor.execute("UPDATE condominio SET tipo_juros_multa = 'J' WHERE id = ?", (self.condo_id,))
+        self.conn.commit()
+        result = self.api.get_inadimplencia(data_corte="2023-01-20")
+        taxas = result["data"][0]["taxas"]
+        # Multa = 300 * 2% = 6.0
+        # Juros = (300 + 6.0) * (1% / 30) * 5 = 306 * 0.001666... = 0.51
+        self.assertAlmostEqual(taxas[0]["multa"], 6.0)
+        self.assertAlmostEqual(taxas[0]["juros_total"], 0.51)
 if __name__ == '__main__':
     unittest.main()

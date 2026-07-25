@@ -14,6 +14,7 @@ import { DatePickerModule } from 'primeng/datepicker';
 import { DialogModule } from 'primeng/dialog';
 import { ChipModule } from 'primeng/chip';
 import { TooltipModule } from 'primeng/tooltip';
+import { RadioButtonModule } from 'primeng/radiobutton';
 
 @Component({
     selector: 'app-configuracoes',
@@ -21,7 +22,8 @@ import { TooltipModule } from 'primeng/tooltip';
     imports: [
         CommonModule, ReactiveFormsModule, CardModule, TabsModule, 
         InputTextModule, InputNumberModule, InputMaskModule, ButtonModule, ToastModule,
-        ConfirmDialogModule, DatePickerModule, DialogModule, ChipModule, TooltipModule
+        ConfirmDialogModule, DatePickerModule, DialogModule, ChipModule, TooltipModule,
+        RadioButtonModule
     ],
     providers: [MessageService, ConfirmationService],
     templateUrl: './configuracoes.html',
@@ -87,7 +89,8 @@ export class ConfiguracoesComponent implements OnInit {
                 inadimplencia_data_corte: [null],
                 inadimplencia_unidades: [0],
                 inadimplencia_valor: [0],
-                saldo_declarado: [null]
+                saldo_declarado: [null],
+                tipo_juros_multa: ['N']
             }),
             membros: this.fb.array([]),
             contas: this.fb.array([])

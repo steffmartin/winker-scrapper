@@ -162,6 +162,7 @@ class Api:
                 if 'inadimplencia_unidades' in condo_data: condo.inadimplencia_unidades = condo_data['inadimplencia_unidades']
                 if 'inadimplencia_valor' in condo_data: condo.inadimplencia_valor = condo_data['inadimplencia_valor']
                 if 'saldo_declarado' in condo_data: condo.saldo_declarado = condo_data['saldo_declarado']
+                if 'tipo_juros_multa' in condo_data: condo.tipo_juros_multa = condo_data['tipo_juros_multa']
                 
                 condo.ultima_atualizacao = datetime.now().isoformat()
                 
@@ -861,13 +862,13 @@ class Api:
                     if key not in descontos_agregados:
                         descontos_agregados[key] = {
                             'valor_original': 0, 'desconto_vista': 0, 
-                            'multa_atraso': 0, 'juros_dia_atraso': 0
+                            'multa_percentual': 0, 'juros_mes_percentual': 0
                         }
                     d_agg = descontos_agregados[key]
                     d_agg['valor_original'] += (t.get('valor_original') or 0)
                     d_agg['desconto_vista'] += (t.get('desconto_vista') or 0)
-                    d_agg['multa_atraso'] += (t.get('multa_atraso') or 0)
-                    d_agg['juros_dia_atraso'] += (t.get('juros_dia_atraso') or 0)
+                    d_agg['multa_percentual'] += (t.get('multa_percentual') or 0)
+                    d_agg['juros_mes_percentual'] += (t.get('juros_mes_percentual') or 0)
                     continue
                 try:
                     v_dt = datetime.strptime(t['vencimento'], "%d/%m/%Y")
@@ -925,8 +926,8 @@ class Api:
                         d_agg = descontos_agregados[key]
                         t_apto['valor_original'] = max(0, t_apto['valor_original'] - d_agg['valor_original'])
                         t_apto['desconto_vista'] = max(0, (t_apto['desconto_vista'] or 0) - d_agg['desconto_vista'])
-                        t_apto['multa_atraso'] = max(0, (t_apto['multa_atraso'] or 0) - d_agg['multa_atraso'])
-                        t_apto['juros_dia_atraso'] = max(0, (t_apto['juros_dia_atraso'] or 0) - d_agg['juros_dia_atraso'])
+                        t_apto['multa_percentual'] = max(0, (t_apto['multa_percentual'] or 0) - d_agg['multa_percentual'])
+                        t_apto['juros_mes_percentual'] = max(0, (t_apto['juros_mes_percentual'] or 0) - d_agg['juros_mes_percentual'])
                 
                 # Agrupar transações do apartamento por competência para evitar iteração linear excessiva
                 transacoes_apto_map = {}
@@ -975,7 +976,20 @@ class Api:
                         if dias_atraso < 0:
                             dias_atraso = 0
                             
-                        juros_total = dias_atraso * (taxa['juros_dia_atraso'] or 0)
+                        total_sem_desconto = taxa['valor_original']
+                        juros_perc = taxa['juros_mes_percentual'] or 0.0
+                        multa_perc = taxa['multa_percentual'] or 0.0
+                        tipo_jm = condo.tipo_juros_multa or 'N'
+                        
+                        if tipo_jm == 'M':
+                            juros_total = total_sem_desconto * (juros_perc / 30.0 / 100.0) * dias_atraso
+                            multa_total = (total_sem_desconto + juros_total) * (multa_perc / 100.0)
+                        elif tipo_jm == 'J':
+                            multa_total = total_sem_desconto * (multa_perc / 100.0)
+                            juros_total = (total_sem_desconto + multa_total) * (juros_perc / 30.0 / 100.0) * dias_atraso
+                        else:
+                            juros_total = total_sem_desconto * (juros_perc / 30.0 / 100.0) * dias_atraso
+                            multa_total = total_sem_desconto * (multa_perc / 100.0)
                         
                         taxas_nao_pagas.append({
                             "competencia": taxa['competencia'],
@@ -983,7 +997,7 @@ class Api:
                             "valor": taxa['valor_original'],
                             "vencimento": taxa['vencimento'],
                             "descricao": taxa['descricao'],
-                            "multa": taxa['multa_atraso'],
+                            "multa": multa_total,
                             "juros_total": juros_total,
                             "dias_vencidos": dias_atraso,
                             "_venc_dt": taxa_venc_dt
@@ -1092,8 +1106,8 @@ class Api:
             if 'descricao' in payload: taxa.descricao = payload['descricao']
             if 'valor_original' in payload: taxa.valor_original = payload['valor_original']
             if 'desconto_vista' in payload: taxa.desconto_vista = payload['desconto_vista']
-            if 'multa_atraso' in payload: taxa.multa_atraso = payload['multa_atraso']
-            if 'juros_dia_atraso' in payload: taxa.juros_dia_atraso = payload['juros_dia_atraso']
+            if 'multa_percentual' in payload: taxa.multa_percentual = payload['multa_percentual']
+            if 'juros_mes_percentual' in payload: taxa.juros_mes_percentual = payload['juros_mes_percentual']
             if 'tipo' in payload: taxa.tipo = payload['tipo']
             if 'apartamento' in payload: taxa.apartamento = payload['apartamento']
             taxa.save()
@@ -1118,8 +1132,8 @@ class Api:
             descricao = payload.get('descricao')
             valor_original = payload.get('valor_original', 0.0)
             desconto_vista = payload.get('desconto_vista', 0.0)
-            multa_atraso = payload.get('multa_atraso', 0.0)
-            juros_dia_atraso = payload.get('juros_dia_atraso', 0.0)
+            multa_percentual = payload.get('multa_percentual', 0.0)
+            juros_mes_percentual = payload.get('juros_mes_percentual', 0.0)
             apartamento = payload.get('apartamento')
             
             def add_months(d, months):
@@ -1151,8 +1165,8 @@ class Api:
                         descricao=descricao,
                         valor_original=valor_original,
                         desconto_vista=desconto_vista,
-                        multa_atraso=multa_atraso,
-                        juros_dia_atraso=juros_dia_atraso,
+                        multa_percentual=multa_percentual,
+                        juros_mes_percentual=juros_mes_percentual,
                         tipo=tipo,
                         apartamento=apartamento,
                         taxa_id=taxa_id_ref if tipo == 'D' else None
@@ -1255,8 +1269,8 @@ class Api:
                         descricao=p.get('descricao'),
                         valor_original=p.get('valor_original', 0.0),
                         desconto_vista=p.get('desconto_vista', 0.0),
-                        multa_atraso=p.get('multa_atraso', 0.0),
-                        juros_dia_atraso=p.get('juros_dia_atraso', 0.0),
+                        multa_percentual=p.get('multa_percentual', 0.0),
+                        juros_mes_percentual=p.get('juros_mes_percentual', 0.0),
                         apartamento=apartamento,
                         tipo='P'
                     )
@@ -1273,8 +1287,8 @@ class Api:
                         descricao=f"Renegociado: {t_orig.descricao}",
                         valor_original=t_orig.valor_original,
                         desconto_vista=t_orig.desconto_vista,
-                        multa_atraso=t_orig.multa_atraso,
-                        juros_dia_atraso=t_orig.juros_dia_atraso,
+                        multa_percentual=t_orig.multa_percentual,
+                        juros_mes_percentual=t_orig.juros_mes_percentual,
                         apartamento=apartamento,
                         tipo='R'
                     )

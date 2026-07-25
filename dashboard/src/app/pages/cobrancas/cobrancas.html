@@ -37,8 +37,8 @@
                             <th pSortableColumn="valor_original">Valor <p-sortIcon field="valor_original"></p-sortIcon></th>
                             <th pSortableColumn="desconto_vista">Desconto <p-sortIcon field="desconto_vista"></p-sortIcon></th>
                             <th pSortableColumn="valor_a_vista">À vista <p-sortIcon field="valor_a_vista"></p-sortIcon></th>
-                            <th pSortableColumn="multa_atraso">Multa <p-sortIcon field="multa_atraso"></p-sortIcon></th>
-                            <th pSortableColumn="juros_dia_atraso">Juros Diários <p-sortIcon field="juros_dia_atraso"></p-sortIcon></th>
+                            <th pSortableColumn="multa_percentual">Multa <p-sortIcon field="multa_percentual"></p-sortIcon></th>
+                            <th pSortableColumn="juros_mes_percentual">Juros Mensais <p-sortIcon field="juros_mes_percentual"></p-sortIcon></th>
                         </tr>
                     </ng-template>
                     <ng-template pTemplate="body" let-rowData>
@@ -54,8 +54,8 @@
                             <td>{{ rowData.valor_original | currency:'BRL':'symbol':'1.2-2' }}</td>
                             <td>{{ rowData.desconto_vista | currency:'BRL':'symbol':'1.2-2' }}</td>
                             <td class="font-medium">{{ rowData.valor_a_vista | currency:'BRL':'symbol':'1.2-2' }}</td>
-                            <td>{{ rowData.multa_atraso | currency:'BRL':'symbol':'1.2-2' }}</td>
-                            <td>{{ rowData.juros_dia_atraso | currency:'BRL':'symbol':'1.2-2' }}</td>
+                            <td>{{ rowData.multa_percentual | number:'1.2-2' }}%</td>
+                            <td>{{ rowData.juros_mes_percentual | number:'1.2-2' }}%</td>
                         </tr>
                     </ng-template>
                 </p-table>
@@ -86,8 +86,8 @@
                             <th pSortableColumn="valor_original">Valor <p-sortIcon field="valor_original"></p-sortIcon></th>
                             <th pSortableColumn="desconto_vista">Desconto <p-sortIcon field="desconto_vista"></p-sortIcon></th>
                             <th pSortableColumn="valor_a_vista">À vista <p-sortIcon field="valor_a_vista"></p-sortIcon></th>
-                            <th pSortableColumn="multa_atraso">Multa <p-sortIcon field="multa_atraso"></p-sortIcon></th>
-                            <th pSortableColumn="juros_dia_atraso">Juros Diários <p-sortIcon field="juros_dia_atraso"></p-sortIcon></th>
+                            <th pSortableColumn="multa_percentual">Multa <p-sortIcon field="multa_percentual"></p-sortIcon></th>
+                            <th pSortableColumn="juros_mes_percentual">Juros Mensais <p-sortIcon field="juros_mes_percentual"></p-sortIcon></th>
                         </tr>
                     </ng-template>
                     <ng-template pTemplate="body" let-rowData>
@@ -104,8 +104,8 @@
                             <td>{{ rowData.valor_original | currency:'BRL':'symbol':'1.2-2' }}</td>
                             <td>{{ rowData.desconto_vista | currency:'BRL':'symbol':'1.2-2' }}</td>
                             <td class="font-medium">{{ rowData.valor_a_vista | currency:'BRL':'symbol':'1.2-2' }}</td>
-                            <td>{{ rowData.multa_atraso | currency:'BRL':'symbol':'1.2-2' }}</td>
-                            <td>{{ rowData.juros_dia_atraso | currency:'BRL':'symbol':'1.2-2' }}</td>
+                            <td>{{ rowData.multa_percentual | number:'1.2-2' }}%</td>
+                            <td>{{ rowData.juros_mes_percentual | number:'1.2-2' }}%</td>
                         </tr>
                     </ng-template>
                 </p-table>
@@ -179,8 +179,8 @@
                             <small class="text-slate-500 dark:text-slate-400">
                                 Total: {{taxa.valor_original|currency:'BRL'}} | 
                                 Desc: {{taxa.desconto_vista|currency:'BRL'}} | 
-                                Multa: {{taxa.multa_atraso|currency:'BRL'}} | 
-                                Juros/dia: {{taxa.juros_dia_atraso|currency:'BRL'}}
+                                Multa: {{taxa.multa_percentual|number:'1.2-2'}}% | 
+                                Juros Mensais: {{taxa.juros_mes_percentual|number:'1.2-2'}}%
                             </small>
                         </div>
                     </ng-template>
@@ -194,8 +194,8 @@
                     <span *ngIf="getSelectedTaxa()">
                         <i class="pi pi-info-circle text-xs mr-1"></i> Total: {{getSelectedTaxa()?.valor_original|currency:'BRL'}} | 
                         Desc à Vista: {{getSelectedTaxa()?.desconto_vista|currency:'BRL'}} | 
-                        Multa: {{getSelectedTaxa()?.multa_atraso|currency:'BRL'}} | 
-                        Juros: {{getSelectedTaxa()?.juros_dia_atraso|currency:'BRL'}}
+                        Multa: {{getSelectedTaxa()?.multa_percentual|number:'1.2-2'}}% | 
+                        Juros Mensais: {{getSelectedTaxa()?.juros_mes_percentual|number:'1.2-2'}}%
                     </span>
                     <span *ngIf="!getSelectedTaxa()">
                         <i class="pi pi-info-circle text-xs mr-1"></i> Selecione uma taxa
@@ -217,12 +217,12 @@
                     <p-inputNumber id="desconto" [(ngModel)]="currentTaxa.desconto_vista" [min]="0" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
                 </div>
                 <div class="flex flex-col gap-2">
-                    <label for="multa" class="font-semibold text-sm">Multa por Atraso</label>
-                    <p-inputNumber id="multa" [(ngModel)]="currentTaxa.multa_atraso" [min]="0" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+                    <label for="multa" class="font-semibold text-sm">Multa</label>
+                    <p-inputNumber id="multa" [(ngModel)]="currentTaxa.multa_percentual" [min]="0" suffix=" %" locale="pt-BR" class="w-full"></p-inputNumber>
                 </div>
                 <div class="flex flex-col gap-2">
-                    <label for="juros" class="font-semibold text-sm">Juros Diários</label>
-                    <p-inputNumber id="juros" [(ngModel)]="currentTaxa.juros_dia_atraso" [min]="0" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+                    <label for="juros" class="font-semibold text-sm">Juros Mensais</label>
+                    <p-inputNumber id="juros" [(ngModel)]="currentTaxa.juros_mes_percentual" [min]="0" suffix=" %" locale="pt-BR" class="w-full"></p-inputNumber>
                 </div>
             </div>
             
@@ -283,8 +283,8 @@
                             <span>{{ taxa.vencimento }} - {{ taxa.descricao }}</span>
                             <small class="text-slate-500 dark:text-slate-400">
                                 Total: {{taxa.valor_original|currency:'BRL'}} | 
-                                Multa: {{taxa.multa_atraso|currency:'BRL'}} | 
-                                Juros/dia: {{taxa.juros_dia_atraso|currency:'BRL'}}
+                                Multa: {{taxa.multa_percentual|number:'1.2-2'}}% | 
+                                Juros Mensais: {{taxa.juros_mes_percentual|number:'1.2-2'}}%
                             </small>
                         </div>
                     </ng-template>
@@ -334,8 +334,8 @@
                             <th pSortableColumn="valor_original" style="width: 12%">Valor <p-sortIcon field="valor_original"></p-sortIcon></th>
                             <th pSortableColumn="desconto_vista" style="width: 11%">Desconto <p-sortIcon field="desconto_vista"></p-sortIcon></th>
                             <th pSortableColumn="valor_a_vista" style="width: 11%">À vista <p-sortIcon field="valor_a_vista"></p-sortIcon></th>
-                            <th pSortableColumn="multa_atraso" style="width: 11%">Multa <p-sortIcon field="multa_atraso"></p-sortIcon></th>
-                            <th pSortableColumn="juros_dia_atraso" style="width: 11%">Juros Diários <p-sortIcon field="juros_dia_atraso"></p-sortIcon></th>
+                            <th pSortableColumn="multa_percentual" style="width: 11%">Multa <p-sortIcon field="multa_percentual"></p-sortIcon></th>
+                            <th pSortableColumn="juros_mes_percentual" style="width: 11%">Juros Mensais <p-sortIcon field="juros_mes_percentual"></p-sortIcon></th>
                         </tr>
                     </ng-template>
                     <ng-template pTemplate="body" let-p let-editing="editing" let-ri="rowIndex">
@@ -394,20 +394,20 @@
                             <td pEditableColumn>
                                 <p-cellEditor>
                                     <ng-template pTemplate="input">
-                                        <p-inputNumber [(ngModel)]="p.multa_atraso" mode="currency" currency="BRL" locale="pt-BR" class="w-full" styleClass="w-full" inputStyleClass="w-full"></p-inputNumber>
+                                        <p-inputNumber [(ngModel)]="p.multa_percentual" suffix=" %" locale="pt-BR" class="w-full" styleClass="w-full" inputStyleClass="w-full"></p-inputNumber>
                                     </ng-template>
                                     <ng-template pTemplate="output">
-                                        {{p.multa_atraso|currency:'BRL'}}
+                                        {{p.multa_percentual|number:'1.2-2'}}%
                                     </ng-template>
                                 </p-cellEditor>
                             </td>
                             <td pEditableColumn>
                                 <p-cellEditor>
                                     <ng-template pTemplate="input">
-                                        <p-inputNumber [(ngModel)]="p.juros_dia_atraso" mode="currency" currency="BRL" locale="pt-BR" class="w-full" styleClass="w-full" inputStyleClass="w-full"></p-inputNumber>
+                                        <p-inputNumber [(ngModel)]="p.juros_mes_percentual" suffix=" %" locale="pt-BR" class="w-full" styleClass="w-full" inputStyleClass="w-full"></p-inputNumber>
                                     </ng-template>
                                     <ng-template pTemplate="output">
-                                        {{p.juros_dia_atraso|currency:'BRL'}}
+                                        {{p.juros_mes_percentual|number:'1.2-2'}}%
                                     </ng-template>
                                 </p-cellEditor>
                             </td>

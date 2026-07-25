@@ -25,6 +25,7 @@ class Condominio(BaseModel):
     ultima_atualizacao = CharField(null=True)
     prazo_fechamento = IntegerField(null=True)
     saldo_declarado = FloatField(null=True)
+    tipo_juros_multa = CharField(null=True, default='N')
 
     class Meta:
         table_name = 'condominio'
@@ -185,8 +186,8 @@ class Taxas(BaseModel):
     descricao = CharField(null=True)
     valor_original = FloatField(default=0.0)
     desconto_vista = FloatField(default=0.0)
-    multa_atraso = FloatField(default=0.0)
-    juros_dia_atraso = FloatField(default=0.0)
+    multa_percentual = FloatField(default=0.0)
+    juros_mes_percentual = FloatField(default=0.0)
     apartamento = CharField(null=True)
     tipo = CharField(null=True)
 

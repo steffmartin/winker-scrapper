@@ -77,6 +77,7 @@ export class CobrancasComponent implements OnInit {
     loadingIndividuais: boolean = false;
     taxasIndividuaisLoaded: boolean = false;
     apartamentos: string[] = [];
+    tipo_juros_multa: string = 'N';
     speedDialItems: MenuItem[] = [];
     speedDialComunsItems: MenuItem[] = [];
     
@@ -160,8 +161,11 @@ export class CobrancasComponent implements OnInit {
         const pywebview = (window as any).pywebview;
         if (pywebview && pywebview.api) {
             pywebview.api.get_condominio_config().then((res: any) => {
-                if (res.status === 'success' && res.data && res.data.condominio && res.data.condominio.apartamentos) {
-                    this.apartamentos = res.data.condominio.apartamentos;
+                if (res.status === 'success' && res.data && res.data.condominio) {
+                    if (res.data.condominio.apartamentos) {
+                        this.apartamentos = res.data.condominio.apartamentos;
+                    }
+                    this.tipo_juros_multa = res.data.condominio.tipo_juros_multa || 'N';
                 }
                 this.loadTaxasComuns();
             });
@@ -226,7 +230,7 @@ export class CobrancasComponent implements OnInit {
             this.loadingComuns = false;
             if (window.location.hostname === 'localhost') {
                 this.taxasComuns = [
-                    { id: 1, tipo: 'C', apartamento: null, competencia: '2026-07', exibicao: 'JUL/2026', vencimento: '14/07/2026', descricao: 'Taxa Ordinária', valor_original: 1500, desconto_vista: 0, multa_atraso: 0, juros_dia_atraso: 0 }
+                    { id: 1, tipo: 'C', apartamento: null, competencia: '2026-07', exibicao: 'JUL/2026', vencimento: '14/07/2026', descricao: 'Taxa Ordinária', valor_original: 1500, desconto_vista: 0, multa_percentual: 0, juros_mes_percentual: 0 }
                 ];
             }
         }
@@ -264,8 +268,8 @@ export class CobrancasComponent implements OnInit {
             descricao: '',
             valor_original: 0,
             desconto_vista: 0,
-            multa_atraso: 0,
-            juros_dia_atraso: 0
+            multa_percentual: 0,
+            juros_mes_percentual: 0
         };
         this.competenciaDate = null;
         this.vencimentoDate = null;
@@ -374,16 +378,16 @@ export class CobrancasComponent implements OnInit {
             // Força valores positivos
             this.currentTaxa.valor_original = Math.abs(this.currentTaxa.valor_original || 0);
             this.currentTaxa.desconto_vista = Math.abs(this.currentTaxa.desconto_vista || 0);
-            this.currentTaxa.multa_atraso = Math.abs(this.currentTaxa.multa_atraso || 0);
-            this.currentTaxa.juros_dia_atraso = Math.abs(this.currentTaxa.juros_dia_atraso || 0);
+            this.currentTaxa.multa_percentual = Math.abs(this.currentTaxa.multa_percentual || 0);
+            this.currentTaxa.juros_mes_percentual = Math.abs(this.currentTaxa.juros_mes_percentual || 0);
             
             // Validar se valor é menor ou igual a taxa
             const taxaPai = this.taxasParaDesconto.find(t => t.id === this.currentTaxa.taxa_id);
             if (taxaPai) {
                 if (this.currentTaxa.valor_original > taxaPai.valor_original || 
                     this.currentTaxa.desconto_vista > taxaPai.desconto_vista ||
-                    this.currentTaxa.multa_atraso > taxaPai.multa_atraso ||
-                    this.currentTaxa.juros_dia_atraso > taxaPai.juros_dia_atraso) {
+                    this.currentTaxa.multa_percentual > taxaPai.multa_percentual ||
+                    this.currentTaxa.juros_mes_percentual > taxaPai.juros_mes_percentual) {
                     this.messageService.add({ severity: 'error', summary: 'Atenção', detail: 'Os valores do desconto não podem ser maiores que os valores originais da taxa.' });
                     return;
                 }
@@ -391,8 +395,8 @@ export class CobrancasComponent implements OnInit {
         }
         
         this.currentTaxa.desconto_vista = this.currentTaxa.desconto_vista ?? 0;
-        this.currentTaxa.multa_atraso = this.currentTaxa.multa_atraso ?? 0;
-        this.currentTaxa.juros_dia_atraso = this.currentTaxa.juros_dia_atraso ?? 0;
+        this.currentTaxa.multa_percentual = this.currentTaxa.multa_percentual ?? 0;
+        this.currentTaxa.juros_mes_percentual = this.currentTaxa.juros_mes_percentual ?? 0;
         
         const c = this.competenciaDate as Date;
         const competencia = `${c.getFullYear()}-${String(c.getMonth() + 1).padStart(2, '0')}`;
@@ -558,8 +562,24 @@ export class CobrancasComponent implements OnInit {
         if (!this.taxasOriginaisSelecionadas || this.taxasOriginaisSelecionadas.length === 0) return 0;
         return this.taxasOriginaisSelecionadas.reduce((sum, t) => {
             const dias = this.getDiasAtraso(t.vencimento);
-            const jurosTotal = (t.juros_dia_atraso || 0) * dias;
-            return sum + (t.valor_original || 0) + (t.multa_atraso || 0) + jurosTotal;
+            let jurosTotal = 0;
+            let multaTotal = 0;
+            const jurosPerc = t.juros_mes_percentual || 0;
+            const multaPerc = t.multa_percentual || 0;
+            const totalSemDesconto = t.valor_original || 0;
+
+            if (this.tipo_juros_multa === 'M') {
+                jurosTotal = totalSemDesconto * (jurosPerc / 30.0 / 100.0) * dias;
+                multaTotal = (totalSemDesconto + jurosTotal) * (multaPerc / 100.0);
+            } else if (this.tipo_juros_multa === 'J') {
+                multaTotal = totalSemDesconto * (multaPerc / 100.0);
+                jurosTotal = (totalSemDesconto + multaTotal) * (jurosPerc / 30.0 / 100.0) * dias;
+            } else {
+                jurosTotal = totalSemDesconto * (jurosPerc / 30.0 / 100.0) * dias;
+                multaTotal = totalSemDesconto * (multaPerc / 100.0);
+            }
+
+            return sum + totalSemDesconto + multaTotal + jurosTotal;
         }, 0);
     }
     
@@ -569,11 +589,26 @@ export class CobrancasComponent implements OnInit {
         }
         return this.taxasOriginaisSelecionadas.reduce((acc, t) => {
             const dias = this.getDiasAtraso(t.vencimento);
-            const jurosTotal = (t.juros_dia_atraso || 0) * dias;
+            let jurosTotal = 0;
+            let multaTotal = 0;
+            const jurosPerc = t.juros_mes_percentual || 0;
+            const multaPerc = t.multa_percentual || 0;
+            const totalSemDesconto = t.valor_original || 0;
+
+            if (this.tipo_juros_multa === 'M') {
+                jurosTotal = totalSemDesconto * (jurosPerc / 30.0 / 100.0) * dias;
+                multaTotal = (totalSemDesconto + jurosTotal) * (multaPerc / 100.0);
+            } else if (this.tipo_juros_multa === 'J') {
+                multaTotal = totalSemDesconto * (multaPerc / 100.0);
+                jurosTotal = (totalSemDesconto + multaTotal) * (jurosPerc / 30.0 / 100.0) * dias;
+            } else {
+                jurosTotal = totalSemDesconto * (jurosPerc / 30.0 / 100.0) * dias;
+                multaTotal = totalSemDesconto * (multaPerc / 100.0);
+            }
             
-            acc.valor += (t.valor_original || 0);
+            acc.valor += totalSemDesconto;
             acc.desconto += 0; 
-            acc.multa += (t.multa_atraso || 0);
+            acc.multa += multaTotal;
             acc.juros += jurosTotal;
             return acc;
         }, { valor: 0, desconto: 0, multa: 0, juros: 0 });
@@ -613,8 +648,8 @@ export class CobrancasComponent implements OnInit {
                 valor_original: valor,
                 desconto_vista: 0,
                 valor_a_vista: valor,
-                multa_atraso: 0,
-                juros_dia_atraso: 0
+                multa_percentual: 0,
+                juros_mes_percentual: 0
             });
         }
     }

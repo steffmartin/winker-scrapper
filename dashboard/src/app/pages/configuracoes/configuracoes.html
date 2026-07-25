@@ -125,6 +125,34 @@
                             }
                         </div>
                     </div>
+                    <div class="col-span-1 md:col-span-3 flex flex-col gap-2 mt-4" formGroupName="condominio">
+                        <span class="font-medium">Cálculo de Encargos</span>
+                        <div class="mt-2 flex flex-col md:flex-row gap-3">
+                            <label for="tipo_N" class="flex-1 flex items-center gap-2 p-3 rounded-lg border hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors cursor-pointer" [class.border-primary]="configForm.get('condominio.tipo_juros_multa')?.value === 'N'" [class.border-surface]="configForm.get('condominio.tipo_juros_multa')?.value !== 'N'">
+                                <p-radiobutton inputId="tipo_N" formControlName="tipo_juros_multa" value="N"></p-radiobutton>
+                                <div class="flex-1 flex flex-col gap-1">
+                                    <span class="font-medium leading-none">Normal</span>
+                                    <span class="text-sm text-surface-500">Juros sobre o valor original. Multa sobre o valor original.</span>
+                                </div>
+                            </label>
+                            
+                            <label for="tipo_M" class="flex-1 flex items-center gap-2 p-3 rounded-lg border hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors cursor-pointer" [class.border-primary]="configForm.get('condominio.tipo_juros_multa')?.value === 'M'" [class.border-surface]="configForm.get('condominio.tipo_juros_multa')?.value !== 'M'">
+                                <p-radiobutton inputId="tipo_M" formControlName="tipo_juros_multa" value="M"></p-radiobutton>
+                                <div class="flex-1 flex flex-col gap-1">
+                                    <span class="font-medium leading-none">Multa sobre Juros</span>
+                                    <span class="text-sm text-surface-500">Juros incidem sobre o valor original. Multa incide sobre (valor original + juros).</span>
+                                </div>
+                            </label>
+
+                            <label for="tipo_J" class="flex-1 flex items-center gap-2 p-3 rounded-lg border hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors cursor-pointer" [class.border-primary]="configForm.get('condominio.tipo_juros_multa')?.value === 'J'" [class.border-surface]="configForm.get('condominio.tipo_juros_multa')?.value !== 'J'">
+                                <p-radiobutton inputId="tipo_J" formControlName="tipo_juros_multa" value="J"></p-radiobutton>
+                                <div class="flex-1 flex flex-col gap-1">
+                                    <span class="font-medium leading-none">Juros sobre Multa</span>
+                                    <span class="text-sm text-surface-500">Multa incide sobre o valor original. Juros incidem sobre (valor original + multa).</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
                 </p-tabpanel>
 
                 <!-- Aba 4: Gestão -->
