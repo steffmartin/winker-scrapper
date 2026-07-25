@@ -170,5 +170,23 @@ class TestRunDashboard(unittest.TestCase):
         # Juros = (300 + 6.0) * (1% / 30) * 5 = 306 * 0.001666... = 0.51
         self.assertAlmostEqual(taxas[0]["multa"], 6.0)
         self.assertAlmostEqual(taxas[0]["juros_total"], 0.51)
+
+    def test_get_inadimplencia_multiple_match(self):
+        self.cursor.execute("INSERT INTO taxas (condominio_id, competencia, exibicao, vencimento, descricao, valor_original, desconto_vista, multa_percentual, juros_mes_percentual, tipo) VALUES (?, '2023-01', 'JAN/2023', '15/01/2023', 'Taxa Teste Match Múltiplo', 100.0, 0.0, 2.0, 1.0, 'C')", (self.condo_id,))
+        self.cursor.execute("UPDATE condominio SET apartamentos = '[\"101\", \"102\", \"103\"]' WHERE id = ?", (self.condo_id,))
+        self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia, revisado_usuario) VALUES (3, 1, 'R', '10/01/2023', 'Pag parcial 1', 55.0, '103', '2023-01', 'Morador', 0, 1, NULL, 1)")
+        self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia, revisado_usuario) VALUES (4, 1, 'R', '10/01/2023', 'Pag parcial 2', 50.0, '103', '2023-01', 'Morador', 0, 1, NULL, 1)")
+        self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, data, descricao, valor, apartamento, competencia, fornecedor, anexos, consistente, motivo_inconsistencia, revisado_usuario) VALUES (5, 1, 'R', '10/01/2023', 'Pag parcial 3', 45.0, '103', '2023-01', 'Morador', 0, 1, NULL, 1)")
+        self.conn.commit()
+        
+        result = self.api.get_inadimplencia(data_corte="2023-01-20")
+        self.assertEqual(result["status"], "success")
+        
+        # O apto 103 pode ter outras taxas pendentes (ex: Taxa Condomínio comum),
+        # mas a "Taxa Teste Match Múltiplo" deve ter sido paga pelo match de (55+45) = 100
+        taxas_103 = next((d["taxas"] for d in result["data"] if d["unidade"] == "103"), [])
+        descricoes_103 = [t["descricao"] for t in taxas_103]
+        self.assertNotIn("Taxa Teste Match Múltiplo", descricoes_103)
+
 if __name__ == '__main__':
     unittest.main()

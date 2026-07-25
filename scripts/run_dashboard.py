@@ -4,6 +4,7 @@ import subprocess
 import sys
 import json
 import calendar
+import itertools
 from datetime import datetime
 
 # Módulos internos independentes
@@ -970,6 +971,43 @@ class Api:
                                 # Remover a transação para não dar match duplo
                                 transacoes_comp.pop(idx)
                                 break
+                                
+                        if not pagamento_encontrado:
+                            transacoes_by_date = {}
+                            for idx_t, transacao in enumerate(transacoes_comp):
+                                try:
+                                    t_data = datetime.strptime(transacao['data'], "%d/%m/%Y").date()
+                                except Exception:
+                                    try:
+                                        t_data = datetime.strptime(transacao['data'], "%Y-%m-%d").date()
+                                    except Exception:
+                                        continue
+                                if t_data not in transacoes_by_date:
+                                    transacoes_by_date[t_data] = []
+                                transacoes_by_date[t_data].append((idx_t, transacao))
+                            
+                            for t_data, t_list in transacoes_by_date.items():
+                                v_date = taxa['_venc_dt'].date()
+                                if t_data <= v_date:
+                                    valor_esperado = taxa['valor_original'] - (taxa['desconto_vista'] or 0)
+                                else:
+                                    valor_esperado = taxa['valor_original']
+                                
+                                match_found = False
+                                for r in range(2, len(t_list) + 1):
+                                    for comb in itertools.combinations(t_list, r):
+                                        soma = sum(item[1]['valor'] for item in comb)
+                                        if abs(soma - valor_esperado) < 0.01:
+                                            match_found = True
+                                            pagamento_encontrado = True
+                                            indices_to_remove = sorted([item[0] for item in comb], reverse=True)
+                                            for idx_to_remove in indices_to_remove:
+                                                transacoes_comp.pop(idx_to_remove)
+                                            break
+                                    if match_found:
+                                        break
+                                if match_found:
+                                    break
                             
                     if not pagamento_encontrado:
                         taxa_venc_dt = taxa['_venc_dt']
