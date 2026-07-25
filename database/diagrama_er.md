@@ -30,6 +30,7 @@ erDiagram
         TEXT inadimplencia_data_corte
         INTEGER inadimplencia_unidades
         REAL inadimplencia_valor
+        REAL taxa_renegociacao
         TEXT administradora
         TEXT telefone_administradora
         TEXT ultima_atualizacao

@@ -78,6 +78,7 @@ export class CobrancasComponent implements OnInit {
     taxasIndividuaisLoaded: boolean = false;
     apartamentos: string[] = [];
     tipo_juros_multa: string = 'N';
+    taxa_renegociacao_config: number = 0;
     speedDialItems: MenuItem[] = [];
     speedDialComunsItems: MenuItem[] = [];
     
@@ -166,6 +167,7 @@ export class CobrancasComponent implements OnInit {
                         this.apartamentos = res.data.condominio.apartamentos;
                     }
                     this.tipo_juros_multa = res.data.condominio.tipo_juros_multa || 'N';
+                    this.taxa_renegociacao_config = res.data.condominio.taxa_renegociacao || 0;
                 }
                 this.loadTaxasComuns();
             });
@@ -539,6 +541,8 @@ export class CobrancasComponent implements OnInit {
 
     onTaxasOriginaisChange() {
         this.parcelasGeradas = [];
+        const total = this.selectedTaxasSum;
+        this.despesasAdicionais = total * (this.taxa_renegociacao_config / 100.0);
     }
     
     getDiasAtraso(vencimentoStr: string): number {

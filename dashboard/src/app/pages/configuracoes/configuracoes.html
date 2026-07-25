@@ -124,6 +124,10 @@
                                 </div>
                             }
                         </div>
+                        <div class="flex flex-col gap-2">
+                            <label for="taxa_renegociacao" class="font-medium">Taxa de Renegociação</label>
+                            <p-inputNumber id="taxa_renegociacao" formControlName="taxa_renegociacao" [min]="0" suffix=" %" locale="pt-BR"></p-inputNumber>
+                        </div>
                     </div>
                     <div class="col-span-1 md:col-span-3 flex flex-col gap-2 mt-4" formGroupName="condominio">
                         <span class="font-medium">Cálculo de Encargos</span>

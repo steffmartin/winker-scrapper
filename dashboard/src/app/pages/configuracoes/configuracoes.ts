@@ -90,7 +90,8 @@ export class ConfiguracoesComponent implements OnInit {
                 inadimplencia_unidades: [0],
                 inadimplencia_valor: [0],
                 saldo_declarado: [null],
-                tipo_juros_multa: ['N']
+                tipo_juros_multa: ['N'],
+                taxa_renegociacao: [0, Validators.min(0)]
             }),
             membros: this.fb.array([]),
             contas: this.fb.array([])

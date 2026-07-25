@@ -20,6 +20,7 @@ class Condominio(BaseModel):
     inadimplencia_data_corte = CharField(null=True)
     inadimplencia_unidades = IntegerField(null=True)
     inadimplencia_valor = FloatField(null=True)
+    taxa_renegociacao = FloatField(null=True, default=0)
     administradora = CharField(null=True)
     telefone_administradora = CharField(null=True)
     ultima_atualizacao = CharField(null=True)

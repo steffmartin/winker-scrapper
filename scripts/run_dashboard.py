@@ -163,6 +163,7 @@ class Api:
                 if 'inadimplencia_valor' in condo_data: condo.inadimplencia_valor = condo_data['inadimplencia_valor']
                 if 'saldo_declarado' in condo_data: condo.saldo_declarado = condo_data['saldo_declarado']
                 if 'tipo_juros_multa' in condo_data: condo.tipo_juros_multa = condo_data['tipo_juros_multa']
+                if 'taxa_renegociacao' in condo_data: condo.taxa_renegociacao = condo_data['taxa_renegociacao']
                 
                 condo.ultima_atualizacao = datetime.now().isoformat()
                 
