@@ -1,0 +1,113 @@
+<p-dialog [(visible)]="visible" [header]="dialogTitle" [modal]="true" [style]="{width: '500px'}"
+          [breakpoints]="{'960px': '75vw', '640px': '90vw'}" [closable]="true" [dismissableMask]="true" (onHide)="closeDialog()">
+    <ng-template pTemplate="header">
+        <div class="flex items-center gap-2">
+            <span class="font-bold text-lg">{{ dialogTitle }}</span>
+            <p-button *ngIf="isEdit" icon="pi pi-trash" styleClass="p-button-rounded p-button-danger p-button-text ml-4" (click)="deleteTaxa()"></p-button>
+        </div>
+    </ng-template>
+
+    <div class="flex flex-col gap-4 mt-2" *ngIf="currentTaxa">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" *ngIf="currentTaxa.tipo === 'I'">
+            <div class="flex flex-col gap-2">
+                <label for="apartamento" class="font-semibold text-sm">Apartamento</label>
+                <input pInputText id="apartamento" [(ngModel)]="currentTaxa.apartamento" class="w-full" placeholder="Ex: 101" />
+            </div>
+            <div></div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" *ngIf="currentTaxa.tipo !== 'D'">
+            <div class="flex flex-col gap-2">
+                <label for="competencia" class="font-semibold text-sm">Competência</label>
+                <p-datepicker id="competencia" [(ngModel)]="competenciaDate" view="month" dateFormat="mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn" class="w-full"></p-datepicker>
+            </div>
+            <div class="flex flex-col gap-2">
+                <label for="vencimento" class="font-semibold text-sm">Vencimento</label>
+                <p-datepicker id="vencimento" [(ngModel)]="vencimentoDate" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn" class="w-full"></p-datepicker>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" *ngIf="currentTaxa.tipo === 'D'">
+            <div class="flex flex-col gap-2">
+                <label for="apartamento" class="font-semibold text-sm">Apartamento</label>
+                <input pInputText id="apartamento" [(ngModel)]="currentTaxa.apartamento" class="w-full" placeholder="Ex: 101" (ngModelChange)="onDescontoChange()" />
+            </div>
+            <div class="flex flex-col gap-2">
+                <label for="competencia" class="font-semibold text-sm">Competência</label>
+                <p-datepicker id="competencia" [(ngModel)]="competenciaDate" view="month" dateFormat="mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn" class="w-full" (ngModelChange)="onDescontoChange()"></p-datepicker>
+            </div>
+        </div>
+        
+        <div class="flex flex-col gap-2" *ngIf="currentTaxa.tipo === 'D'">
+            <label for="taxaVinculada" class="font-semibold text-sm">Taxa Vinculada</label>
+            <p-select id="taxaVinculada" [options]="taxasParaDesconto" [(ngModel)]="currentTaxa.taxa_id" 
+                      optionLabel="descricao" optionValue="id" [filter]="true" filterBy="descricao,vencimento" 
+                      [showClear]="true" placeholder="Selecione a taxa" styleClass="w-full"
+                      emptyMessage="Nenhuma taxa encontrada" emptyFilterMessage="Nenhuma taxa encontrada">
+                <ng-template let-taxa pTemplate="item">
+                    <div class="flex flex-col">
+                        <span>{{ taxa.vencimento }} - {{ taxa.descricao }}</span>
+                        <small class="text-slate-500 dark:text-slate-400">
+                            Total: {{taxa.valor_original|currency:'BRL'}} | 
+                            Desc: {{taxa.desconto_vista|currency:'BRL'}} | 
+                            Multa: {{taxa.multa_percentual|number:'1.2-2'}}% | 
+                            Juros Mensais: {{taxa.juros_mes_percentual|number:'1.2-2'}}%
+                        </small>
+                    </div>
+                </ng-template>
+                <ng-template let-taxa pTemplate="selectedItem">
+                    <div *ngIf="taxa">
+                        {{ taxa.vencimento }} - {{ taxa.descricao }}
+                    </div>
+                </ng-template>
+            </p-select>
+            <small class="text-slate-500 dark:text-slate-400 mt-1 block">
+                <span *ngIf="getSelectedTaxa()">
+                    <i class="pi pi-info-circle text-xs mr-1"></i> Total: {{getSelectedTaxa()?.valor_original|currency:'BRL'}} | 
+                    Desc à Vista: {{getSelectedTaxa()?.desconto_vista|currency:'BRL'}} | 
+                    Multa: {{getSelectedTaxa()?.multa_percentual|number:'1.2-2'}}% | 
+                    Juros Mensais: {{getSelectedTaxa()?.juros_mes_percentual|number:'1.2-2'}}%
+                </span>
+                <span *ngIf="!getSelectedTaxa()">
+                    <i class="pi pi-info-circle text-xs mr-1"></i> Selecione uma taxa
+                </span>
+            </small>
+        </div>
+        
+        <div class="flex flex-col gap-2">
+            <label for="descricao" class="font-semibold text-sm">Descrição</label>
+            <input pInputText id="descricao" [(ngModel)]="currentTaxa.descricao" class="w-full" />
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="flex flex-col gap-2">
+                <label for="valor" class="font-semibold text-sm">Valor Total</label>
+                <p-inputNumber id="valor" [(ngModel)]="currentTaxa.valor_original" [min]="0" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+            </div>
+            <div class="flex flex-col gap-2">
+                <label for="desconto" class="font-semibold text-sm">Desconto à Vista</label>
+                <p-inputNumber id="desconto" [(ngModel)]="currentTaxa.desconto_vista" [min]="0" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
+            </div>
+            <div class="flex flex-col gap-2">
+                <label for="multa" class="font-semibold text-sm">Multa</label>
+                <p-inputNumber id="multa" [(ngModel)]="currentTaxa.multa_percentual" [min]="0" suffix=" %" locale="pt-BR" class="w-full"></p-inputNumber>
+            </div>
+            <div class="flex flex-col gap-2">
+                <label for="juros" class="font-semibold text-sm">Juros Mensais</label>
+                <p-inputNumber id="juros" [(ngModel)]="currentTaxa.juros_mes_percentual" [min]="0" suffix=" %" locale="pt-BR" class="w-full"></p-inputNumber>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4" *ngIf="(currentTaxa.tipo === 'C' || currentTaxa.tipo === 'E') && !isEdit">
+            <div></div>
+            <div class="flex flex-col gap-2">
+                <label for="mesesRepeticao" class="font-semibold text-sm">Repetir taxa</label>
+                <p-inputNumber id="mesesRepeticao" [(ngModel)]="mesesRepeticao" [min]="1" [max]="120" [showButtons]="true" suffix=" vez(es)" styleClass="primary-inputnumber-btn" class="w-full"></p-inputNumber>
+            </div>
+        </div>
+        
+        <div class="flex items-center justify-end border-t border-surface-200 dark:border-surface-700 pt-4 mt-2 gap-2">
+            <p-button label="Cancelar" severity="secondary" [text]="true" (onClick)="closeDialog()"></p-button>
+            <p-button label="Salvar" (onClick)="saveTaxa()"></p-button>
+        </div>
+    </div>
+</p-dialog>

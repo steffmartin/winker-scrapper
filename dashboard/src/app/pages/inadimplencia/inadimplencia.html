@@ -36,7 +36,7 @@
         </p>
     </div>
 
-    <p-tabs *ngIf="!loading && inadimplencias && inadimplencias.length > 0" [value]="activeTab">
+    <p-tabs *ngIf="!loading && inadimplencias && inadimplencias.length > 0" [value]="activeTab" (valueChange)="onTabChange($event)">
         <p-tablist>
             <p-tab *ngFor="let unidade of inadimplencias" [value]="unidade.unidade">
                 <div class="flex items-center gap-2">
@@ -49,7 +49,7 @@
         <p-tabpanels style="padding: 0 !important;" class="!p-0">
             <p-tabpanel *ngFor="let unidade of inadimplencias" [value]="unidade.unidade">
                 
-                <p-table [value]="unidade.taxas" sortMode="multiple" 
+                <p-table [value]="unidade.taxas" sortMode="multiple" [(selection)]="selectedTaxas" selectionMode="multiple" [metaKeySelection]="false" dataKey="id" (onRowSelect)="updateSpeedDialItems()" (onRowUnselect)="updateSpeedDialItems()" (onHeaderCheckboxToggle)="updateSpeedDialItems()" 
                          [globalFilterFields]="['exibicao', 'vencimento', 'descricao']" 
                          styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll"
                          rowHover="true">
@@ -69,7 +69,7 @@
                     </ng-template>
                     
                     <ng-template pTemplate="body" let-rowData>
-                        <tr>
+                        <tr [pSelectableRow]="rowData">
                             <td>
                                 <p-avatar [label]="getAvatarLabelMes(rowData.competencia)" shape="circle" size="normal" 
                                           [style]="{'background-color': getAvatarColor(rowData.competencia), 'color': '#ffffff'}">
@@ -101,4 +101,14 @@
             </p-tabpanel>
         </p-tabpanels>
     </p-tabs>
+
+    <p-speeddial *ngIf="speedDialItems.length > 0" [model]="speedDialItems" direction="up" [style]="{ position: 'absolute', bottom: '1rem', right: '1rem', 'z-index': 1000 }" buttonClassName="p-button-primary w-14 h-14 shadow-lg"></p-speeddial>
+
+    @defer (on idle) {
+        <app-renegociacao-dialog [(visible)]="showRenegociacaoDialog" [autoFillApartamento]="selectedApartamento" [autoFillCompetenciaRange]="selectedCompetenciaRange" [autoFillTaxasOriginaisIds]="selectedTaxasIds" (onSave)="onDialogSave()"></app-renegociacao-dialog>
+    }
+
+    @defer (on idle) {
+        <app-taxa-dialog [(visible)]="showDescontoDialog" tipo="D" [autoFillApartamento]="selectedApartamento" [autoFillCompetencia]="selectedCompetencia" [autoFillTaxaVinculadaId]="selectedTaxaId" (onSave)="onDialogSave()"></app-taxa-dialog>
+    }
 </div>

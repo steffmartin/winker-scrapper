@@ -14,6 +14,10 @@ import { ToastModule } from 'primeng/toast';
 import { BadgeModule } from 'primeng/badge';
 import { TooltipModule } from 'primeng/tooltip';
 import { SkeletonModule } from 'primeng/skeleton';
+import { SpeedDialModule } from 'primeng/speeddial';
+import { MenuItem } from 'primeng/api';
+import { TaxaDialogComponent } from '../../shared/components/taxa-dialog/taxa-dialog.component';
+import { RenegociacaoDialogComponent } from '../../shared/components/renegociacao-dialog/renegociacao-dialog.component';
 
 declare global {
     interface Window {
@@ -27,7 +31,7 @@ declare global {
     imports: [
         CommonModule, CardModule, TabsModule, TableModule, ButtonModule,
         InputTextModule, InputNumberModule, DatePickerModule, AvatarModule, 
-        FormsModule, ToastModule, BadgeModule, TooltipModule, SkeletonModule
+        FormsModule, ToastModule, BadgeModule, TooltipModule, SkeletonModule, SpeedDialModule, TaxaDialogComponent, RenegociacaoDialogComponent
     ],
     providers: [MessageService],
     templateUrl: './inadimplencia.html',
@@ -53,6 +57,47 @@ export class InadimplenciaComponent implements OnInit {
     dataCorte: Date = new Date(); // default hoje
     hoje: Date = new Date(); // data maxima permitida
     activeTab: string = '';
+    
+    selectedTaxas: any[] = [];
+    speedDialItems: MenuItem[] = [];
+    
+    onTabChange(event: string | number | undefined) {
+        if (event !== undefined) {
+            this.activeTab = String(event);
+        }
+        this.selectedTaxas = [];
+        this.updateSpeedDialItems();
+    }
+    
+    updateSpeedDialItems() {
+        this.speedDialItems = [];
+        
+        if (this.selectedTaxas && this.selectedTaxas.length > 0) {
+            this.speedDialItems.push({
+                icon: 'pi pi-refresh',
+                tooltipOptions: { tooltipLabel: 'Nova Renegociação' },
+                command: () => this.openRenegociacaoDialog(this.activeTab)
+            });
+        }
+        
+        if (this.selectedTaxas && this.selectedTaxas.length === 1) {
+            this.speedDialItems.push({
+                icon: 'pi pi-tag',
+                tooltipOptions: { tooltipLabel: 'Novo Desconto' },
+                command: () => this.openDescontoDialog(this.activeTab)
+            });
+        }
+    }
+    
+    showRenegociacaoDialog: boolean = false;
+    showDescontoDialog: boolean = false;
+    
+    selectedApartamento: string = '';
+    selectedCompetenciaRange: Date[] = [];
+    selectedTaxasIds: number[] = [];
+    selectedCompetencia: string = '';
+    selectedTaxaId: number = 0;
+
 
     constructor(
         private messageService: MessageService,
@@ -138,16 +183,16 @@ export class InadimplenciaComponent implements OnInit {
                         {
                             unidade: '101',
                             taxas: [
-                                { competencia: '2026-06', exibicao: 'JUN/2026', valor: 350.00, vencimento: '2026-06-15', descricao: 'Taxa Ordinária', multa: 7.00, juros_total: 10.50, dias_vencidos: 30 },
-                                { competencia: '2026-07', exibicao: 'JUL/2026', valor: 350.00, vencimento: '2026-07-15', descricao: 'Taxa Ordinária', multa: 7.00, juros_total: 1.50, dias_vencidos: 5 }
+                                { id: 1, competencia: '2026-06', exibicao: 'JUN/2026', valor: 350.00, vencimento: '2026-06-15', descricao: 'Taxa Ordinária', multa: 7.00, juros_total: 10.50, dias_vencidos: 30 },
+                                { id: 2, competencia: '2026-07', exibicao: 'JUL/2026', valor: 350.00, vencimento: '2026-07-15', descricao: 'Taxa Ordinária', multa: 7.00, juros_total: 1.50, dias_vencidos: 5 }
                             ]
                         },
                         {
                             unidade: '202',
                             taxas: [
-                                { competencia: '2026-05', exibicao: 'MAI/2026', valor: 400.00, vencimento: '2026-05-15', descricao: 'Taxa Ordinária', multa: 8.00, juros_total: 20.00, dias_vencidos: 61 },
-                                { competencia: '2026-06', exibicao: 'JUN/2026', valor: 400.00, vencimento: '2026-06-15', descricao: 'Taxa Extra', multa: 8.00, juros_total: 12.00, dias_vencidos: 30 },
-                                { competencia: '2026-07', exibicao: 'JUL/2026', valor: 400.00, vencimento: '2026-07-15', descricao: 'Taxa Ordinária', multa: 8.00, juros_total: 2.00, dias_vencidos: 5 }
+                                { id: 3, competencia: '2026-05', exibicao: 'MAI/2026', valor: 400.00, vencimento: '2026-05-15', descricao: 'Taxa Ordinária', multa: 8.00, juros_total: 20.00, dias_vencidos: 61 },
+                                { id: 4, competencia: '2026-06', exibicao: 'JUN/2026', valor: 400.00, vencimento: '2026-06-15', descricao: 'Taxa Extra', multa: 8.00, juros_total: 12.00, dias_vencidos: 30 },
+                                { id: 5, competencia: '2026-07', exibicao: 'JUL/2026', valor: 400.00, vencimento: '2026-07-15', descricao: 'Taxa Ordinária', multa: 8.00, juros_total: 2.00, dias_vencidos: 5 }
                             ]
                         }
                     ];
@@ -215,4 +260,59 @@ export class InadimplenciaComponent implements OnInit {
         }
         return unidade.taxas.reduce((acc: number, t: any) => acc + (t[campo] || 0), 0);
     }
+
+
+    
+    openRenegociacaoDialog(unidade: string) {
+        this.messageService.add({severity: 'info', summary: 'Debug', detail: 'Executando openRenegociacaoDialog'});
+        if (!this.selectedTaxas || this.selectedTaxas.length === 0) {
+            this.messageService.add({severity: 'warn', summary: 'Aviso', detail: 'Nenhuma taxa selecionada'});
+            return;
+        }
+        
+        this.selectedApartamento = unidade;
+        this.selectedTaxasIds = this.selectedTaxas.map(t => t.id);
+        
+        try {
+            // Find min and max competencia
+            const compDates = this.selectedTaxas.map(t => {
+                const parts = t.competencia.split('-');
+                return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+            });
+            
+            const minDate = new Date(Math.min(...compDates.map(d => d.getTime())));
+            const maxDate = new Date(Math.max(...compDates.map(d => d.getTime())));
+            
+            this.selectedCompetenciaRange = [minDate, maxDate];
+            this.showRenegociacaoDialog = true;
+            this.messageService.add({severity: 'success', summary: 'Debug', detail: 'Variáveis populadas com sucesso'});
+        } catch(e: any) {
+            this.messageService.add({severity: 'error', summary: 'Erro de parse', detail: e.toString()});
+        }
+    }
+    
+    openDescontoDialog(unidade: string) {
+        this.messageService.add({severity: 'info', summary: 'Debug', detail: 'Executando openDescontoDialog'});
+        if (!this.selectedTaxas || this.selectedTaxas.length !== 1) {
+            this.messageService.add({severity: 'warn', summary: 'Aviso', detail: 'Mais de uma taxa selecionada para desconto'});
+            return;
+        }
+        
+        try {
+            const taxa = this.selectedTaxas[0];
+            this.selectedApartamento = unidade;
+            this.selectedCompetencia = taxa.competencia;
+            this.selectedTaxaId = taxa.id;
+            
+            this.showDescontoDialog = true;
+            this.messageService.add({severity: 'success', summary: 'Debug', detail: 'Dialog de desconto deve abrir agora'});
+        } catch(e: any) {
+            this.messageService.add({severity: 'error', summary: 'Erro de parse', detail: e.toString()});
+        }
+    }
+    
+    onDialogSave() {
+        this.carregarDados();
+    }
+
 }
