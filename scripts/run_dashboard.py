@@ -1033,6 +1033,7 @@ class Api:
                             multa_total = total_sem_desconto * (multa_perc / 100.0)
                         
                         taxas_nao_pagas.append({
+                            "id": taxa.get('id'),
                             "competencia": taxa['competencia'],
                             "exibicao": taxa['exibicao'],
                             "valor": taxa['valor_original'],
