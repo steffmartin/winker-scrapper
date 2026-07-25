@@ -960,10 +960,13 @@ class Api:
                                 except Exception:
                                     continue
                             
-                            valor_esperado_cheio = taxa['valor_original']
-                            valor_esperado_desc = taxa['valor_original'] - (taxa['desconto_vista'] or 0)
+                            v_date = taxa['_venc_dt'].date()
+                            if t_data <= v_date:
+                                valor_esperado = taxa['valor_original'] - (taxa['desconto_vista'] or 0)
+                            else:
+                                valor_esperado = taxa['valor_original']
                                 
-                            if abs(transacao['valor'] - valor_esperado_cheio) < 0.01 or abs(transacao['valor'] - valor_esperado_desc) < 0.01:
+                            if abs(transacao['valor'] - valor_esperado) < 0.01:
                                 pagamento_encontrado = True
                                 # Remover a transação para não dar match duplo
                                 transacoes_comp.pop(idx)
@@ -988,10 +991,17 @@ class Api:
                                 for comb in itertools.combinations(t_list, r):
                                     soma = sum(item[1]['valor'] for item in comb)
                                     
-                                    valor_esperado_cheio = taxa['valor_original']
-                                    valor_esperado_desc = taxa['valor_original'] - (taxa['desconto_vista'] or 0)
+                                    valid_dates = [item[2] for item in comb if item[2] is not None]
+                                    max_date = max(valid_dates) if valid_dates else None
                                     
-                                    if abs(soma - valor_esperado_cheio) < 0.01 or abs(soma - valor_esperado_desc) < 0.01:
+                                    if max_date and max_date <= v_date:
+                                        valor_esperado_desc = taxa['valor_original'] - (taxa['desconto_vista'] or 0)
+                                    else:
+                                        valor_esperado_desc = None
+                                        
+                                    valor_esperado_cheio = taxa['valor_original']
+                                    
+                                    if abs(soma - valor_esperado_cheio) < 0.01 or (valor_esperado_desc is not None and abs(soma - valor_esperado_desc) < 0.01):
                                         match_found = True
                                         pagamento_encontrado = True
                                         indices_to_remove = sorted([item[0] for item in comb], reverse=True)
