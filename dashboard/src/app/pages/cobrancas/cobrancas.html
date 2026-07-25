@@ -135,7 +135,7 @@
         <div class="flex flex-col gap-4 mt-2" *ngIf="currentTaxa">
             
             <!-- Row for I: Apartamento alone -->
-            <div class="grid grid-cols-2 gap-4" *ngIf="currentTaxa.tipo === 'I'">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" *ngIf="currentTaxa.tipo === 'I'">
                 <div class="flex flex-col gap-2">
                     <label for="apartamento" class="font-semibold text-sm">Apartamento</label>
                     <input pInputText id="apartamento" [(ngModel)]="currentTaxa.apartamento" class="w-full" placeholder="Ex: 101" />
@@ -144,7 +144,7 @@
             </div>
 
             <!-- Row for C or I: Competencia and Vencimento -->
-            <div class="grid grid-cols-2 gap-4" *ngIf="currentTaxa.tipo !== 'D'">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" *ngIf="currentTaxa.tipo !== 'D'">
                 <div class="flex flex-col gap-2">
                     <label for="competencia" class="font-semibold text-sm">Competência</label>
                     <p-datepicker id="competencia" [(ngModel)]="competenciaDate" view="month" dateFormat="mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn" class="w-full"></p-datepicker>
@@ -156,7 +156,7 @@
             </div>
 
             <!-- Row for D: Apartamento and Competencia -->
-            <div class="grid grid-cols-2 gap-4" *ngIf="currentTaxa.tipo === 'D'">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" *ngIf="currentTaxa.tipo === 'D'">
                 <div class="flex flex-col gap-2">
                     <label for="apartamento" class="font-semibold text-sm">Apartamento</label>
                     <input pInputText id="apartamento" [(ngModel)]="currentTaxa.apartamento" class="w-full" placeholder="Ex: 101" (ngModelChange)="onDescontoChange()" />
@@ -207,7 +207,7 @@
                 <label for="descricao" class="font-semibold text-sm">Descrição</label>
                 <input pInputText id="descricao" [(ngModel)]="currentTaxa.descricao" class="w-full" />
             </div>
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div class="flex flex-col gap-2">
                     <label for="valor" class="font-semibold text-sm">Valor Total</label>
                     <p-inputNumber id="valor" [(ngModel)]="currentTaxa.valor_original" [min]="0" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>
@@ -226,7 +226,7 @@
                 </div>
             </div>
             
-            <div class="grid grid-cols-2 gap-4 mt-4" *ngIf="(currentTaxa.tipo === 'C' || currentTaxa.tipo === 'E') && !isEdit">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4" *ngIf="(currentTaxa.tipo === 'C' || currentTaxa.tipo === 'E') && !isEdit">
                 <div></div>
                 <div class="flex flex-col gap-2">
                     <label for="mesesRepeticao" class="font-semibold text-sm">Repetir taxa</label>
@@ -242,7 +242,7 @@
     </p-dialog>
 
     @defer (when displayDialogRenegociacao) {
-    <p-dialog [(visible)]="displayDialogRenegociacao" [modal]="true" [style]="{width: '65vw'}" [draggable]="false" [resizable]="false" [dismissableMask]="true" [closable]="true">
+    <p-dialog [(visible)]="displayDialogRenegociacao" [modal]="true" [style]="{width: '65vw'}" [breakpoints]="{'1199px': '75vw', '960px': '90vw', '640px': '95vw'}" [draggable]="false" [resizable]="false" [dismissableMask]="true" [closable]="true">
         <ng-template pTemplate="header">
             <div class="flex items-center gap-2">
                 <span class="font-bold text-lg">{{ isEdit ? 'Editar Renegociação' : 'Nova Renegociação' }}</span>
@@ -251,7 +251,7 @@
         </ng-template>
         <div class="flex flex-col gap-6 pt-2">
             
-            <div class="grid grid-cols-4 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div class="flex flex-col gap-2">
                     <label for="ren-data" class="font-semibold text-sm">Data da Renegociação</label>
                     <p-datepicker id="ren-data" [(ngModel)]="dataRenegociacaoDate" dateFormat="dd/mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn" class="w-full" [maxDate]="todayDate" (ngModelChange)="onRenegociacaoFormChange()"></p-datepicker>
@@ -291,9 +291,10 @@
                 </p-multiSelect>
                 <small class="text-slate-500 dark:text-slate-400 mt-1 block">
                     <span *ngIf="taxasOriginaisSelecionadas && taxasOriginaisSelecionadas.length > 0; else noTaxasLabel">
-                        <i class="pi pi-info-circle text-xs mr-1"></i> Total: {{selectedTaxasDetalhesSum.valor|currency:'BRL'}} | 
+                        <i class="pi pi-info-circle text-xs mr-1"></i> Valor: {{selectedTaxasDetalhesSum.valor|currency:'BRL'}} | 
                         Multa: {{selectedTaxasDetalhesSum.multa|currency:'BRL'}} | 
-                        Juros: {{selectedTaxasDetalhesSum.juros|currency:'BRL'}}
+                        Juros: {{selectedTaxasDetalhesSum.juros|currency:'BRL'}} | 
+                        Total: {{selectedTaxasDetalhesSum.geral|currency:'BRL'}}
                     </span>
                     <ng-template #noTaxasLabel>
                         <span><i class="pi pi-info-circle text-xs mr-1"></i> Selecione uma ou mais taxas</span>
@@ -301,7 +302,7 @@
                 </small>
             </div>
 
-            <div class="grid grid-cols-4 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div class="flex flex-col gap-2">
                     <label for="ren-despesas" class="font-semibold text-sm">Despesas da Renegociação</label>
                     <p-inputNumber id="ren-despesas" [(ngModel)]="despesasAdicionais" mode="currency" currency="BRL" locale="pt-BR" class="w-full"></p-inputNumber>

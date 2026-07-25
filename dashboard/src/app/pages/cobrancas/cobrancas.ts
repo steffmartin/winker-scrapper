@@ -589,7 +589,7 @@ export class CobrancasComponent implements OnInit {
     
     get selectedTaxasDetalhesSum() {
         if (!this.taxasOriginaisSelecionadas || this.taxasOriginaisSelecionadas.length === 0) {
-            return { valor: 0, desconto: 0, multa: 0, juros: 0 };
+            return { valor: 0, desconto: 0, multa: 0, juros: 0, geral: 0 };
         }
         return this.taxasOriginaisSelecionadas.reduce((acc, t) => {
             const dias = this.getDiasAtraso(t.vencimento);
@@ -614,8 +614,9 @@ export class CobrancasComponent implements OnInit {
             acc.desconto += 0; 
             acc.multa += multaTotal;
             acc.juros += jurosTotal;
+            acc.geral += totalSemDesconto + multaTotal + jurosTotal;
             return acc;
-        }, { valor: 0, desconto: 0, multa: 0, juros: 0 });
+        }, { valor: 0, desconto: 0, multa: 0, juros: 0, geral: 0 });
     }
     
     gerarParcelasRenegociacao() {

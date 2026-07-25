@@ -973,7 +973,7 @@ class Api:
                                 break
                                 
                         if not pagamento_encontrado:
-                            transacoes_by_date = {}
+                            t_list = []
                             for idx_t, transacao in enumerate(transacoes_comp):
                                 try:
                                     t_data = datetime.strptime(transacao['data'], "%d/%m/%Y").date()
@@ -981,30 +981,32 @@ class Api:
                                     try:
                                         t_data = datetime.strptime(transacao['data'], "%Y-%m-%d").date()
                                     except Exception:
-                                        continue
-                                if t_data not in transacoes_by_date:
-                                    transacoes_by_date[t_data] = []
-                                transacoes_by_date[t_data].append((idx_t, transacao))
+                                        t_data = None
+                                t_list.append((idx_t, transacao, t_data))
                             
-                            for t_data, t_list in transacoes_by_date.items():
-                                v_date = taxa['_venc_dt'].date()
-                                if t_data <= v_date:
-                                    valor_esperado = taxa['valor_original'] - (taxa['desconto_vista'] or 0)
-                                else:
-                                    valor_esperado = taxa['valor_original']
-                                
-                                match_found = False
-                                for r in range(2, len(t_list) + 1):
-                                    for comb in itertools.combinations(t_list, r):
-                                        soma = sum(item[1]['valor'] for item in comb)
-                                        if abs(soma - valor_esperado) < 0.01:
-                                            match_found = True
-                                            pagamento_encontrado = True
-                                            indices_to_remove = sorted([item[0] for item in comb], reverse=True)
-                                            for idx_to_remove in indices_to_remove:
-                                                transacoes_comp.pop(idx_to_remove)
-                                            break
-                                    if match_found:
+                            v_date = taxa['_venc_dt'].date()
+                            match_found = False
+                            
+                            for r in range(2, len(t_list) + 1):
+                                for comb in itertools.combinations(t_list, r):
+                                    soma = sum(item[1]['valor'] for item in comb)
+                                    
+                                    valid_dates = [item[2] for item in comb if item[2] is not None]
+                                    max_date = max(valid_dates) if valid_dates else None
+                                    
+                                    if max_date and max_date <= v_date:
+                                        valor_esperado_desc = taxa['valor_original'] - (taxa['desconto_vista'] or 0)
+                                    else:
+                                        valor_esperado_desc = None
+                                        
+                                    valor_esperado_cheio = taxa['valor_original']
+                                    
+                                    if abs(soma - valor_esperado_cheio) < 0.01 or (valor_esperado_desc is not None and abs(soma - valor_esperado_desc) < 0.01):
+                                        match_found = True
+                                        pagamento_encontrado = True
+                                        indices_to_remove = sorted([item[0] for item in comb], reverse=True)
+                                        for idx_to_remove in indices_to_remove:
+                                            transacoes_comp.pop(idx_to_remove)
                                         break
                                 if match_found:
                                     break
