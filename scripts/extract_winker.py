@@ -1118,6 +1118,7 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
         page = context.new_page()
         page_pc = context.new_page()
         page_pc2 = context.new_page()
+        page_pc3 = context.new_page()
 
         page.bring_to_front()
 
@@ -1233,7 +1234,13 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                 except Exception:
                     time.sleep(3)
             
-            # --- Aba terciária (Documentos - Balancetes) ---
+            # --- Aba terciária (Documentos - Demonstrativos financeiros) ---
+            page_pc3.bring_to_front()
+            page_pc3.goto("https://app.winker.com.br/intra/meuCondominio/documento", wait_until="networkidle")
+            page_pc3.get_by_role("link", name=re.compile(r"Demonstrativos financeiros", re.IGNORECASE)).click()
+            page_pc3.wait_for_load_state("networkidle")
+            
+            # --- Aba quaternária (Documentos - Balancetes) ---
             page_pc2.bring_to_front()
             page_pc2.goto("https://app.winker.com.br/intra/meuCondominio/documento", wait_until="networkidle")
             page_pc2.get_by_role("link", name=re.compile(r"Balancetes", re.IGNORECASE)).click()
@@ -1425,13 +1432,13 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                         else:
                             fallback_success = False
                             try:
-                                page_pc2.bring_to_front()
+                                page_pc3.bring_to_front()
                                 search_term = f"{str(mes_num).zfill(2)}-{ano_item}"
-                                page_pc2.get_by_placeholder("Pesquisar").fill(search_term)
-                                page_pc2.get_by_placeholder("Pesquisar").press("Enter")
-                                page_pc2.wait_for_load_state("networkidle")
+                                page_pc3.get_by_placeholder("Pesquisar").fill(search_term)
+                                page_pc3.get_by_placeholder("Pesquisar").press("Enter")
+                                page_pc3.wait_for_load_state("networkidle")
                                 
-                                cell = page_pc2.locator(f"td a:has-text('{search_term}')").first
+                                cell = page_pc3.locator("td a").filter(has_text=re.compile(rf"{search_term}$")).first
                                 if cell.count() > 0:
                                     dl_btn = cell.locator("xpath=ancestor::tr").locator("a[href*='/download/id/']").first
                                     if dl_btn.count() > 0:
@@ -1464,10 +1471,53 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                                         total_downloads_prestacoes += 1
                                         fallback_success = True
                             except Exception as err:
-                                logger.error(f"    Erro ao extrair prestação de contas de {mes_ext}: {err}")
+                                logger.error(f"    Erro ao extrair prestação de contas (Demonstrativos) de {mes_ext}: {err}")
                             
                             if not fallback_success:
-                                logger.warning(f"    [AVISO CONSISTÊNCIA] Prestação de contas indisponível.")
+                                try:
+                                    page_pc2.bring_to_front()
+                                    search_term = f"{str(mes_num).zfill(2)}-{ano_item}"
+                                    page_pc2.get_by_placeholder("Pesquisar").fill(search_term)
+                                    page_pc2.get_by_placeholder("Pesquisar").press("Enter")
+                                    page_pc2.wait_for_load_state("networkidle")
+                                    
+                                    cell = page_pc2.locator("td a").filter(has_text=re.compile(rf"{search_term}$")).first
+                                    if cell.count() > 0:
+                                        dl_btn = cell.locator("xpath=ancestor::tr").locator("a[href*='/download/id/']").first
+                                        if dl_btn.count() > 0:
+                                            href = dl_btn.get_attribute("href")
+                                            target_url = f"https://app.winker.com.br{href}"
+                                            
+                                            mes_dir = os.path.join(project_root, "anexos", "temp")
+                                            default_pdf_name = f"Prestação de contas {mes_ext}"
+                                            
+                                            temp_path, nome_orig_pdf = download_http_file(
+                                                context, target_url, mes_dir,
+                                                filename_prefix="", default_filename=default_pdf_name
+                                            )
+                                            
+                                            ext_real = get_extensao(nome_orig_pdf) or "pdf"
+                                            caminho_final = os.path.join(project_root, "anexos", str(condo_id_extraido), chave_unica, f"{chave_unica}_prestacao_contas.{ext_real}")
+                                            caminho_rel = f"anexos/{condo_id_extraido}/{chave_unica}/{chave_unica}_prestacao_contas.{ext_real}"
+                                            
+                                            pc_consistente, pc_motivo = evaluate_entity_consistency('prestacao_contas', extensao=ext_real)
+                                            
+                                            prestacao_contas_info = {
+                                                "temp_path": temp_path,
+                                                "caminho_final": caminho_final,
+                                                "nome_orig_pdf": nome_orig_pdf,
+                                                "extensao": ext_real,
+                                                "caminho_rel": caminho_rel,
+                                                "pc_consistente": pc_consistente,
+                                                "pc_motivo": pc_motivo
+                                            }
+                                            total_downloads_prestacoes += 1
+                                            fallback_success = True
+                                except Exception as err:
+                                    logger.error(f"    Erro ao extrair prestação de contas (Balancetes) de {mes_ext}: {err}")
+                                
+                                if not fallback_success:
+                                    logger.warning(f"    [AVISO CONSISTÊNCIA] Prestação de contas indisponível.")
 
                         page.bring_to_front() # Volta para a aba principal
 
