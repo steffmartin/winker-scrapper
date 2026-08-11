@@ -619,20 +619,13 @@ def extract_inadimplencia_boleto(page, context):
         
     badge_btn = None
 
-    # 1. Pegar o PRIMEIRO que possui 'Pago'
-    loc_pago = page.locator(".list-group-item:has(a:has-text('Pago')) a:has-text('Pago')")
-    if loc_pago.count() > 0:
-        badge_btn = loc_pago.first
-    else:
-        # 2. Pegar o ÚLTIMO item que possui 'Ver boleto'
-        loc_ver_boleto = page.locator(".list-group-item:has(a:has-text('Ver boleto')) a:has-text('Ver boleto')")
-        if loc_ver_boleto.count() > 0:
-            badge_btn = loc_ver_boleto.last
-        else:
-            # 3. Se não existir, pegar o PRIMEIRO que possui 'a.badge'
-            loc_badge = page.locator(".list-group-item:has(a.badge) a.badge")
-            if loc_badge.count() > 0:
-                badge_btn = loc_badge.first
+    # Pegar o ÚLTIMO boleto da lista sempre, independente de tags ('Pago', 'Ver boleto', etc).
+    loc_ultimo_item = page.locator(".list-group-item").last
+    if loc_ultimo_item.count() > 0:
+        # Procura por botões/links conhecidos dentro do último item ou fallback para qualquer âncora
+        loc_botao = loc_ultimo_item.locator("a.badge, a:has-text('Ver boleto'), a:has-text('Pago'), a").first
+        if loc_botao.count() > 0:
+            badge_btn = loc_botao
     
     if not badge_btn or badge_btn.count() == 0:
         logger.warning("Aviso: Botão de download/visualização do boleto não encontrado.")
