@@ -1265,7 +1265,7 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                     text = current_btn.inner_text().strip()
                     lines = text.split("\n")
                     if len(lines) >= 3:
-                        nome_mes_abbr = lines[0].strip()
+                        nome_mes_abbr = lines[0].strip()[:3]
                         meses_map_reverso = {
                             "JAN": 1, "FEV": 2, "MAR": 3, "ABR": 4, "MAI": 5, "JUN": 6,
                             "JUL": 7, "AGO": 8, "SET": 9, "OUT": 10, "NOV": 11, "DEZ": 12
