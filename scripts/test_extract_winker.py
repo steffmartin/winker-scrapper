@@ -277,6 +277,23 @@ class TestExtractWinker(unittest.TestCase):
             self.assertEqual(membro_rows[0], ("12345", "João Silva", "Síndico"))
             self.assertEqual(membro_rows[1], ("12345", "Maria Santos", "Conselheiro"))
             
+            # Testa preservação quando membros for vazio (cenário de fallback)
+            save_condominio_and_gestao(
+                condo_id="12345",
+                condo_nome=None,
+                data_corte=None,
+                unidades=None,
+                valor=None,
+                administradora=None,
+                telefone=None,
+                membros=[]
+            )
+            cursor.execute("SELECT condominio_id, nome, cargo FROM membros_gestao")
+            membros_preservados = cursor.fetchall()
+            self.assertEqual(len(membros_preservados), 2)
+            self.assertEqual(membros_preservados[0], ("12345", "João Silva", "Síndico"))
+            self.assertEqual(membros_preservados[1], ("12345", "Maria Santos", "Conselheiro"))
+            
         finally:
             conn.close()
             models.db.close()
@@ -356,11 +373,12 @@ class TestExtractWinker(unittest.TestCase):
                 os.unlink(temp_path)
             except: pass
 
+    @patch('builtins.input', return_value='0')
     @patch('extract_winker.sync_playwright')
     @patch('extract_winker.init_db')
     @patch('extract_winker.create_auditoria')
     @patch('extract_winker.extract_condominio_and_gestao')
-    def test_extract_winker_portal_index(self, mock_extract_condominio, mock_auditoria, mock_init, mock_sp):
+    def test_extract_winker_portal_index(self, mock_extract_condominio, mock_auditoria, mock_init, mock_sp, mock_input):
         from extract_winker import extract_winker
         from datetime import datetime
         
@@ -386,5 +404,41 @@ class TestExtractWinker(unittest.TestCase):
             
         mock_page.locator.assert_any_call("#content hgroup > div > table tbody tr")
 
+    @patch('extract_winker.models.Condominio.select')
+    @patch('builtins.input', return_value='1')
+    def test_selecionar_condominio_fallback_escolha_valida(self, mock_input, mock_select):
+        from extract_winker import selecionar_condominio_fallback
+        mock_c = MagicMock()
+        mock_c.id = "TEST-123"
+        mock_c.nome = "Condomínio Teste"
+        mock_select.return_value.order_by.return_value = [mock_c]
+
+        condo_id, condo_nome = selecionar_condominio_fallback()
+        self.assertEqual(condo_id, "TEST-123")
+        self.assertEqual(condo_nome, "Condomínio Teste")
+
+    @patch('extract_winker.models.Condominio.select')
+    @patch('builtins.input', return_value='0')
+    def test_selecionar_condominio_fallback_desistir(self, mock_input, mock_select):
+        from extract_winker import selecionar_condominio_fallback
+        mock_c = MagicMock()
+        mock_c.id = "TEST-123"
+        mock_c.nome = "Condomínio Teste"
+        mock_select.return_value.order_by.return_value = [mock_c]
+
+        condo_id, condo_nome = selecionar_condominio_fallback()
+        self.assertIsNone(condo_id)
+        self.assertIsNone(condo_nome)
+
+    @patch('extract_winker.models.Condominio.select')
+    def test_selecionar_condominio_fallback_sem_condominios(self, mock_select):
+        from extract_winker import selecionar_condominio_fallback
+        mock_select.return_value.order_by.return_value = []
+
+        condo_id, condo_nome = selecionar_condominio_fallback()
+        self.assertIsNone(condo_id)
+        self.assertIsNone(condo_nome)
+
 if __name__ == "__main__":
     unittest.main()
+

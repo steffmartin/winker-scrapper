@@ -567,6 +567,47 @@ def extract_condominio_and_gestao(page):
                 
     return condo_id, condo_nome, membros
 
+def selecionar_condominio_fallback():
+    """
+    Lista os condomínios cadastrados na tabela 'condominio' do banco de dados
+    para seleção interativa do usuário quando a extração automática falhar.
+    Retorna uma tupla (condo_id, condo_nome) ou (None, None) se o usuário optar por desistir.
+    """
+    try:
+        condos = list(models.Condominio.select().order_by(models.Condominio.nome))
+    except Exception as e:
+        logger.error(f"Erro ao consultar condomínios no banco de dados: {e}")
+        condos = []
+
+    if not condos:
+        logger.error("Nenhum condomínio cadastrado no banco de dados para seleção de fallback.")
+        return None, None
+
+    for idx, c in enumerate(condos, start=1):
+        nome_str = c.nome or "Nome não identificado"
+        print(f"[{idx}] {nome_str} (ID: {c.id})")
+    print("[0] Desistir / Cancelar extração")
+
+    while True:
+        try:
+            escolha = input("\nDigite o número da opção desejada: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nExtração cancelada pelo usuário.")
+            return None, None
+
+        if escolha == "0":
+            logger.info("Usuário optou por cancelar a extração no fallback de condomínio.")
+            return None, None
+
+        if escolha.isdigit():
+            num = int(escolha)
+            if 1 <= num <= len(condos):
+                selecionado = condos[num - 1]
+                logger.debug(f"Condomínio selecionado manualmente: {selecionado.nome} (ID: {selecionado.id})")
+                return selecionado.id, selecionado.nome
+
+        print(f"Opção inválida! Digite um número de 1 a {len(condos)} ou 0 para desistir.")
+
 def extract_inadimplencia_boleto(page, context):
     """
     Navega para a página de boletos, faz o download do PDF do boleto mais recente,
@@ -682,7 +723,8 @@ def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor
 
     try:
         cond, created = models.Condominio.get_or_create(id=condo_id)
-        cond.nome = condo_nome
+        if condo_nome:
+            cond.nome = condo_nome
         if data_corte and unidades is not None and valor is not None:
             cond.inadimplencia_data_corte = data_corte
             cond.inadimplencia_unidades = unidades
@@ -692,9 +734,17 @@ def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor
         cond.ultima_atualizacao = datetime.now().isoformat()
         cond.save()
         
-        models.MembrosGestao.delete().where(models.MembrosGestao.condominio_id == condo_id).execute()
-        for m in membros:
-            models.MembrosGestao.create(condominio_id=condo_id, nome=m['nome'], cargo=m['cargo'])
+        # Preserva os membros existentes caso 'membros' esteja vazio ou ausente (modo fallback)
+        if membros:
+            membros_validos = [m for m in membros if m and m.get('nome') and str(m.get('nome')).strip()]
+            if membros_validos:
+                models.MembrosGestao.delete().where(models.MembrosGestao.condominio_id == condo_id).execute()
+                for m in membros_validos:
+                    models.MembrosGestao.create(condominio_id=condo_id, nome=str(m['nome']).strip(), cargo=m.get('cargo') or 'Membro da Gestão')
+            else:
+                logger.debug("Nenhum membro válido extraído; preservando membros da gestão existentes no banco.")
+        else:
+            logger.debug("Lista de membros vazia ou não obtida; preservando síndico e corpo diretivo existentes no banco.")
     except Exception as e:
         logger.error(f"Erro ao salvar dados do condomínio: {e}")
 
@@ -1089,6 +1139,7 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
     auditoria_id = None
     user_data = {}
     condo_id_extraido = None  # Será preenchido após a extração obrigatória do condomínio
+    condo_nome = None
     lista_contas_db = []
     
     def update_current_audit():
@@ -1156,9 +1207,8 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
             # Cria registro inicial de auditoria (condominio_id começa como NULL)
             auditoria_id = create_auditoria(start_date_obj.strftime("%Y-%m"), end_date_obj.strftime("%Y-%m"))
 
-            # 1. Extração OBRIGATÓRIA do Condomínio e Corpo Diretivo (Membros da Gestão)
-            # A extração do condomínio não é mais condicional: todo scrapper deve preencher
-            # a tabela condominio antes de registrar meses, membros ou qualquer dado vinculado.
+            # 1. Extração do Condomínio e Corpo Diretivo (Membros da Gestão)
+            membros = []
             try:
                 logger.info("Lendo informações do condomínio")
                 condo_id_extraido, condo_nome, membros = extract_condominio_and_gestao(page)
@@ -1166,21 +1216,47 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                     capturou_condominio = 1
                 if membros:
                     capturou_membros = 1
+            except Exception as ex_condo:
+                logger.debug(f"Erro ao extrair informações do condomínio da página: {ex_condo}")
 
-                # 2. Extração parcial de Inadimplência do boleto recente
+            # Fallback interativo: se o ID do condomínio não foi obtido da página
+            if not condo_id_extraido:
+                logger.warning("ID do condomínio não foi obtido automaticamente da página. Selecione o condomínio manualmente:")
+                condo_id_extraido, fallback_nome = selecionar_condominio_fallback()
+                if not condo_id_extraido:
+                    logger.info("Extração cancelada pelo usuário. Encerrando o script.")
+                    return
+                condo_nome = fallback_nome or condo_nome or "Condomínio"
+                capturou_condominio = 1
+
+            # 2. Extração de Inadimplência do boleto recente e dados da Administradora
+            # Executada mesmo em caso de fallback da página sobre/index
+            data_corte, unidades, valor, administradora, telefone = None, None, None, None, None
+            try:
+                logger.info("Lendo informações de inadimplência e administradora do boleto")
                 data_corte, unidades, valor, administradora, telefone = extract_inadimplencia_boleto(page, context)
                 if data_corte:
                     capturou_inadimplencia = 1
+            except Exception as ex_inad:
+                logger.warning(f"Erro ao extrair inadimplência do boleto: {ex_inad}")
 
-                # 3. Salva condomínio e membros no banco de dados
+            # 3. Salva condomínio, inadimplência e membros no banco de dados
+            try:
                 save_condominio_and_gestao(condo_id_extraido, condo_nome, data_corte, unidades, valor, administradora, telefone, membros)
+            except Exception as ex_save:
+                logger.error(f"Erro ao salvar dados do condomínio: {ex_save}")
 
-                # 4. Atualiza condominio_id na auditoria assim que o id é obtido
-                update_auditoria_condominio_id(auditoria_id, condo_id_extraido)
-                lista_contas_db = [c.conta for c in models.Contas.select().where(models.Contas.condominio_id == condo_id_extraido)]
-                update_current_audit()
-            except Exception as ex_condo:
-                logger.error(f"Erro ao extrair/salvar dados de gestão e inadimplência: {ex_condo}")
+            # 4. Atualiza condominio_id na auditoria assim que o id é obtido e carrega as contas do banco
+            update_auditoria_condominio_id(auditoria_id, condo_id_extraido)
+            lista_contas_db = [c.conta for c in models.Contas.select().where(models.Contas.condominio_id == condo_id_extraido)]
+            membros_salvos = list(models.MembrosGestao.select().where(models.MembrosGestao.condominio_id == condo_id_extraido))
+            if membros_salvos:
+                nomes_gestao = [f"{m.cargo or 'Membro'}: {m.nome}" for m in membros_salvos]
+                logger.debug(f"Gestão no banco ({len(membros_salvos)} membro(s)): {', '.join(nomes_gestao)}")
+                if not capturou_membros:
+                    capturou_membros = 1
+            logger.debug(f"Condomínio ativo: {condo_nome} (ID: {condo_id_extraido}) | Contas identificadas ({len(lista_contas_db)}): {lista_contas_db}")
+            update_current_audit()
 
             # 4. Navega para o Balancete
             balancete_url = "https://app.winker.com.br/intra/meuCondominio/balancete"
