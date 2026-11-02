@@ -1,0 +1,196 @@
+---
+name: pdf-prestacao-contas
+description: >-
+  Converts condomínio Prestação de Contas PDFs into idempotent SQLite SQL scripts
+  for winker-scrapper, with local page discovery, independent controls and isolated
+  validation. Supports one competência or a batch/year, without production writes.
+---
+
+# PDF Prestação de Contas → SQL
+
+Produzir SQL revisável para `meses → categorias → subcategorias → transacoes`.
+Nunca executar no banco oficial sem instrução explícita. Usar conexão SQLite
+`mode=ro` para consultar cadastro, esquema, motivos e criar cópia em memória.
+
+## Organização e privacidade
+
+- `SKILL.md`, `PATTERNS.md`, `scripts/`, `tests/` e `requirements.txt`: somente
+  instruções, ferramentas reutilizáveis e testes sintéticos, versionáveis.
+- `artifacts/`: tudo específico do usuário/processamento, ignorado pelo Git.
+  Guardar `sources/YYYY-MM/`, `sql_scripts/`, `reports/`, `tools/YYYY/`, `tmp/`,
+  `scratch_pages/`, caches, OCR, imagens, controles, ledgers, logs e entregas ali.
+- Não usar `scripts/`, `sources/`, `tmp/` ou `scratch_pages/` da raiz do projeto
+  para artefatos da skill. Não inserir PDFs, extratos ou dados financeiros em
+  testes/documentação versionável. O histórico privado fica em
+  `artifacts/reports/month-log.md`; sua ausência não impede um novo processamento.
+- Retroalimentar esta skill com padrões confirmados e limitações gerais; valores,
+  páginas e decisões de competências específicas pertencem apenas a artifacts.
+  Não promover validação técnica a aprovação do usuário.
+- Antes de processar, ler `artifacts/local-config.json`, se existir: identificação
+  do condomínio, contas/mapeamentos confirmados, caminhos e instalação de OCR desta
+  máquina ficam somente ali. Consultar também `artifacts/reports/month-log.md`
+  quando necessário. Não copiar esses dados para arquivos versionáveis.
+- Os scripts carregam essa configuração por padrão. `--config` seleciona outro
+  JSON; `--condominio-id` sobrescreve o ID no gerador/validador. Sem ID explícito ou
+  configurado, geração/validação falham, sem escolher um condomínio arbitrário.
+
+## 1. Descobrir localmente antes de extrair em volume
+
+Ler [PATTERNS.md](PATTERNS.md). Para um lote, fazer primeiro a descoberta de todos
+os PDFs e dos controles brutos. Se o usuário pedir ajuda prévia para páginas
+faltantes, investigar localmente e apresentar as lacunas antes do lote completo.
+Não solicitar páginas/totais que já possam ser obtidos da fonte.
+
+Da raiz do projeto:
+
+```powershell
+python .agents/skills/pdf-prestacao-contas/scripts/extract_local.py "report.pdf" --output ".agents/skills/pdf-prestacao-contas/artifacts/sources/YYYY-MM/auto" --discover-only
+```
+
+O helper não acessa banco/rede. Faz triagem textual, OCR de cabeçalhos, agrupamento
+de seções e, sem `--discover-only`, OCR das tabelas selecionadas. Manifestos,
+controles e candidatos ficam em disco. `RECONCILIATION_REQUIRED` é intencional:
+candidatos não são lançamentos aprovados. Cache usa SHA-256 do PDF e versões do
+extrator. `--scan-all` amplia a triagem se a ordem mudar, houver outras contas ou
+faltarem seções; não extrair todos os comprovantes preventivamente.
+
+Exigir demonstrativo, recebimentos principais, sintético, analítico e extratos,
+ou documentar substituto expressamente autorizado pelo usuário. Não parar no
+primeiro extrato: ele pode ser de investimento e preceder o analítico. Conferir
+folhas de continuação/encerramento mesmo sem título ou novas transações. Distinguir
+paginação global do documento de paginação própria de cada relatório.
+
+## 2. Extrair, normalizar e reconciliar
+
+- Preferir processamento local e devolver ao agente apenas manifestos compactos,
+  diferenças e recortes disputados. Texto existente pode ser OCR antigo/ilegível.
+  Rotacionar a imagem para a orientação visual correta antes do OCR.
+- Começar pelas páginas principais; consultar acordos, inadimplência, extratos
+  oficiais e comprovantes apenas para uma pergunta concreta. Antes de conversor
+  MCP de PDF inteiro, criar PDF local só das páginas selecionadas.
+- Para falha, reler somente a página/célula afetada em 300 DPI, PSM 3/4/6 ou PSM 7
+  para célula; usar TSV/boxes. Grade e carimbo podem ocultar algarismos. Limiar e
+  remoção de linhas são alternativas locais, não substituição automática da fonte.
+  Guardar a leitura inicial e a corrigida com evidência.
+- Valores vêm das colunas `Liquidado`, `Valor Pago` e `Valor Baixa`. Não usar
+  último número arbitrário, valor original, saldo final ou fórmula de taxa.
+  Não alterar número para forçar soma. Separar datas de vencimento/pagamento e
+  referências do histórico; uma descrição pode conter uma terceira data.
+- Preservar unidade entre páginas, mas confirmar cada cabeçalho por posição.
+  Usar a posição da data da linha, não o mínimo de todos os boxes (bordas podem
+  ter boxes altos). OCR que omite unidade pode manter o total certo e atribuí-lo
+  ao apartamento anterior. Conferir por unidade, data, classe e liquidação.
+- Montar controles independentes tipo → grupo → classe → centavos → página/texto,
+  a partir do demonstrativo, sintético e rodapés publicados. Não fabricar controles
+  somando o ledger. Conferir também os totais brutos e todos os saldos de conta
+  do cadastro do condomínio; não assumir uma quantidade fixa.
+- Reconciliar cada movimento/saldo intermediário do extrato corrente, recebimentos
+  por unidade/data e multiplicidade de despesas por fornecedor/documento/data/valor.
+  Conferir os demais investimentos, capital e saldos consolidados/entre meses.
+  Receitas de aplicação podem não constar no extrato corrente.
+
+## 3. Movimentos internos e competências
+
+- Transferências entre contas, resgates e aportes de capital não são receitas ou
+  despesas econômicas. Podem constar também dos próprios relatórios de R/D.
+  Confirmar origem, destino, data e valor; excluir ambos os lados, preservando a
+  ponte bruto → econômico nos controles, SQL e relatório. Não classificar pelo
+  nome isolado: crédito de rateio/lucros na conta capital pode ser receita real.
+- Preservar a hierarquia impressa e os valores efetivamente liquidados. Não criar
+  uma categoria por classe. Impostos retidos permanecem na classe do serviço.
+- Não assumir que todas as unidades pagaram, nem repetir pagamento já incluído
+  em Contas Recebidas por aparecer no detalhamento de acordo.
+- A competência do acordo prevalece sobre dívidas originais quando o acordo está
+  identificado. Vencimento reemitido comum, sozinho, não comprova acordo. Se o
+  usuário autorizar repartir pelas competências originais, exigir que os créditos
+  individuais somem exatamente o recebimento e conferir cada subtotal em centavos.
+- Preservar adiantamentos identificados. Para conflito real entre fontes sem
+  solução/instrução específica, usar `competencia = NULL` e motivo oficial
+  `Competência não identificada`. A descrição não deve afirmar competência incerta.
+  Não inferir competência de despesa ou receita pelo mês do pagamento.
+
+## 4. Cadastro, histórico e flags
+
+Consultar nomes e valores iniciais de `contas` com conexão read-only, no mesmo
+`condominio_id` dos lançamentos. Identificar contas por evidência e pelos
+mapeamentos previamente confirmados na configuração privada. Não deduzir a
+função de um investimento pelo nome, saldo atual ou rendimento mensal. Uma regra
+local baseada em saldos iniciais só se aplica ao cadastro em que foi confirmada;
+se contas extras, saldos iguais ou falta de correspondência impedirem identificação
+única, resolver sem adivinhar.
+Usar o nome EXATO cadastrado; aliases do relatório não criam contas novas.
+Toda transação R/D deve ter conta cadastrada, não nula nem vazia.
+
+Conferir o condomínio configurado no banco antes de gerar. Não transportar IDs,
+nomes, números de conta, saldos ou mapeamentos de outro cadastro.
+
+Preservar em `descricao` fornecedor/beneficiário, NF/documento e histórico original
+(parcela, imposto retido, identificador de serviço, produto etc.). Reunir linhas
+quebradas, remover apenas ruído confirmado e conferir números de documento nas
+fontes independentes. `fornecedor` separado não substitui o histórico. Não trocar
+histórico por classe/categoria nem acrescentar essa classificação como boilerplate.
+
+Ler os motivos individuais dos arrays JSON existentes no banco oficial, por tabela,
+e rejeitar motivo inventado. Fonte/correção e explicação ficam em comentários e
+relatório, não dentro de uma nova string de motivo.
+
+| Situação | Valores obrigatórios |
+|---|---|
+| Mês sem PDF efetivamente importado | `anexos=0`, `consistente=0`, motivo `["Mês sem prestação de contas"]`, `revisado_usuario=0` |
+| Despesa sem comprovante efetivamente importado | `anexos=0`, `consistente=0`, motivo inclui `Despesa sem comprovantes`, `revisado_usuario=0` |
+| Campo obrigatório não identificado/conflitante | NULL quando apropriado, motivo oficial exato, flags 0 |
+| Categoria/subcategoria conciliada sem discrepância própria | `consistente=1`, motivo NULL, `revisado_usuario=1` |
+| Qualquer linha consistente | `revisado_usuario=1`, sem motivos |
+| Qualquer linha inconsistente | `revisado_usuario=0`, motivo oficial aplicável |
+
+Não propagar ausência de PDF/comprovantes aos agregados conciliados. Validar
+`revisado_usuario = consistente` em TODAS as tabelas geradas. Não criar anexos,
+caminhos ou INSERT em `prestacoes_contas` sem arquivo realmente importado e
+verificado no local final, ainda que o comprovante esteja dentro do PDF fonte.
+
+## 5. Gerar e validar isoladamente
+
+Preparar em `artifacts/sources/YYYY-MM/`:
+
+- `ledger.json`: lançamentos revisados com tipo, categoria, classe, data, descrição,
+  `valor_centavos`, apartamento, competência, fornecedor, conta, página, evidência
+  e indicação `excluded` para movimentos internos.
+- `controls.json`: controles independentes revisados, mesma hierarquia, em centavos.
+- `review.json`: competência, ponte bruta/econômica, decisões e notas. Só definir
+  `approved_for_generation=true` depois da revisão técnica das fontes.
+- Evidência de reconciliação de extratos e contas usada pelo validador.
+
+```powershell
+python .agents/skills/pdf-prestacao-contas/scripts/generate_sql.py --source ".agents/skills/pdf-prestacao-contas/artifacts/sources/YYYY-MM" --output ".agents/skills/pdf-prestacao-contas/artifacts/sql_scripts/YYYY-MM.sql"
+python .agents/skills/pdf-prestacao-contas/scripts/validate_sql.py --database "database/winker_data.db" --source ".agents/skills/pdf-prestacao-contas/artifacts/sources/YYYY-MM" --sql ".agents/skills/pdf-prestacao-contas/artifacts/sql_scripts/YYYY-MM.sql" --output ".agents/skills/pdf-prestacao-contas/artifacts/sources/YYYY-MM/validation.json"
+```
+
+O gerador não executa SQL. O validador abre produção `mode=ro`, faz backup para
+`:memory:`, fecha a conexão oficial e executa o SQL DUAS vezes só em memória.
+Exigir FK sem erros, conteúdos/contagens lógicos idênticos, dados de outras
+competências/tabelas intactos, hash do arquivo oficial inalterado, nomes de contas
+exatos, motivos/JSON/flags corretos e todos os campos iguais ao ledger revisado.
+Conferir transações → classes → grupos → mês e controles independentes em centavos.
+Para lote anual, verificar também execução conjunta dos 12 scripts e continuidade
+dos saldos entre meses. Reportar explicitamente discrepâncias remanescentes.
+
+SQL revisável: seções numeradas, palavras-chave maiúsculas, 4 espaços, valores com
+duas casas, uma tupla completa por linha, INSERTs em lotes, SELECTs inline e
+comentários concisos de fonte/nome/data/valor. Cleanup e lookups usam exatamente o
+mês alvo. Inserir totais finais diretamente, sem incrementos provisórios. Depois
+de mudar formatação/caminhos, repetir a validação isolada.
+
+## Ambiente local e manutenção
+
+Dependências de OCR em `requirements.txt`. Instalações e caminhos conhecidos desta
+máquina ficam nas chaves `ocr.tesseract` e `ocr.tessdata` do JSON privado. Conferir
+existência local; o helper aceita `--tesseract` e `--tessdata` como sobrescritas.
+Sem configuração local, respeita o executável disponível no PATH e o ambiente.
+Em pytesseract direto, configurar `TESSDATA_PREFIX` quando necessário. MCP OCR de
+imagem aceita `image_path`/`language`; não passar PSM não suportado. PSM fica no
+pytesseract local.
+
+Testes sintéticos: `python -m unittest discover -s .agents/skills/pdf-prestacao-contas/tests -v`.
+Manter gerador, validador, controles e evidência reprodutíveis. Remover apenas
+scratch já revisado após verificar o caminho resolvido dentro de artifacts;
+nunca apagar evidência de reconciliação nem alterar o banco oficial na limpeza.
