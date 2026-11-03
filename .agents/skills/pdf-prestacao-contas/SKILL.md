@@ -51,8 +51,10 @@ O helper não acessa banco/rede. Faz triagem textual, OCR de cabeçalhos, agrupa
 de seções e, sem `--discover-only`, OCR das tabelas selecionadas. Manifestos,
 controles e candidatos ficam em disco. `RECONCILIATION_REQUIRED` é intencional:
 candidatos não são lançamentos aprovados. Cache usa SHA-256 do PDF e versões do
-extrator. `--scan-all` amplia a triagem se a ordem mudar, houver outras contas ou
-faltarem seções; não extrair todos os comprovantes preventivamente.
+extrator. A versão atual inventaria os cabeçalhos até o fim do documento, pois
+extratos de outras contas podem aparecer depois dos comprovantes. `--scan-all`
+permanece aceito por compatibilidade. Inventário de cabeçalhos não é OCR integral
+de comprovantes; preservar o cache e não repetir a triagem sem mudança de fonte.
 
 Exigir demonstrativo, recebimentos principais, sintético, analítico e extratos,
 ou documentar substituto expressamente autorizado pelo usuário. Não parar no
@@ -61,6 +63,56 @@ folhas de continuação/encerramento mesmo sem título ou novas transações. Di
 paginação global do documento de paginação própria de cada relatório.
 
 ## 2. Extrair, normalizar e reconciliar
+
+### Ferramentas locais reutilizáveis
+
+Escolher o formato pela assinatura da tabela e posição dos cabeçalhos, nunca pelo
+ano nem por coordenadas fixas. Além do candidato textual de `extract_local.py`,
+preferir o caminho espacial em tabelas antigas ou quando houver qualquer diferença:
+
+```powershell
+python .agents/skills/pdf-prestacao-contas/scripts/ocr_tables.py --manifest "artifacts-path/auto/manifest.json" --output "artifacts-path/analysis/spatial" --pages 7 --psm 6 --dpi 300
+```
+
+Substituir os caminhos pelos artefatos privados do mês. A página é obtida do
+manifesto local, não solicitada ao usuário. Para reparo de grade/inclinação, usar
+`--remove-grid`; comparar com a variante original, que continua preservada. Essa
+opção exige OpenCV/numpy opcionais. `--psm 6 4 3` guarda alternativas distintas;
+não executar todas em todas as páginas se só uma célula estiver ruim.
+
+`table_geometry.py` identifica colunas pelos cabeçalhos, inclusive quando mudam
+de posição, ancora linhas no centro das datas e conserva valores/campos ilegíveis
+como não resolvidos. Não assume lista ou regex fixa de apartamentos, ano de data
+nem fórmula de condomínio. Receitas extras, indenizações, reembolsos, capital,
+encargos e classes complementares não podem ser descartados por nome inesperado.
+Rótulos e campos quebrados seguem para revisão local, sem herdar categoria pela
+semelhança com um mês anterior.
+
+O resultado de cada variante inclui palavras/boxes, colunas, linhas, confiança e
+`repair_queue`. O cache de palavras caras é separado do reprocessamento geométrico.
+Para reler apenas as células disputadas, com orçamento e retomada por cache:
+
+```powershell
+python .agents/skills/pdf-prestacao-contas/scripts/repair_cells.py --manifest "artifacts-path/auto/manifest.json" --variant "artifacts-path/analysis/spatial/VARIANT.json" --output "artifacts-path/analysis/cells" --limit 30
+```
+
+Consenso entre PSMs gera proposta, não aprovação: confrontar com os componentes da
+linha, controles independentes e identidade bancária. Nunca completar centavos
+ausentes a partir de saldo ou escolher a leitura apenas para fechar o total.
+
+`reconcile_local.py --statements INPUT.json --output OUTPUT.json` verifica cadeias
+por alias físico e encontra caminhos numéricos apenas entre alternativas OCR já
+observadas. Dois caminhos possíveis permanecem ambíguos; nenhuma quantia é criada.
+Mesmo um caminho único precisa de conferência de identidade/documento/data.
+`--candidates INPUT.json --reference REVIEWED.json` compara multiplicidade e
+identidades completas; referência revisada é oráculo de regressão, nunca entrada
+para extrair/corrigir um mês novo. Campos ausentes não são preenchidos pela referência.
+
+Regressão leve sem OCR/banco: `benchmark_local.py --sources ARTIFACT_SOURCES
+--output AUDIT.json` compara a classificação de textos em cache com mapas de
+páginas revisados. `reconcile_local.py --corpus ARTIFACT_SOURCES --output AUDIT.json`
+mede as diferenças dos estágios históricos contra os ledgers finais. Usar os
+resultados para escolher exceções/reparos locais; não sobrescrever fontes aprovadas.
 
 - Preferir processamento local e devolver ao agente apenas manifestos compactos,
   diferenças e recortes disputados. Texto existente pode ser OCR antigo/ilegível.

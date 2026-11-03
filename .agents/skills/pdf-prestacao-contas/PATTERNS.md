@@ -3,6 +3,43 @@
 Regras confirmadas em múltiplos layouts. Não são páginas, valores ou expectativas
 de uma competência. Evidências mensais/decisões ficam apenas em artifacts.
 
+## Perfis por estrutura e processamento local
+
+Não selecionar parser pelo ano do arquivo. Há demonstrativos parciais, folhas
+invertidas, tabelas sem título repetido e extratos espalhados pelo pacote. O perfil
+é escolhido pelas colunas reconhecidas na imagem de cada página. Não assumir a
+mesma margem, largura, ordem ou quantidade de contas/unidades entre relatórios.
+
+- Reconhecer primeiro o cabeçalho da tabela, incluindo a coluna Unidade que
+  delimita o início das datas. Um limite esquerdo de data igual a zero quando
+  faltou esse cabeçalho não é evidência de uma coluna inteira: revisar localmente.
+- `table_geometry.py` usa centros das palavras/datas e cabeçalhos compostos
+  (Valor Pago, Valor Baixa, Conta Corrente), aceitando caixas/pontuação do OCR.
+  Não usa percentuais fixos de Liquidado ou um padrão fixo de apartamento.
+- A coluna de unidades tem uma leitura estreita independente, pois bordas podem
+  virar números soltos no OCR de largura completa. Preservar cabeçalhos conflitantes
+  como exceção; não propagar silenciosamente a unidade anterior para linhas órfãs.
+- `ocr_tables.py --remove-grid` mede linhas longas e pequena inclinação local,
+  conserva a variante original e registra o ângulo. Seu resultado pode ter menos
+  linhas do que o original: escolher somente por menor número de erros pode omitir
+  transações. Conferir a cobertura de linhas, não só a soma ou confiança OCR.
+- Datas compactas/com separadores danificados só geram propostas no interior de
+  colunas de data reconhecidas, com ano explícito e calendário válido. Guardar o
+  token original e se houve normalização; não inferir competência dessa proposta.
+- Valores sem separador decimal ficam não resolvidos. Repetir somente as células
+  na fila, comparar leituras e preservar propostas sem sobrescrever as aprovadas.
+- Várias contas físicas podem usar o mesmo nome no cadastro. Agrupar cadeias pelo
+  cabeçalho/alias físico; se o cabeçalho falhar, separar por página e sinalizar a
+  identidade pendente, em vez de concatenar contas distintas.
+- Resolver alternativas bancárias somente entre triplas crédito/débito/saldo
+  efetivamente lidas. Consistência numérica não autoriza criar um movimento nem
+  substituir uma identidade/documento/data pelo que faria o saldo fechar.
+- Mapas e ledgers já revisados são oráculos de regressão isolados. Não os alimentar
+  ao parser para completar a leitura; isso daria uma falsa impressão de precisão.
+  Medir recall de páginas positivas, falsos positivos e identidade de linhas como
+  controles diferentes. Um teste só de páginas previamente selecionadas não mede
+  precisão do classificador em todas as páginas do PDF.
+
 ## Identificar a função, não apenas o título
 
 | Função | Assinaturas/colunas | Cuidados |

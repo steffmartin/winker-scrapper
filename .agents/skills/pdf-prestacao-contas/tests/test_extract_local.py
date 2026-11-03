@@ -28,7 +28,7 @@ class DiscoveryTests(unittest.TestCase):
             for number,kind in enumerate(kinds,1):
                 ex.save(out/f'discovery_{number:03}.json',dict(page=number,section=kind,rotation=0,method='native',fraction=[1,1],source_sha256='synthetic',version=ex.VERSION))
             records=ex.discover([Page() for _ in kinds],out,'synthetic')
-            self.assertEqual([r['section'] for r in records],kinds[:6])
+            self.assertEqual([r['section'] for r in records],kinds)
 
     def test_partial_statement_requires_financial_structure(self):
         self.assertEqual(ex.classify('DEMONSTRATIVO PARCIAL\nRECEITAS DESPESAS VALORES EM R$'), 'demonstrativo')
@@ -37,6 +37,18 @@ class DiscoveryTests(unittest.TestCase):
     def test_global_pagination_is_not_section_pagination(self):
         self.assertEqual(ex.global_page_denominators({'demonstrativo':[[3,98],[4,98]],'recebimentos':[[7,98]]},100),{98})
         self.assertEqual(ex.global_page_denominators({'demonstrativo':[[1,2]],'recebimentos':[[1,7]]},100),set())
+
+    def test_split_all_unit_blocks_are_not_discarded_as_agreement_support(self):
+        records=[dict(page=1,section='recebimentos'),dict(page=2,section=None),
+                 dict(page=3,section='recebimentos'),dict(page=4,section='acordos'),
+                 dict(page=5,section='recebimentos')]
+        with tempfile.TemporaryDirectory() as directory:
+            out=Path(directory)
+            for number,unit in [(1,'todas'),(3,'todas'),(5,'999')]:
+                (out/f'header_{number:03}.txt').write_text('CONTAS RECEBIDAS\nUnidade: '+unit,encoding='utf8')
+            selected,auxiliary=ex.group_pages(records,out)
+            self.assertEqual([g['pages'] for g in selected],[[1],[3]])
+            self.assertIn([5],[g['pages'] for g in auxiliary])
 
     def test_titleless_continuation_keeps_best_orientation(self):
         def ocr(image,psm=6):return 'supplier 01/01/2025 10,00 10,00' if image.angle==0 else 'unreadable'

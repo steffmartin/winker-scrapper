@@ -19,7 +19,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from local_config import load_config
 
-VERSION = 4
+VERSION = 5
 TABLE_VERSION = 3
 MONEY = re.compile(r'(?<![\d/])\d+(?:\.\d{3})*[.,]\d{2}(?![\d/])')
 DATE = re.compile(r'\b\d{2}/\d{2}/\d{4}\b')
@@ -70,6 +70,11 @@ def classify(text):
         # A title without column anchors is a divider, never a table.
         if contains(text,title) and sum(a in n for a in anchors) >= 2:
             return kind
+    # Old receipt continuations may lose the title while retaining the table.
+    # Date/settlement columns plus actual monetary rows distinguish a table from
+    # a divider. Group selection still checks all-unit versus auxiliary filters.
+    if all(a in n for a in ('VENCIMENTO','PAGAMENTO','LIQUIDADO')) and DATE.search(text) and len(MONEY.findall(text))>=3:
+        return 'recebimentos'
     return None
 
 def fraction(text):
@@ -106,15 +111,20 @@ def discover(doc,out,fingerprint,scan_all=False):
             header = native
             if section is None:
                 im = render(page,110)
+                best_header=('',-1)
                 for angle in (0,270,90,180):
                     upright = im.rotate(angle,expand=True)
                     strip = upright.crop((0,0,upright.width,int(upright.height*.28)))
                     text = ocr(strip)
+                    score=sum(a in norm(text) for _,anchors in SPECS.values() for a in anchors)
+                    if score>best_header[1]:best_header=(text,score)
                     found = classify(text)
                     if found:
                         header = text
                         record.update(section=found,rotation=angle,method='header_ocr',fraction=fraction(text))
                         break
+                if record['section'] is None:
+                    header=best_header[0] or native
             if record['section']=='extrato' and not record['fraction']:
                 im=render(page,150)
                 upright=im.rotate(record['rotation'],expand=True)
@@ -150,10 +160,9 @@ def discover(doc,out,fingerprint,scan_all=False):
             record['fraction']=fraction(label)
             save(cache,record)
         records.append(record)
-        if record['section']=='extrato' and not scan_all and MAIN <= {r['section'] for r in records}:
-            frac = record['fraction']
-            if (frac and frac[0]==frac[1]) or record.get('closing_balance_label') or 'SALDO FINAL' in norm(page.get_text()):
-                break
+        # Full header inventory is mandatory: older packets interleave physical
+        # bank statements and vouchers long after the first complete cash flow.
+        # A complete list of section *types* does not prove account coverage.
     return records
 
 def group_pages(records,out):
@@ -168,9 +177,10 @@ def group_pages(records,out):
     receipts=[g for g in groups if g['section']=='recebimentos']
     eligible=[g for g in receipts if re.search(r'UNIDADE\s*:\s*TODAS',norm((out/f"header_{g['pages'][0]:03}.txt").read_text(encoding='utf8')))]
     primary=max(eligible or receipts,key=lambda g:len(g['pages'])) if receipts else None
+    primary_ids={id(g) for g in eligible} if eligible else ({id(primary)} if primary else set())
     selected=[]; auxiliary=[]
     for g in groups:
-        target=selected if g['section'] in MAIN and (g['section']!='recebimentos' or g is primary) else auxiliary
+        target=selected if g['section'] in MAIN and (g['section']!='recebimentos' or id(g) in primary_ids) else auxiliary
         target.append(g)
     return selected,auxiliary
 
@@ -221,12 +231,14 @@ def money(s):
 
 def candidates(selected,texts):
     rows=[]; controls=[]; unit=None; category=None; subcategory=None
-    for g in selected:
+    for group_index,g in enumerate(selected):
         kind=g['section']
         if kind!='recebimentos':
             unit=None
         for page in g['pages']:
             lines=texts[page].splitlines()
+            physical_header=next((norm(line).strip() for line in lines[:25] if 'FLUXO DE CAIXA DA CONTA' in norm(line)),None)
+            statement_id=f'{group_index}:'+hashlib.sha256((physical_header or 'unidentified_page_'+str(page)).encode()).hexdigest()[:12]
             for i,raw in enumerate(lines):
                 line=raw.strip(); n=norm(line); dates=DATE.findall(line); amounts=MONEY.findall(line)
                 evidence=dict(page=page,line=i+1,raw=line,section=kind)
@@ -243,10 +255,10 @@ def candidates(selected,texts):
                         controls.append(dict(**evidence,label='classe_despesa',category=category,name=name,
                                              cents=money(amounts[-1]) if len(amounts)==5 else None,needs_review=True))
                 if kind=='recebimentos':
-                    u=re.fullmatch(r'\W*([2-9][0oO][1-5])\W*',line)
+                    u=re.fullmatch(r'\W*(\d{1,6}[A-Za-z]?)\W*',line)
                     if u:
-                        unit=u[1].lower().replace('o','0')
-                    if len(dates)>=2 and re.match(r'(FUNDO|TAXA|RENDIMENTO|OUTRAS)',n):
+                        unit=u[1]
+                    if len(dates)>=2 and re.match(r'(FUNDO|TAXA|RENDIMENTO|OUTRAS|ENCARGO|INTEGRALIZA|REEMBOLSO|MORADOR|INDENIZA|MULTA INFR|DISTRIBUI)',n):
                         tail=line[list(DATE.finditer(line))[1].end():]
                         values=MONEY.findall(re.split(r'C\s*[/I]\s*[CA]|CIC',tail)[0])
                         rows.append(dict(**evidence,kind='R_candidate',unit=unit,due=dates[0],paid=dates[1],
@@ -262,7 +274,8 @@ def candidates(selected,texts):
                 if kind=='extrato' and len(dates)==1:
                     values=MONEY.findall(line[line.find(dates[0])+len(dates[0]):])
                     if len(values)>=3:
-                        rows.append(dict(**evidence,kind='statement_control',date=dates[0],credit=money(values[0]),debit=money(values[1]),balance=money(values[2])))
+                        rows.append(dict(**evidence,kind='statement_control',statement_id=statement_id,
+                                         account_header=physical_header,date=dates[0],credit=money(values[0]),debit=money(values[1]),balance=money(values[2])))
     return rows,controls
 
 def run(pdf,out,scan_all=False,discover_only=False):
@@ -316,11 +329,17 @@ def run(pdf,out,scan_all=False,discover_only=False):
             incomplete=[c for c in controls if c['label']=='classe_despesa' and c['cents'] is None]
             if incomplete:
                 issues.append(dict(reason='incomplete_class_control_columns',count=len(incomplete)))
-            statement=[r for r in rows if r['kind']=='statement_control']
+            statement_groups=defaultdict(list)
+            for row in rows:
+                if row['kind']=='statement_control':statement_groups[row['statement_id']].append(row)
+            unidentified=sum(not r.get('account_header') for r in rows if r['kind']=='statement_control')
+            if unidentified:
+                issues.append(dict(reason='statement_physical_account_not_identified',rows=unidentified))
             breaks=[]
-            for previous,current in zip(statement,statement[1:]):
-                if previous['balance']+current['credit']-current['debit']!=current['balance']:
-                    breaks.append(dict(page=current['page'],line=current['line']))
+            for statement in statement_groups.values():
+                for previous,current in zip(statement,statement[1:]):
+                    if previous['balance']+current['credit']-current['debit']!=current['balance']:
+                        breaks.append(dict(page=current['page'],line=current['line']))
             if breaks:
                 issues.append(dict(reason='statement_running_balance_break',count=len(breaks),first_locations=breaks[:3]))
         result=dict(version=VERSION,pdf=str(pdf.resolve()),source_sha256=fingerprint,total_pdf_pages=len(doc),pages_screened=len(records),

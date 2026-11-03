@@ -1,3 +1,6 @@
 pymupdf
 Pillow
 pytesseract
+
+# Optional for --remove-grid: opencv-python-headless and numpy.
+# Install optional packages in the chosen OCR environment; never vendor binaries here.
