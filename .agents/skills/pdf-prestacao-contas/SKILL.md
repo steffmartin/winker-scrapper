@@ -87,6 +87,10 @@ paginação global do documento de paginação própria de cada relatório.
 - Reconciliar cada movimento/saldo intermediário do extrato corrente, recebimentos
   por unidade/data e multiplicidade de despesas por fornecedor/documento/data/valor.
   Conferir os demais investimentos, capital e saldos consolidados/entre meses.
+  Validar separadamente cada conta física, mesmo quando aliases compartilham
+  o nome cadastrado. O validador aceita `statement_reviewed.json` com
+  `statements: [{alias, account, opening, closing, rows}]` ou a cadeia única legada;
+  cada linha traz `credit`, `debit` e `balance` inteiros em centavos.
   Receitas de aplicação podem não constar no extrato corrente.
 
 ## 3. Movimentos internos e competências
@@ -107,7 +111,9 @@ paginação global do documento de paginação própria de cada relatório.
 - Preservar adiantamentos identificados. Para conflito real entre fontes sem
   solução/instrução específica, usar `competencia = NULL` e motivo oficial
   `Competência não identificada`. A descrição não deve afirmar competência incerta.
-  Não inferir competência de despesa ou receita pelo mês do pagamento.
+  Não inferir competência de despesa ou receita pelo mês do pagamento. Confrontar
+  referências por classe e competência com o demonstrativo; para despesas iguais,
+  usar também NF/documento e tributo, evitando casamento apenas por data/valor.
 
 ## 4. Cadastro, histórico e flags
 
@@ -171,7 +177,7 @@ Exigir FK sem erros, conteúdos/contagens lógicos idênticos, dados de outras
 competências/tabelas intactos, hash do arquivo oficial inalterado, nomes de contas
 exatos, motivos/JSON/flags corretos e todos os campos iguais ao ledger revisado.
 Conferir transações → classes → grupos → mês e controles independentes em centavos.
-Para lote anual, verificar também execução conjunta dos 12 scripts e continuidade
+Para lote anual, verificar também execução conjunta de todos os scripts solicitados e continuidade
 dos saldos entre meses. Reportar explicitamente discrepâncias remanescentes.
 
 SQL revisável: seções numeradas, palavras-chave maiúsculas, 4 espaços, valores com
@@ -194,3 +200,16 @@ Testes sintéticos: `python -m unittest discover -s .agents/skills/pdf-prestacao
 Manter gerador, validador, controles e evidência reprodutíveis. Remover apenas
 scratch já revisado após verificar o caminho resolvido dentro de artifacts;
 nunca apagar evidência de reconciliação nem alterar o banco oficial na limpeza.
+
+## Checkpoint e retomada de lotes
+
+Quando solicitado pelo usuário ou necessário para preservar uma sessão longa,
+grave em `artifacts/reports/` um checkpoint com status real, arquivos canônicos e
+candidatos, comandos leves de retomada, controles já conferidos, pendências,
+correções com evidência e experimentos que não devem ser usados como resultado.
+Indique explicitamente se SQLs ainda não foram gerados ou validados. Preserve
+caches e não repita OCR integral na retomada sem uma lacuna que o justifique.
+Incluir o último comando, processos ativos, resultados já concluídos e próxima
+pendência concreta. Se houver adendos periódicos, atualizar o estado vivo e encerrar
+o gravador ao concluir; ao retomar, não reproduzir todos os intervalos vencidos.
+Checkpoint não constitui aprovação técnica nem dispensa reconciliação.

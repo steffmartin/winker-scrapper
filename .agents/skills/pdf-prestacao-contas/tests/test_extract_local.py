@@ -30,6 +30,10 @@ class DiscoveryTests(unittest.TestCase):
             records=ex.discover([Page() for _ in kinds],out,'synthetic')
             self.assertEqual([r['section'] for r in records],kinds[:6])
 
+    def test_partial_statement_requires_financial_structure(self):
+        self.assertEqual(ex.classify('DEMONSTRATIVO PARCIAL\nRECEITAS DESPESAS VALORES EM R$'), 'demonstrativo')
+        self.assertIsNone(ex.classify('DEMONSTRATIVO PARCIAL'))
+
     def test_global_pagination_is_not_section_pagination(self):
         self.assertEqual(ex.global_page_denominators({'demonstrativo':[[3,98],[4,98]],'recebimentos':[[7,98]]},100),{98})
         self.assertEqual(ex.global_page_denominators({'demonstrativo':[[1,2]],'recebimentos':[[1,7]]},100),set())

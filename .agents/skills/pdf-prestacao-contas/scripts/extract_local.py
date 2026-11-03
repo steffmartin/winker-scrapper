@@ -62,6 +62,10 @@ def classify(text):
         # report titles. A list of several titles without rows is not a table.
         if sum(contains(text,title) for title,_ in SPECS.values()) >= 3:
             return None
+    # Some accounting systems title the same period statement as partial.
+    # Require the financial structure; a divider/title alone is insufficient.
+    if contains(text, 'DEMONSTRATIVO PARCIAL') and sum(a in n for a in ('RECEITAS', 'DESPESAS', 'VALORES', 'SALDO', 'CONTAS CORRENTES')) >= 2:
+        return 'demonstrativo'
     for kind,(title,anchors) in SPECS.items():
         # A title without column anchors is a divider, never a table.
         if contains(text,title) and sum(a in n for a in anchors) >= 2:

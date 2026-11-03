@@ -58,6 +58,23 @@ def reason_flags(db,ids,allowed):
         counts[table]={'consistent':consistent,'inconsistent':inconsistent}
     return counts
 
+def validate_bank_chains(bank):
+    """Validate physical account chains separately, including legacy single chains."""
+    statements = bank.get('statements', [bank])
+    assert statements, 'No bank statements supplied.'
+    count = 0
+    for statement in statements:
+        balance = statement['opening']
+        for row in statement['rows']:
+            assert all(isinstance(row[key], int) for key in ('credit', 'debit', 'balance'))
+            assert row['credit'] >= 0 and row['debit'] >= 0
+            assert balance + row['credit'] - row['debit'] == row['balance'], (statement.get('alias'), row)
+            balance = row['balance']
+            count += 1
+        assert balance == statement['closing'], statement.get('alias')
+    return count
+
+
 def validate(database,source,sql_path,output,config=None,condominio_id=None):
     settings=load_config(config)
     cid=condominium_id(settings,condominio_id)
@@ -124,26 +141,27 @@ def validate(database,source,sql_path,output,config=None,condominio_id=None):
         previous=current;counts={t:len(ids[t]) for t in TABLES}
     db.close()
     bank=json.loads((source/'statement_reviewed.json').read_text(encoding='utf8'))
-    previous_balance=bank['opening']
-    for row in bank['rows']:
-        assert previous_balance+row['credit']-row['debit']==row['balance']
-        previous_balance=row['balance']
-    assert previous_balance==bank['closing']
+    bank_rows_checked=validate_bank_chains(bank)
     reconciliation=json.loads((source/'bank_reconciliation.json').read_text(encoding='utf8'))
     assert not reconciliation['unit_diffs'] and not any(reconciliation['expense_diffs'].values()) and not any(reconciliation['nonunit_diffs'].values())
     account_controls=json.loads((source/'account_controls_reviewed.json').read_text(encoding='utf8'))
+    assert set(account_controls['accounts']) == set(accounts), 'Missing registered account controls.'
     for name,b in account_controls['accounts'].items():
         assert name in accounts
         assert b['opening']+b['credits']-b['debits']+sum(b['transfers'])==b['closing']
         assert sum(r['valor_centavos'] for r in ledger if r['tipo']=='R' and r['conta']==name)==b['credits']
+        assert sum(r['valor_centavos'] for r in ledger if r['tipo']=='D' and r['conta']==name)==b['debits']
+    assert sum(b['opening'] for b in account_controls['accounts'].values()) == account_controls['opening_consolidated']
+    assert sum(b['closing'] for b in account_controls['accounts'].values()) == account_controls['closing_consolidated']
+    assert sum(sum(b['transfers']) for b in account_controls['accounts'].values()) == 0
     assert account_controls['opening_consolidated']+gross['R']-gross['D']==account_controls['closing_consolidated']
     after=hashlib.sha256(database.read_bytes()).hexdigest();assert before==after
     report={'month':month,'status':'PASS','totals_cents':expected_totals,'gross_cents':gross,'excluded_internal_transfer_cents':review['excluded_cents'],
             'counts':counts,'isolated_executions':2,'foreign_keys':'OK','idempotence':'OK logical contents and counts',
             'transactions_to_subcategories':'OK integer cents','subcategories_to_categories':'OK integer cents','categories_to_month':'OK integer cents',
             'independent_pdf_class_controls':'OK','all_registered_accounts':'OK','reason_json_and_review_flags':flags,
-            'bank_running_balances_checked':len(bank['rows']),'bank_payment_identity':'OK unit/date and paid expense multiplicity',
-            'five_account_rollforwards':'OK','competence_conflicts':review.get('conflicts',[]),'notes':review.get('notes',[]),
+            'bank_running_balances_checked':bank_rows_checked,'bank_payment_identity':'OK unit/date and paid expense multiplicity',
+            'registered_account_rollforwards':'OK','competence_conflicts':review.get('conflicts',[]),'notes':review.get('notes',[]),
             'official_db_sha256_before':before,'official_db_sha256_after':after,'official_db_writes':0,
             'sql_sha256':hashlib.sha256(sql_path.read_bytes()).hexdigest()}
     output.parent.mkdir(parents=True,exist_ok=True);output.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8')

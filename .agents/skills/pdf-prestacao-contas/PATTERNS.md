@@ -73,3 +73,29 @@ identificadores, tributos, serviço ou item). Conferir NFs entre analítico e
 demonstrativo; OCR pode acrescentar algarismo ou perder a NF numa linha quebrada.
 Não transportar ajustes, exclusões extraordinárias ou competências decididas por
 usuário de uma competência para outra.
+
+## Variações confirmadas de título e ordem
+
+- `DEMONSTRATIVO PARCIAL` pode trazer a mesma estrutura contábil mensal, com receitas, despesas e resumo de contas. Conferir o período e a estrutura financeira antes de reconhecer; o título isolado não basta.
+- As folhas físicas de um demonstrativo podem estar invertidas. Reordenar pela paginação impressa e pelo conteúdo, preservando os números físicos como evidência.
+- Carimbos próximos à paginação podem fazer PSM 3/6 retornarem texto vazio, embora a célula esteja legível. Conferir o recorte visual ou restringir a célula; não registrar ausência da página por falha do OCR.
+
+## Colunas, controles e alternativas de OCR
+
+- Projeção de pixels escuros pode confundir algarismos monetários alinhados com bordas. Para localizar a grade, preferir morfologia de linhas verticais longas e confirmar cabeçalhos/limites na imagem. Recalcular por página: margens e larguras mudam entre folhas do mesmo relatório.
+- Comparar a posição central dos caracteres de data; caixas altas causadas pela grade criam âncoras duplicadas. Respeitar o espaçamento físico de cada tabela ao recortar uma célula, para não incluir a linha seguinte.
+- Classe extraordinária ou complementar pode aparecer na segunda linha enquanto a primeira diz apenas Taxa de Condomínio. Um fechamento global correto pode esconder transferência indevida entre classes; conferir os rótulos físicos.
+- Contas Recebidas pode omitir um crédito não unitário que consta no demonstrativo e no extrato. Incluir apenas após localizar valor, data, histórico e conta na fonte independente; conservar a diferença entre as fontes e sua evidência.
+- Uma conta de investimento pode ter receita bruta e tarifa separadas. O aumento líquido do saldo não substitui a receita nem autoriza atribuir a despesa à corrente. Conferir os dois lados e o nome cadastrado.
+- Despesas iguais do mesmo fornecedor em datas distintas podem ser duas baixas efetivas. Preservar a multiplicidade publicada e confrontar cada baixa com o banco. Liquidação zero por desconto integral não é uma despesa positiva; manter esse controle explicitamente, sem fabricar transação.
+- Não substituir uma cadeia bancária já consistente só porque uma alternativa OCR coincide em parte dos campos ou no saldo. Comparar identidade, movimento e saldos anterior/seguinte; preservar a leitura original e rejeitar variantes que piorem a reconciliação.
+- Um fluxo gerencial pode mostrar saldo final de conta recém-aberta sem a linha da transferência recebida. Buscar o extrato oficial daquela conta para a pergunta concreta; não criar a linha a partir da diferença de saldos.
+
+## Identidades, referências e divergências entre fontes
+
+- Duas linhas OCR podem apontar para o mesmo pagamento físico enquanto outro pagamento do mesmo valor foi omitido. O total continua correto: resolver as duas ocorrências na imagem e conservar o registro da correção, sem gerar ajuste financeiro.
+- Um vencimento reemitido pode ocultar a referência original; confrontar histórico, demonstrativo e crédito bancário. Um mesmo dia/unidade pode ter cobrança regular e parcela de acordo com competências diferentes. Manter a identidade de cada componente antes de agregar o recebimento bancário.
+- Despesas de mesmo valor/data podem se referir a NFs, tributos ou competências diferentes. Exigir classe e documento no casamento; não atribuir a referência da primeira linha compatível.
+- Data da baixa analítica e data bancária podem divergir de fato. Preservar ambas na evidência e explicitar o critério de data adotado, incluindo a decisão do usuário quando houver; a conciliação não deve apagar a divergência nem trocar a competência automaticamente.
+- Uma NF legível no analítico pode divergir de uma leitura OCR do demonstrativo. Conferir a imagem e registrar qual fonte sustentou o número, preservando a leitura descartada.
+- Ordenação de saldos iniciais de cadastro é uma evidência local e temporal, não uma identidade permanente de investimento. Um cadastro atualizado pode inverter essa ordenação; preservar os mapeamentos confirmados pelas fontes e retirar condições antigas da configuração privada quando deixarem de se aplicar.
