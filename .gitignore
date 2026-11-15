@@ -34,3 +34,6 @@ config/*.config
 # Artefatos privados da skill: fontes, OCR, caches, SQLs e relatórios por competência.
 # SKILL.md, PATTERNS.md, scripts reutilizáveis e testes sintéticos continuam versionáveis.
 /.agents/skills/pdf-prestacao-contas/artifacts/
+
+# Relatórios e arquivos temporários locais
+/tmp/
