@@ -76,6 +76,10 @@ export class RevisaoComponent implements OnInit {
     }
 
     onToggleChange() {
+        for (const tipo of ['meses', 'categorias', 'subcategorias', 'lancamentos', 'documentos']) {
+            sessionStorage.removeItem(`winker-revisao-${tipo}`);
+        }
+        this.activeTab = '-1';
         this.meses = [];
         this.categorias = [];
         this.subcategorias = [];
