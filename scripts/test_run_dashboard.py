@@ -173,6 +173,27 @@ class TestRunDashboard(unittest.TestCase):
         self.assertAlmostEqual(taxas[0]["multa"], 6.0)
         self.assertAlmostEqual(taxas[0]["juros_total"], 0.51)
 
+    def test_inadimplencia_sem_data_de_corte_nao_aplica_multa_no_dia_do_vencimento(self):
+        from datetime import datetime
+
+        class DataFixa(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2023, 1, 15, 12, 0)
+
+        for tipo in ('N', 'M', 'J'):
+            with self.subTest(tipo=tipo):
+                self.cursor.execute("UPDATE condominio SET tipo_juros_multa = ? WHERE id = ?", (tipo, self.condo_id))
+                self.conn.commit()
+                with patch.dict(Api.get_inadimplencia.__globals__, datetime=DataFixa):
+                    resultado = self.api.get_inadimplencia()
+                self.assertEqual(resultado['status'], 'success')
+                unidade = next(item for item in resultado['data'] if item['unidade'] == '101')
+                taxa = unidade['taxas'][0]
+                self.assertEqual(taxa['dias_vencidos'], 0)
+                self.assertEqual(taxa['multa'], 0)
+                self.assertEqual(taxa['juros_total'], 0)
+
     def test_get_inadimplencia_multiple_match(self):
         self.cursor.execute("INSERT INTO taxas (condominio_id, competencia, exibicao, vencimento, descricao, valor_original, desconto_vista, multa_percentual, juros_mes_percentual, tipo) VALUES (?, '2023-01', 'JAN/2023', '15/01/2023', 'Taxa Teste Match Múltiplo', 100.0, 0.0, 2.0, 1.0, 'C')", (self.condo_id,))
         self.cursor.execute("UPDATE condominio SET apartamentos = '[\"101\", \"102\", \"103\"]' WHERE id = ?", (self.condo_id,))

@@ -569,7 +569,7 @@ export class CobrancasComponent implements OnInit {
             let jurosTotal = 0;
             let multaTotal = 0;
             const jurosPerc = t.juros_mes_percentual || 0;
-            const multaPerc = t.multa_percentual || 0;
+            const multaPerc = dias > 0 ? (t.multa_percentual || 0) : 0;
             const totalSemDesconto = t.valor_original || 0;
 
             if (this.tipo_juros_multa === 'M') {
@@ -596,7 +596,7 @@ export class CobrancasComponent implements OnInit {
             let jurosTotal = 0;
             let multaTotal = 0;
             const jurosPerc = t.juros_mes_percentual || 0;
-            const multaPerc = t.multa_percentual || 0;
+            const multaPerc = dias > 0 ? (t.multa_percentual || 0) : 0;
             const totalSemDesconto = t.valor_original || 0;
 
             if (this.tipo_juros_multa === 'M') {

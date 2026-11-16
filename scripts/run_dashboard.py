@@ -988,7 +988,7 @@ class Api:
                             
                         total_sem_desconto = taxa['valor_original']
                         juros_perc = taxa['juros_mes_percentual'] or 0.0
-                        multa_perc = taxa['multa_percentual'] or 0.0
+                        multa_perc = (taxa['multa_percentual'] or 0.0) if dias_atraso > 0 else 0.0
                         tipo_jm = condo.tipo_juros_multa or 'N'
                         
                         if tipo_jm == 'M':
