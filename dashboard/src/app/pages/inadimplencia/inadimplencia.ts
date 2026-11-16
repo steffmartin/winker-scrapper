@@ -50,6 +50,7 @@ declare global {
 export class InadimplenciaComponent implements OnInit {
     loading: boolean = true;
     inadimplencias: any[] = [];
+    erroCarregamento: string = '';
     dataCorte: Date = new Date(); // default hoje
     hoje: Date = new Date(); // data maxima permitida
     activeTab: string = '';
@@ -90,6 +91,7 @@ export class InadimplenciaComponent implements OnInit {
 
     async carregarDados() {
         this.loading = true;
+        this.erroCarregamento = '';
         this.cdr.detectChanges();
         
         try {
@@ -128,7 +130,9 @@ export class InadimplenciaComponent implements OnInit {
                         this.activeTab = this.inadimplencias[0].unidade;
                     }
                 } else {
-                    this.messageService.add({severity:'error', summary:'Erro', detail: response?.message || 'Falha ao carregar inadimplência'});
+                    this.inadimplencias = [];
+                    this.erroCarregamento = response?.message || 'Falha ao carregar inadimplência';
+                    this.messageService.add({severity:'error', summary:'Erro', detail: this.erroCarregamento});
                 }
             } else {
                 console.warn("API pywebview não encontrada. O backend está rodando?");
@@ -179,7 +183,9 @@ export class InadimplenciaComponent implements OnInit {
             }
         } catch (error) {
             console.error(error);
-            this.messageService.add({severity:'error', summary:'Erro', detail: 'Erro ao se comunicar com o backend'});
+            this.inadimplencias = [];
+            this.erroCarregamento = 'Erro ao se comunicar com o backend';
+            this.messageService.add({severity:'error', summary:'Erro', detail: this.erroCarregamento});
         } finally {
             this.loading = false;
             this.cdr.detectChanges();

@@ -122,6 +122,21 @@ Os testes rodam de forma 100% isolada e rápida, sem precisar interagir com a in
 projeto possui um pipeline de integração contínua (CI) via GitHub Actions que executa automaticamente as suítes de
 testes unitários do Python e do Angular a cada push ou pull request.
 
+### Medição da inadimplência
+
+O comando abaixo compara a versão anterior à correção da issue 103 com o código atual, para a mesma data de corte. Ele
+abre o banco em modo somente leitura, não inicializa a API nem acessa anexos, e informa tempos, volumes e hashes das
+respostas. Substitua o identificador do condomínio pelo desejado:
+
+```bash
+python scripts/benchmark_inadimplencia.py --db database/winker_data.db --condominio ID_DO_CONDOMINIO --data 2026-11-03 --anterior 0d0b81c
+```
+
+A medição anterior é interrompida se atingir os limites de tempo ou combinações. Para verificar o histórico completo,
+o script também executa uma referência com poda apenas para grupos de valores não negativos, preservando a ordem e a
+regra de conciliação. Para medir a renderização do frontend já compilado, acrescente `--render-dir compilados/browser`
+e `--chrome CAMINHO_DO_CHROME`; o navegador recebe a resposta em memória e acessa somente o servidor local do teste.
+
 ---
 
 ## 📁 Estrutura de Pastas do Projeto

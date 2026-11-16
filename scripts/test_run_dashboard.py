@@ -2,6 +2,8 @@ import unittest
 import sqlite3
 import os
 import sys
+import itertools
+from unittest.mock import patch
 
 # Add the project root to sys.path if needed
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -187,6 +189,76 @@ class TestRunDashboard(unittest.TestCase):
         taxas_103 = next((d["taxas"] for d in result["data"] if d["unidade"] == "103"), [])
         descricoes_103 = [t["descricao"] for t in taxas_103]
         self.assertNotIn("Taxa Teste Match Múltiplo", descricoes_103)
+
+    def test_inadimplencia_regressao_com_descontos_estornos_e_corte(self):
+        # Dados sintéticos: a mesma transação não pode quitar duas taxas.
+        self.cursor.execute("UPDATE condominio SET apartamentos = ? WHERE id = ?",
+                            ('["101", "102", "103"]', self.condo_id))
+        taxa_id = self.cursor.execute("SELECT id FROM taxas WHERE descricao = 'Taxa Condomínio'").fetchone()[0]
+        self.cursor.execute("INSERT INTO taxas (condominio_id, taxa_id, apartamento, tipo, valor_original, desconto_vista, multa_percentual, juros_mes_percentual) VALUES (?, ?, '101', 'D', 20, 2, 0.5, 0.2)",
+                            (self.condo_id, taxa_id))
+        self.cursor.execute("INSERT INTO taxas (condominio_id, competencia, exibicao, vencimento, descricao, valor_original, desconto_vista, multa_percentual, juros_mes_percentual, tipo) VALUES (?, '2023-01', 'JAN/2023', '15/01/2023', 'Taxa adicional', 100, 0, 2, 1, 'C')", (self.condo_id,))
+        self.cursor.execute("INSERT INTO renegociacao (id, condominio_id, apartamento, data_renegociacao, quantidade_parcelas, despesas_adicionais, descontos_adicionais) VALUES (1, ?, '103', '18/01/2023', 1, 0, 0)", (self.condo_id,))
+        self.cursor.execute("INSERT INTO taxas (condominio_id, renegociacao_id, competencia, exibicao, vencimento, descricao, valor_original, desconto_vista, multa_percentual, juros_mes_percentual, apartamento, tipo) VALUES (?, 1, '2023-01', 'JAN/2023', '10/01/2023', 'Parcela renegociada', 50, 0, 2, 1, '103', 'P')", (self.condo_id,))
+        for transacao in [
+            (3, '101', 25, '14/01/2023'), (4, '101', 75, '14/01/2023'),
+            (5, '103', 150, '14/01/2023'), (6, '103', 160, '14/01/2023'),
+            (7, '103', -20, '14/01/2023'), (8, '103', 50, '19/01/2023'),
+        ]:
+            self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, apartamento, competencia, valor, data, anexos, consistente, revisado_usuario) VALUES (?, 1, 'R', ?, '2023-01', ?, ?, 0, 1, 0)", transacao)
+        self.conn.commit()
+
+        def busca_anterior(transacoes, vencimento, valor, desconto):
+            for tamanho in range(2, len(transacoes) + 1):
+                for indices in itertools.combinations(range(len(transacoes)), tamanho):
+                    soma = sum(transacoes[i][0] for i in indices)
+                    datas = [transacoes[i][1] for i in indices if transacoes[i][1] is not None]
+                    if abs(soma - valor) < 0.01 or (datas and max(datas) <= vencimento and abs(soma - (valor - (desconto or 0))) < 0.01):
+                        return indices
+            return None
+
+        # A conexão da aplicação é estritamente de leitura durante os cálculos.
+        import models
+        models.db.execute_sql('PRAGMA query_only = ON')
+        for corte in ('2023-01-16', '2023-01-18', '2023-01-20'):
+            with self.subTest(corte=corte):
+                resultado = self.api.get_inadimplencia(data_corte=corte)
+                with patch.dict(Api.get_inadimplencia.__globals__, encontrar_combinacao=busca_anterior):
+                    anterior = self.api.get_inadimplencia(data_corte=corte)
+                self.assertEqual(resultado, anterior)
+                self.assertEqual(resultado['status'], 'success')
+
+        resultado = self.api.get_inadimplencia(data_corte='2023-01-20')
+        unidade_101 = next(item for item in resultado['data'] if item['unidade'] == '101')
+        self.assertEqual([taxa['descricao'] for taxa in unidade_101['taxas']], ['Taxa Condomínio'])
+        self.assertEqual(unidade_101['taxas'][0]['valor'], 280)
+
+    def test_limite_de_conciliacao_retorna_erro_sem_resultado_parcial(self):
+        from conciliacao import LimiteConciliacao
+
+        self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, apartamento, competencia, valor, data, anexos, consistente, revisado_usuario) VALUES (3, 1, 'R', '101', '2023-01', 20, '14/01/2023', 0, 1, 0)")
+        self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, apartamento, competencia, valor, data, anexos, consistente, revisado_usuario) VALUES (4, 1, 'R', '101', '2023-01', 30, '14/01/2023', 0, 1, 0)")
+        self.conn.commit()
+        def excede_limite(*args, **kwargs):
+            raise LimiteConciliacao('Limite de teste')
+        with patch.dict(Api.get_inadimplencia.__globals__, encontrar_combinacao=excede_limite):
+            resultado = self.api.get_inadimplencia(data_corte='2023-01-20')
+        self.assertEqual(resultado['status'], 'error')
+        self.assertIn('Conciliação pendente', resultado['message'])
+        self.assertNotIn('data', resultado)
+
+    def test_recebimentos_agrupados_nao_quitam_duas_taxas(self):
+        for descricao in ('Primeira taxa', 'Segunda taxa'):
+            self.cursor.execute("INSERT INTO taxas (condominio_id, competencia, exibicao, vencimento, descricao, valor_original, desconto_vista, multa_percentual, juros_mes_percentual, tipo) VALUES (?, '2023-01', 'JAN/2023', '15/01/2023', ?, 100, 0, 0, 0, 'C')", (self.condo_id, descricao))
+        for transacao_id in (3, 4):
+            self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, apartamento, competencia, valor, data, anexos, consistente, revisado_usuario) VALUES (?, 1, 'R', '101', '2023-01', 50, '14/01/2023', 0, 1, 0)", (transacao_id,))
+        self.conn.commit()
+        resultado = self.api.get_inadimplencia(data_corte='2023-01-20')
+        self.assertEqual(resultado['status'], 'success')
+        unidade = next(item for item in resultado['data'] if item['unidade'] == '101')
+        descricoes = [taxa['descricao'] for taxa in unidade['taxas']]
+        self.assertNotIn('Primeira taxa', descricoes)
+        self.assertIn('Segunda taxa', descricoes)
 
 if __name__ == '__main__':
     unittest.main()

@@ -4,11 +4,11 @@ import subprocess
 import sys
 import json
 import calendar
-import itertools
 from datetime import datetime
 
 # Módulos internos independentes
 from utils import logger
+from conciliacao import LimiteConciliacao, encontrar_combinacao
 
 # Garantir dependências antes de importar libs externas
 from setup_deps import install_dependencies
@@ -901,7 +901,7 @@ class Api:
             ).dicts())
             
             # Filtrar transações por data_corte no Python, já que SQLite não suporta string compare para DD/MM/YYYY
-            transacoes = []
+            transacoes_por_apto = {}
             for t in todas_transacoes:
                 try:
                     t_data = datetime.strptime(t['data'], "%d/%m/%Y").date()
@@ -912,7 +912,9 @@ class Api:
                         continue
                 
                 if t_data <= corte_dt.date():
-                    transacoes.append(t)
+                    t['_data'] = t_data
+                    por_competencia = transacoes_por_apto.setdefault(t['apartamento'], {})
+                    por_competencia.setdefault(t['competencia'], []).append(t)
             
             resultado = []
             
@@ -931,14 +933,11 @@ class Api:
                         t_apto['multa_percentual'] = max(0, (t_apto['multa_percentual'] or 0) - d_agg['multa_percentual'])
                         t_apto['juros_mes_percentual'] = max(0, (t_apto['juros_mes_percentual'] or 0) - d_agg['juros_mes_percentual'])
                 
-                # Agrupar transações do apartamento por competência para evitar iteração linear excessiva
-                transacoes_apto_map = {}
-                for t in transacoes:
-                    if t['apartamento'] == apto:
-                        comp = t['competencia']
-                        if comp not in transacoes_apto_map:
-                            transacoes_apto_map[comp] = []
-                        transacoes_apto_map[comp].append(t)
+                # Cada apartamento recebe listas independentes, como na regra anterior.
+                transacoes_apto_map = {
+                    comp: list(itens)
+                    for comp, itens in transacoes_por_apto.get(apto, {}).items()
+                }
                 
                 taxas_nao_pagas = []
                 for taxa in taxas_apto:
@@ -951,15 +950,7 @@ class Api:
                         transacoes_comp = transacoes_apto_map[comp_taxa]
                         # Encontrar se houve pagamento exato correspondente considerando desconto_vista
                         for idx, transacao in enumerate(transacoes_comp):
-                            try:
-                                t_data = datetime.strptime(transacao['data'], "%d/%m/%Y").date()
-                            except Exception:
-                                # Fallback em caso de formato inesperado
-                                try:
-                                    t_data = datetime.strptime(transacao['data'], "%Y-%m-%d").date()
-                                except Exception:
-                                    continue
-                            
+                            t_data = transacao['_data']
                             v_date = taxa['_venc_dt'].date()
                             if t_data <= v_date:
                                 valor_esperado = taxa['valor_original'] - (taxa['desconto_vista'] or 0)
@@ -973,43 +964,21 @@ class Api:
                                 break
                                 
                         if not pagamento_encontrado:
-                            t_list = []
-                            for idx_t, transacao in enumerate(transacoes_comp):
-                                try:
-                                    t_data = datetime.strptime(transacao['data'], "%d/%m/%Y").date()
-                                except Exception:
-                                    try:
-                                        t_data = datetime.strptime(transacao['data'], "%Y-%m-%d").date()
-                                    except Exception:
-                                        t_data = None
-                                t_list.append((idx_t, transacao, t_data))
-                            
-                            v_date = taxa['_venc_dt'].date()
-                            match_found = False
-                            
-                            for r in range(2, len(t_list) + 1):
-                                for comb in itertools.combinations(t_list, r):
-                                    soma = sum(item[1]['valor'] for item in comb)
-                                    
-                                    valid_dates = [item[2] for item in comb if item[2] is not None]
-                                    max_date = max(valid_dates) if valid_dates else None
-                                    
-                                    if max_date and max_date <= v_date:
-                                        valor_esperado_desc = taxa['valor_original'] - (taxa['desconto_vista'] or 0)
-                                    else:
-                                        valor_esperado_desc = None
-                                        
-                                    valor_esperado_cheio = taxa['valor_original']
-                                    
-                                    if abs(soma - valor_esperado_cheio) < 0.01 or (valor_esperado_desc is not None and abs(soma - valor_esperado_desc) < 0.01):
-                                        match_found = True
-                                        pagamento_encontrado = True
-                                        indices_to_remove = sorted([item[0] for item in comb], reverse=True)
-                                        for idx_to_remove in indices_to_remove:
-                                            transacoes_comp.pop(idx_to_remove)
-                                        break
-                                if match_found:
-                                    break
+                            try:
+                                indices = encontrar_combinacao(
+                                    [(t['valor'], t['_data']) for t in transacoes_comp],
+                                    taxa['_venc_dt'].date(), taxa['valor_original'],
+                                    taxa['desconto_vista'],
+                                )
+                            except LimiteConciliacao as exc:
+                                raise LimiteConciliacao(
+                                    f"Conciliação pendente para a unidade {apto}, "
+                                    f"competência {comp_taxa}: {exc}"
+                                ) from exc
+                            if indices is not None:
+                                pagamento_encontrado = True
+                                for idx in reversed(indices):
+                                    transacoes_comp.pop(idx)
                             
                     if not pagamento_encontrado:
                         taxa_venc_dt = taxa['_venc_dt']
