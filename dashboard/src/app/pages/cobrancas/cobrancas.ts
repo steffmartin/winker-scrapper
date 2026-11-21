@@ -527,9 +527,9 @@ export class CobrancasComponent implements OnInit {
         
         const pywebview = (window as any).pywebview;
         if (pywebview && pywebview.api) {
-            pywebview.api.get_taxas_por_apartamento(this.currentRenegociacao.apartamento, [compStr1, compStr2], ['C', 'E', 'I']).then((res: any) => {
+            pywebview.api.get_taxas_por_apartamento(this.currentRenegociacao.apartamento, [compStr1, compStr2], ['C', 'E', 'I', 'P']).then((res: any) => {
                 if (res.status === 'success') {
-                    this.taxasOriginaisParaRenegociacao = res.data.map((t: any) => {
+                    this.taxasOriginaisParaRenegociacao = res.data.filter((t: any) => !this.isEdit || t.renegociacao_id !== this.currentRenegociacao.id).map((t: any) => {
                         t.displayLabel = `${t.exibicao} - ${t.descricao} (R$ ${t.valor_original})`;
                         return t;
                     });
@@ -777,9 +777,9 @@ export class CobrancasComponent implements OnInit {
                     const compStr1 = `${c1.getFullYear()}-${String(c1.getMonth() + 1).padStart(2, '0')}`;
                     const compStr2 = `${c2.getFullYear()}-${String(c2.getMonth() + 1).padStart(2, '0')}`;
                     
-                    pywebview.api.get_taxas_por_apartamento(this.currentRenegociacao.apartamento, [compStr1, compStr2], ['C', 'E', 'I']).then((resTaxas: any) => {
+                    pywebview.api.get_taxas_por_apartamento(this.currentRenegociacao.apartamento, [compStr1, compStr2], ['C', 'E', 'I', 'P']).then((resTaxas: any) => {
                         if (resTaxas.status === 'success') {
-                            this.taxasOriginaisParaRenegociacao = resTaxas.data.map((t: any) => {
+                            this.taxasOriginaisParaRenegociacao = resTaxas.data.filter((t: any) => t.renegociacao_id !== id).map((t: any) => {
                                 t.displayLabel = `${t.exibicao} - ${t.descricao} (R$ ${t.valor_original})`;
                                 return t;
                             });

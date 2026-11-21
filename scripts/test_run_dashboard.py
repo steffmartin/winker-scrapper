@@ -15,6 +15,43 @@ from scripts.run_dashboard import Api
 
 class TestRunDashboard(unittest.TestCase):
 
+    def test_rerenegociacao_preserva_historico_e_impede_exclusao_da_origem(self):
+        import models
+        taxa = models.Taxas.get(models.Taxas.descricao == 'Taxa Condomínio')
+        def payload(originais, data, vencimento, valor, ren_id=None):
+            return {'id': ren_id, 'apartamento': '101', 'competencia_inicial': '2023-01',
+                    'competencia_final': '2023-03', 'data_renegociacao': data,
+                    'quantidade_parcelas': 1, 'taxas_originais': originais,
+                    'parcelas': [{'competencia': '2023-02' if data == '18/01/2023' else '2023-03',
+                                  'vencimento': vencimento, 'descricao': 'Parcela', 'valor_original': valor}]}
+
+        self.assertEqual(self.api.salvar_renegociacao(payload([taxa.id], '18/01/2023', '10/02/2023', 300))['status'], 'success')
+        origem = models.Renegociacao.get()
+        parcela = models.Taxas.get((models.Taxas.renegociacao_id == origem.id) & (models.Taxas.tipo == 'P'))
+        extra = models.Taxas.create(condominio_id=self.condo_id, apartamento='101', tipo='I',
+                                    competencia='2023-02', vencimento='10/02/2023', descricao='Taxa individual', valor_original=40)
+        disponiveis = self.api.get_taxas_por_apartamento('101', ['2023-01', '2023-03'], ['C', 'E', 'I', 'P'])['data']
+        self.assertIn(parcela.id, [t['id'] for t in disponiveis])
+        self.assertNotIn(parcela.id, [t['id'] for t in self.api.get_taxas_por_apartamento('102', ['2023-01', '2023-03'], ['C', 'E', 'I', 'P'])['data']])
+        self.assertEqual(self.api.salvar_renegociacao(payload([parcela.id, extra.id], '15/02/2023', '10/03/2023', 340))['status'], 'success')
+        nova = models.Renegociacao.get(models.Renegociacao.id != origem.id)
+        self.assertEqual({t['taxa_id'] for t in self.api.get_renegociacao(nova.id)['data']['taxas_originais']}, {parcela.id, extra.id})
+        self.assertEqual(self.api.delete_renegociacao(origem.id)['status'], 'error')
+        self.assertEqual(self.api.salvar_renegociacao(payload([taxa.id], '18/01/2023', '10/02/2023', 300, origem.id))['status'], 'error')
+        self.assertTrue(models.Taxas.get_or_none(models.Taxas.id == parcela.id))
+        for corte, esperado in [('2023-02-14', parcela.id), ('2023-03-11', None)]:
+            resultado = self.api.get_inadimplencia(corte)
+            taxas = next(x['taxas'] for x in resultado['data'] if x['unidade'] == '101')
+            ids = [t['id'] for t in taxas]
+            if esperado is not None:
+                self.assertIn(esperado, ids)
+            else:
+                self.assertNotIn(parcela.id, ids)
+                self.assertNotIn(extra.id, ids)
+                self.assertIn(self.api.get_renegociacao(nova.id)['data']['parcelas'][0]['id'], ids)
+        self.assertEqual(self.api.delete_renegociacao(nova.id)['status'], 'success')
+        self.assertEqual(self.api.delete_renegociacao(origem.id)['status'], 'success')
+
     def setUp(self):
         import tempfile
         import models

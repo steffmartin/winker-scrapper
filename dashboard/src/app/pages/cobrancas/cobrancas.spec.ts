@@ -19,6 +19,42 @@ describe('Renegociação de cobranças', () => {
         delete (window as any).pywebview;
     });
 
+    it('oferece parcelas anteriores junto com taxas normais na nova renegociação', async () => {
+        const buscar = jasmine.createSpy('get_taxas_por_apartamento').and.resolveTo({
+            status: 'success', data: [
+                { id: 1, tipo: 'C', descricao: 'Taxa', exibicao: 'NOV/2026', valor_original: 100 },
+                { id: 2, tipo: 'P', descricao: 'Parcela', exibicao: 'NOV/2026', valor_original: 50 }
+            ]
+        });
+        (window as any).pywebview = { api: { get_taxas_por_apartamento: buscar } };
+        component.currentRenegociacao = { apartamento: '101' };
+        component.apartamentos = ['101'];
+        component.competenciaRenegociacaoRange = [new Date(2026, 10, 1), new Date(2026, 10, 1)];
+        component.onRenegociacaoFormChange();
+        await Promise.resolve();
+        expect(buscar).toHaveBeenCalledWith('101', ['2026-11', '2026-11'], ['C', 'E', 'I', 'P']);
+        expect(component.taxasOriginaisParaRenegociacao.map(t => t.id)).toEqual([1, 2]);
+    });
+
+    it('reabre uma renegociação com a parcela anterior selecionada, sem oferecer suas próprias parcelas', async () => {
+        const buscar = jasmine.createSpy('get_taxas_por_apartamento').and.resolveTo({ status: 'success', data: [
+            { id: 2, tipo: 'P', renegociacao_id: 1, descricao: 'Parcela anterior', valor_original: 50 },
+            { id: 3, tipo: 'P', renegociacao_id: 2, descricao: 'Parcela atual', valor_original: 50 }
+        ] });
+        (window as any).pywebview = { api: {
+            get_taxas_por_apartamento: buscar,
+            get_renegociacao: jasmine.createSpy().and.resolveTo({ status: 'success', data: {
+                id: 2, apartamento: '101', data_renegociacao: '15/11/2026', competencia_inicial: '2026-11',
+                competencia_final: '2026-11', taxas_originais: [{ taxa_id: 2 }], parcelas: []
+            } })
+        } };
+        component.editRenegociacao(2);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(component.taxasOriginaisParaRenegociacao.map(t => t.id)).toEqual([2]);
+        expect(component.taxasOriginaisSelecionadas.map(t => t.id)).toEqual([2]);
+    });
+
     for (const tipo of ['N', 'M', 'J']) {
         for (const vencimento of ['15/11/2026', '16/11/2026']) {
             it(`não cobra multa nem juros para vencimento ${vencimento}, cálculo ${tipo}`, () => {

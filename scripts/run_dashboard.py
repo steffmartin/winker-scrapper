@@ -1217,11 +1217,23 @@ class Api:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    def _renegociacao_tem_dependentes(self, renegociacao_id):
+        parcelas = models.Taxas.select(models.Taxas.id).where(
+            (models.Taxas.renegociacao_id == renegociacao_id) & (models.Taxas.tipo == 'P')
+        )
+        return models.Taxas.select().where(
+            (models.Taxas.taxa_id.in_(parcelas)) & (models.Taxas.tipo == 'R') &
+            (models.Taxas.renegociacao_id != renegociacao_id)
+        ).exists()
+
     def delete_renegociacao(self, renegociacao_id):
         if self.init_error:
             return {"status": "error", "message": self.init_error}
         try:
-            models.Renegociacao.delete().where(models.Renegociacao.id == renegociacao_id).execute()
+            with models.db.atomic():
+                if self._renegociacao_tem_dependentes(renegociacao_id):
+                    return {"status": "error", "message": "Esta renegociação possui parcelas usadas em outra renegociação e não pode ser excluída."}
+                models.Renegociacao.delete().where(models.Renegociacao.id == renegociacao_id).execute()
             return {"status": "success"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
@@ -1248,6 +1260,13 @@ class Api:
 
             with models.db.atomic():
                 if ren_id:
+                    if self._renegociacao_tem_dependentes(ren_id):
+                        return {"status": "error", "message": "Esta renegociação possui parcelas usadas em outra renegociação e não pode ser editada."}
+                    if models.Taxas.select().where(
+                        (models.Taxas.id.in_(taxas_originais)) &
+                        (models.Taxas.renegociacao_id == ren_id)
+                    ).exists():
+                        return {"status": "error", "message": "Uma renegociação não pode incluir suas próprias parcelas."}
                     models.Renegociacao.delete().where(models.Renegociacao.id == ren_id).execute()
                 
                 nova_ren = models.Renegociacao.create(
