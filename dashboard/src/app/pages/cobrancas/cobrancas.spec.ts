@@ -32,8 +32,22 @@ describe('Renegociação de cobranças', () => {
         component.competenciaRenegociacaoRange = [new Date(2026, 10, 1), new Date(2026, 10, 1)];
         component.onRenegociacaoFormChange();
         await Promise.resolve();
-        expect(buscar).toHaveBeenCalledWith('101', ['2026-11', '2026-11'], ['C', 'E', 'I', 'P']);
+        expect(buscar).toHaveBeenCalledWith('101', ['2026-11', '2026-11'], ['C', 'E', 'I', 'P', 'D']);
         expect(component.taxasOriginaisParaRenegociacao.map(t => t.id)).toEqual([1, 2]);
+    });
+
+    it('aplica o desconto e os percentuais reduzidos à taxa vinculada', () => {
+        component.tipo_juros_multa = 'N';
+        component.taxasOriginaisSelecionadas = [
+            { id: 1, tipo: 'C', vencimento: '14/11/2026', valor_original: 100, multa_percentual: 2, juros_mes_percentual: 3 },
+            { id: 2, tipo: 'D', taxa_id: 1, valor_original: 20, multa_percentual: 1, juros_mes_percentual: 1 }
+        ];
+        expect(component.descontosComTaxasSelecionadas).toBeTrue();
+        expect(component.selectedTaxasDetalhesSum.desconto).toBe(20);
+        expect(component.selectedTaxasSum).toBeCloseTo(80 + 0.8 + 80 * 0.02 / 30, 10);
+        component.taxasOriginaisSelecionadas.shift();
+        expect(component.descontosComTaxasSelecionadas).toBeFalse();
+        expect(component.isRenegociacaoValid).toBeFalse();
     });
 
     it('reabre uma renegociação com a parcela anterior selecionada, sem oferecer suas próprias parcelas', async () => {

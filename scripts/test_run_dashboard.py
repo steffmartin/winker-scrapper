@@ -15,6 +15,47 @@ from scripts.run_dashboard import Api
 
 class TestRunDashboard(unittest.TestCase):
 
+    def test_desconto_renegociado_deixa_de_abater_taxa_a_partir_da_data(self):
+        import models
+        taxa = models.Taxas.get(models.Taxas.descricao == 'Taxa Condomínio')
+        desconto = models.Taxas.create(condominio_id=self.condo_id, apartamento='101', tipo='D',
+                                        taxa_id=taxa.id, competencia='2023-01', vencimento='15/01/2023',
+                                        descricao='Desconto', valor_original=20, desconto_vista=2,
+                                        multa_percentual=0.5, juros_mes_percentual=0.2)
+        payload = {'apartamento': '101', 'competencia_inicial': '2023-01', 'competencia_final': '2023-01',
+                   'data_renegociacao': '18/01/2023', 'taxas_originais': [desconto.id],
+                   'parcelas': [{'competencia': '2023-02', 'vencimento': '10/02/2023',
+                                 'descricao': 'Parcela', 'valor_original': 280}]}
+        self.assertEqual(self.api.salvar_renegociacao(payload)['status'], 'error')
+        ren = models.Renegociacao.create(condominio_id=self.condo_id, apartamento='101', data_renegociacao='18/01/2023')
+        models.Taxas.create(condominio_id=self.condo_id, apartamento='101', tipo='R', taxa_id=desconto.id,
+                            renegociacao_id=ren.id, valor_original=20, desconto_vista=2,
+                            multa_percentual=0.5, juros_mes_percentual=0.2)
+        for corte, valor in [('2023-01-17', 280), ('2023-01-18', 300)]:
+            resultado = self.api.get_inadimplencia(corte)
+            self.assertEqual(resultado['status'], 'success')
+            unidade = next((u for u in resultado['data'] if u['unidade'] == '101'), {'taxas': []})
+            origem = next((t for t in unidade['taxas'] if t['id'] == taxa.id), None)
+            if valor is None:
+                self.assertIsNone(origem)
+            else:
+                self.assertEqual(origem['valor'], valor)
+        models.Renegociacao.delete_by_id(ren.id)
+        payload['taxas_originais'] = [taxa.id, desconto.id]
+        resultado = self.api.salvar_renegociacao(payload)
+        self.assertEqual(resultado['status'], 'success', resultado.get('message'))
+        ren = models.Renegociacao.get()
+        self.assertEqual({t['taxa_id'] for t in self.api.get_renegociacao(ren.id)['data']['taxas_originais']}, {taxa.id, desconto.id})
+        self.assertEqual(self.api.delete_taxa(desconto.id)['status'], 'error')
+        self.assertEqual(self.api.update_taxa(desconto.id, {})['status'], 'error')
+        resultado = self.api.get_inadimplencia('2023-01-18')
+        unidade = next((u for u in resultado['data'] if u['unidade'] == '101'), {'taxas': []})
+        self.assertNotIn(taxa.id, [t['id'] for t in unidade['taxas']])
+        self.assertEqual(self.api.delete_renegociacao(ren.id)['status'], 'success')
+        resultado = self.api.get_inadimplencia('2023-01-18')
+        unidade = next(u for u in resultado['data'] if u['unidade'] == '101')
+        self.assertEqual(next(t['valor'] for t in unidade['taxas'] if t['id'] == taxa.id), 280)
+
     def test_rerenegociacao_preserva_historico_e_impede_exclusao_da_origem(self):
         import models
         taxa = models.Taxas.get(models.Taxas.descricao == 'Taxa Condomínio')

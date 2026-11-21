@@ -282,7 +282,7 @@
                         <div class="flex flex-col">
                             <span>{{ taxa.vencimento }} - {{ taxa.descricao }}</span>
                             <small class="text-slate-500 dark:text-slate-400">
-                                Total: {{taxa.valor_original|currency:'BRL'}} | 
+                                Total: {{(taxa.tipo === 'D' ? -taxa.valor_original : taxa.valor_original)|currency:'BRL'}} |
                                 Multa: {{taxa.multa_percentual|number:'1.2-2'}}% | 
                                 Juros Mensais: {{taxa.juros_mes_percentual|number:'1.2-2'}}%
                             </small>
@@ -292,6 +292,7 @@
                 <small class="text-slate-500 dark:text-slate-400 mt-1 block">
                     <span *ngIf="taxasOriginaisSelecionadas && taxasOriginaisSelecionadas.length > 0; else noTaxasLabel">
                         <i class="pi pi-info-circle text-xs mr-1"></i> Valor: {{selectedTaxasDetalhesSum.valor|currency:'BRL'}} | 
+                        Desconto: {{selectedTaxasDetalhesSum.desconto|currency:'BRL'}} |
                         Multa: {{selectedTaxasDetalhesSum.multa|currency:'BRL'}} | 
                         Juros: {{selectedTaxasDetalhesSum.juros|currency:'BRL'}} | 
                         Total: {{selectedTaxasDetalhesSum.geral|currency:'BRL'}}
@@ -301,6 +302,8 @@
                     </ng-template>
                 </small>
             </div>
+
+            <small *ngIf="!descontosComTaxasSelecionadas" class="text-red-500">Selecione também a taxa vinculada a cada desconto.</small>
 
             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div class="flex flex-col gap-2">
@@ -319,7 +322,7 @@
                     <label for="ren-qtd" class="font-semibold text-sm">Quantidade de Parcelas</label>
                     <p-inputgroup>
                         <p-inputNumber id="ren-qtd" [(ngModel)]="quantidadeParcelas" [min]="1" class="w-full"></p-inputNumber>
-                        <button pButton label="Criar" icon="pi pi-cog" (click)="gerarParcelasRenegociacao()" [disabled]="!taxasOriginaisSelecionadas || taxasOriginaisSelecionadas.length === 0 || !vencimentoPrimeiraParcelaDate || quantidadeParcelas < 1"></button>
+                        <button pButton label="Criar" icon="pi pi-cog" (click)="gerarParcelasRenegociacao()" [disabled]="!taxasOriginaisSelecionadas || taxasOriginaisSelecionadas.length === 0 || !descontosComTaxasSelecionadas || !vencimentoPrimeiraParcelaDate || quantidadeParcelas < 1"></button>
                     </p-inputgroup>
                 </div>
             </div>

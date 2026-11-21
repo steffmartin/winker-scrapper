@@ -844,6 +844,25 @@ class Api:
             taxas_individuais_map = {}
             
             descontos_agregados = {}
+            descontos_cancelados = {}
+            descontos_ids = {t['id'] for t in taxas if t['tipo'] == 'D'}
+            campos_abatimento = ('valor_original', 'desconto_vista', 'multa_percentual', 'juros_mes_percentual')
+            for t in taxas:
+                if t['tipo'] != 'R' or t.get('taxa_id') not in descontos_ids:
+                    continue
+                try:
+                    data_ren = datetime.strptime(t['data_renegociacao'], '%d/%m/%Y').date()
+                except (ValueError, TypeError):
+                    try:
+                        data_ren = datetime.strptime(t['data_renegociacao'], '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        data_ren = None
+                if data_ren and data_ren > corte_dt.date():
+                    continue
+                key = (t.get('apartamento'), t['taxa_id'])
+                cancelado = descontos_cancelados.setdefault(key, {campo: 0 for campo in campos_abatimento})
+                for campo in campos_abatimento:
+                    cancelado[campo] += t.get(campo) or 0
             
             for t in taxas:
                 if t['tipo'] in ['P', 'R']:
@@ -860,6 +879,8 @@ class Api:
                             continue # descarta
                             
                 if t['tipo'] in ['D', 'R']:
+                    if t['tipo'] == 'R' and t.get('taxa_id') in descontos_ids:
+                        continue
                     key = (t.get('apartamento'), t.get('taxa_id'))
                     if key not in descontos_agregados:
                         descontos_agregados[key] = {
@@ -867,10 +888,9 @@ class Api:
                             'multa_percentual': 0, 'juros_mes_percentual': 0
                         }
                     d_agg = descontos_agregados[key]
-                    d_agg['valor_original'] += (t.get('valor_original') or 0)
-                    d_agg['desconto_vista'] += (t.get('desconto_vista') or 0)
-                    d_agg['multa_percentual'] += (t.get('multa_percentual') or 0)
-                    d_agg['juros_mes_percentual'] += (t.get('juros_mes_percentual') or 0)
+                    cancelado = descontos_cancelados.get((t.get('apartamento'), t['id']), {}) if t['tipo'] == 'D' else {}
+                    for campo in campos_abatimento:
+                        d_agg[campo] += max(0, (t.get(campo) or 0) - cancelado.get(campo, 0))
                     continue
                 try:
                     v_dt = datetime.strptime(t['vencimento'], "%d/%m/%Y")
@@ -1078,6 +1098,8 @@ class Api:
             return {"status": "error", "message": self.init_error}
         try:
             taxa = models.Taxas.get_by_id(taxa_id)
+            if taxa.tipo == 'D' and models.Taxas.select().where((models.Taxas.taxa_id == taxa.id) & (models.Taxas.tipo == 'R')).exists():
+                return {"status": "error", "message": "Este desconto está vinculado a uma renegociação e não pode ser excluído."}
             if taxa.tipo in ['P', 'R']:
                 return {"status": "error", "message": "Taxas de renegociação não podem ser excluídas individualmente. Exclua a renegociação inteira."}
             taxa.delete_instance()
@@ -1090,6 +1112,8 @@ class Api:
             return {"status": "error", "message": self.init_error}
         try:
             taxa = models.Taxas.get_by_id(taxa_id)
+            if taxa.tipo == 'D' and models.Taxas.select().where((models.Taxas.taxa_id == taxa.id) & (models.Taxas.tipo == 'R')).exists():
+                return {"status": "error", "message": "Este desconto está vinculado a uma renegociação e não pode ser editado."}
             if taxa.tipo in ['P', 'R']:
                 return {"status": "error", "message": "Taxas de renegociação não podem ser editadas individualmente. Edite a renegociação inteira."}
             if 'competencia' in payload: 
@@ -1259,6 +1283,10 @@ class Api:
             meses_map_inv = {1: 'JAN', 2: 'FEV', 3: 'MAR', 4: 'ABR', 5: 'MAI', 6: 'JUN', 7: 'JUL', 8: 'AGO', 9: 'SET', 10: 'OUT', 11: 'NOV', 12: 'DEZ'}
 
             with models.db.atomic():
+                selecionadas = list(models.Taxas.select().where(models.Taxas.id.in_(taxas_originais)))
+                selecionados_ids = {t.id for t in selecionadas}
+                if any(t.tipo == 'D' and t.taxa_id_id not in selecionados_ids for t in selecionadas):
+                    return {"status": "error", "message": "Selecione a taxa vinculada a cada desconto."}
                 if ren_id:
                     if self._renegociacao_tem_dependentes(ren_id):
                         return {"status": "error", "message": "Esta renegociação possui parcelas usadas em outra renegociação e não pode ser editada."}

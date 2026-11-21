@@ -527,7 +527,7 @@ export class CobrancasComponent implements OnInit {
         
         const pywebview = (window as any).pywebview;
         if (pywebview && pywebview.api) {
-            pywebview.api.get_taxas_por_apartamento(this.currentRenegociacao.apartamento, [compStr1, compStr2], ['C', 'E', 'I', 'P']).then((res: any) => {
+            pywebview.api.get_taxas_por_apartamento(this.currentRenegociacao.apartamento, [compStr1, compStr2], ['C', 'E', 'I', 'P', 'D']).then((res: any) => {
                 if (res.status === 'success') {
                     this.taxasOriginaisParaRenegociacao = res.data.filter((t: any) => !this.isEdit || t.renegociacao_id !== this.currentRenegociacao.id).map((t: any) => {
                         t.displayLabel = `${t.exibicao} - ${t.descricao} (R$ ${t.valor_original})`;
@@ -562,66 +562,51 @@ export class CobrancasComponent implements OnInit {
         return diffDays > 0 ? diffDays : 0;
     }
 
+    get descontosComTaxasSelecionadas(): boolean {
+        const ids = new Set(this.taxasOriginaisSelecionadas.map(t => t.id));
+        return this.taxasOriginaisSelecionadas.every(t => t.tipo !== 'D' || ids.has(t.taxa_id));
+    }
+
+    private calcularTaxa(t: any) {
+        const dias = this.getDiasAtraso(t.vencimento);
+        const valor = t.valor_original || 0;
+        const jurosPerc = t.juros_mes_percentual || 0;
+        const multaPerc = dias > 0 ? (t.multa_percentual || 0) : 0;
+        let juros = valor * (jurosPerc / 30 / 100) * dias;
+        let multa = valor * (multaPerc / 100);
+        if (this.tipo_juros_multa === 'M') multa = (valor + juros) * (multaPerc / 100);
+        if (this.tipo_juros_multa === 'J') juros = (valor + multa) * (jurosPerc / 30 / 100) * dias;
+        return { valor, multa, juros, geral: valor + multa + juros };
+    }
+
     get selectedTaxasSum(): number {
-        if (!this.taxasOriginaisSelecionadas || this.taxasOriginaisSelecionadas.length === 0) return 0;
-        return this.taxasOriginaisSelecionadas.reduce((sum, t) => {
-            const dias = this.getDiasAtraso(t.vencimento);
-            let jurosTotal = 0;
-            let multaTotal = 0;
-            const jurosPerc = t.juros_mes_percentual || 0;
-            const multaPerc = dias > 0 ? (t.multa_percentual || 0) : 0;
-            const totalSemDesconto = t.valor_original || 0;
-
-            if (this.tipo_juros_multa === 'M') {
-                jurosTotal = totalSemDesconto * (jurosPerc / 30.0 / 100.0) * dias;
-                multaTotal = (totalSemDesconto + jurosTotal) * (multaPerc / 100.0);
-            } else if (this.tipo_juros_multa === 'J') {
-                multaTotal = totalSemDesconto * (multaPerc / 100.0);
-                jurosTotal = (totalSemDesconto + multaTotal) * (jurosPerc / 30.0 / 100.0) * dias;
-            } else {
-                jurosTotal = totalSemDesconto * (jurosPerc / 30.0 / 100.0) * dias;
-                multaTotal = totalSemDesconto * (multaPerc / 100.0);
-            }
-
-            return sum + totalSemDesconto + multaTotal + jurosTotal;
-        }, 0);
+        return this.selectedTaxasDetalhesSum.geral;
     }
-    
+
     get selectedTaxasDetalhesSum() {
-        if (!this.taxasOriginaisSelecionadas || this.taxasOriginaisSelecionadas.length === 0) {
-            return { valor: 0, desconto: 0, multa: 0, juros: 0, geral: 0 };
-        }
-        return this.taxasOriginaisSelecionadas.reduce((acc, t) => {
-            const dias = this.getDiasAtraso(t.vencimento);
-            let jurosTotal = 0;
-            let multaTotal = 0;
-            const jurosPerc = t.juros_mes_percentual || 0;
-            const multaPerc = dias > 0 ? (t.multa_percentual || 0) : 0;
-            const totalSemDesconto = t.valor_original || 0;
-
-            if (this.tipo_juros_multa === 'M') {
-                jurosTotal = totalSemDesconto * (jurosPerc / 30.0 / 100.0) * dias;
-                multaTotal = (totalSemDesconto + jurosTotal) * (multaPerc / 100.0);
-            } else if (this.tipo_juros_multa === 'J') {
-                multaTotal = totalSemDesconto * (multaPerc / 100.0);
-                jurosTotal = (totalSemDesconto + multaTotal) * (jurosPerc / 30.0 / 100.0) * dias;
-            } else {
-                jurosTotal = totalSemDesconto * (jurosPerc / 30.0 / 100.0) * dias;
-                multaTotal = totalSemDesconto * (multaPerc / 100.0);
+        const selecionadas = this.taxasOriginaisSelecionadas || [];
+        const total = { valor: 0, desconto: 0, multa: 0, juros: 0, geral: 0 };
+        for (const taxa of selecionadas.filter(t => t.tipo !== 'D')) {
+            const original = this.calcularTaxa(taxa);
+            const liquida = { ...taxa };
+            for (const desconto of selecionadas.filter(t => t.tipo === 'D' && t.taxa_id === taxa.id)) {
+                for (const campo of ['valor_original', 'multa_percentual', 'juros_mes_percentual']) {
+                    liquida[campo] = Math.max(0, (liquida[campo] || 0) - (desconto[campo] || 0));
+                }
             }
-            
-            acc.valor += totalSemDesconto;
-            acc.desconto += 0; 
-            acc.multa += multaTotal;
-            acc.juros += jurosTotal;
-            acc.geral += totalSemDesconto + multaTotal + jurosTotal;
-            return acc;
-        }, { valor: 0, desconto: 0, multa: 0, juros: 0, geral: 0 });
+            const ajustada = this.calcularTaxa(liquida);
+            total.valor += original.valor;
+            total.desconto += original.valor - ajustada.valor;
+            total.multa += ajustada.multa;
+            total.juros += ajustada.juros;
+            total.geral += ajustada.geral;
+        }
+        return total;
     }
-    
+
     gerarParcelasRenegociacao() {
         if (!this.vencimentoPrimeiraParcelaDate || this.quantidadeParcelas < 1) return;
-        if (!this.taxasOriginaisSelecionadas || this.taxasOriginaisSelecionadas.length === 0) return;
+        if (!this.taxasOriginaisSelecionadas || this.taxasOriginaisSelecionadas.length === 0 || !this.descontosComTaxasSelecionadas) return;
         
         const baseVal = this.selectedTaxasSum;
         const total = baseVal + (this.despesasAdicionais || 0) - (this.descontosAdicionais || 0);
@@ -677,7 +662,7 @@ export class CobrancasComponent implements OnInit {
         const expected = Math.round((this.selectedTaxasSum + (this.despesasAdicionais || 0) - (this.descontosAdicionais || 0)) * 100) / 100;
         const actual = Math.round(this.parcelasSum * 100) / 100;
         
-        return this.parcelasGeradas.length > 0 && 
+        return this.descontosComTaxasSelecionadas && this.parcelasGeradas.length > 0 &&
                expected === actual && 
                this.currentRenegociacao.apartamento && 
                this.dataRenegociacaoDate !== null && 
@@ -777,7 +762,7 @@ export class CobrancasComponent implements OnInit {
                     const compStr1 = `${c1.getFullYear()}-${String(c1.getMonth() + 1).padStart(2, '0')}`;
                     const compStr2 = `${c2.getFullYear()}-${String(c2.getMonth() + 1).padStart(2, '0')}`;
                     
-                    pywebview.api.get_taxas_por_apartamento(this.currentRenegociacao.apartamento, [compStr1, compStr2], ['C', 'E', 'I', 'P']).then((resTaxas: any) => {
+                    pywebview.api.get_taxas_por_apartamento(this.currentRenegociacao.apartamento, [compStr1, compStr2], ['C', 'E', 'I', 'P', 'D']).then((resTaxas: any) => {
                         if (resTaxas.status === 'success') {
                             this.taxasOriginaisParaRenegociacao = resTaxas.data.filter((t: any) => t.renegociacao_id !== id).map((t: any) => {
                                 t.displayLabel = `${t.exibicao} - ${t.descricao} (R$ ${t.valor_original})`;
