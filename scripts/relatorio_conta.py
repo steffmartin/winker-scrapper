@@ -53,6 +53,7 @@ def gerar(condo_id, filtros):
                                    'tipo': 'Receita' if t.tipo == 'R' else 'Despesa', 'centavos': valor,
                                    'pendente_revisao': not t.consistente and not t.revisado_usuario})
     resultado = []
+    saldo_global = 0
     for nome in nomes:
         todos = sorted(movimentos[nome], key=lambda t: (t['data'], -t['centavos'], t['id']))
         saldo = _centavos(contas[nome].saldo_inicial) + sum(t['centavos'] for t in todos if t['data'] < inicio.isoformat())
@@ -82,4 +83,5 @@ def gerar(condo_id, filtros):
         resultado.append({'conta': nome, 'saldo_anterior': anterior / 100, 'meses': grupos,
                           'subtotal': total_conta / 100, 'saldo_final': saldo / 100,
                           'provisorio': any(t['pendente_revisao'] for t in todos if t['data'] <= fim.isoformat())})
-    return {'periodo': [inicio.isoformat(), fim.isoformat()], 'contas': resultado}
+        saldo_global += saldo
+    return {'periodo': [inicio.isoformat(), fim.isoformat()], 'contas': resultado, 'saldo_global': saldo_global / 100}

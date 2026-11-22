@@ -33,10 +33,13 @@ class TestRelatorioConta(unittest.TestCase):
         a, b = dados['contas']
         self.assertEqual((a['saldo_anterior'], a['subtotal'], a['saldo_final']), (120, 15, 135))
         self.assertEqual((b['saldo_anterior'], b['subtotal'], b['saldo_final']), (50, 0, 50))
+        self.assertEqual(dados['saldo_global'], 185)
         dias = a['meses'][0]['dias']
         self.assertEqual([t['valor'] for t in dias[0]['transacoes']], [30, -10])
         self.assertEqual((dias[0]['subtotal'], dias[0]['saldo_final'], a['meses'][0]['subtotal']), (20, 140, 15))
         self.assertFalse(a['provisorio'])
+        apenas_a = gerar('a', {'periodo': ['2024-01-01', '2024-01-31'], 'contas': ['Conta A']})
+        self.assertEqual(apenas_a['saldo_global'], 135)
 
     def test_erro_de_filtros_e_dados_inconsistentes(self):
         for filtros in ({'periodo': None}, {'periodo': ['2024-02-01', '2024-01-01']}, {'periodo': ['2024-01-01', '2024-01-31'], 'contas': ['Inválida']}):

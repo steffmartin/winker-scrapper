@@ -70,7 +70,7 @@ describe('RelatoriosComponent', () => {
     it('carrega o extrato de conta sob demanda e apresenta os saldos do backend', async () => {
         const carregar = jasmine.createSpy('get_contas_relatorio').and.resolveTo({ status: 'success', data: ['Conta A'] });
         const gerar = jasmine.createSpy('get_relatorio_conta').and.resolveTo({ status: 'success', data: {
-            periodo: ['2024-01-01', '2024-01-31'], contas: [{ conta: 'Conta A', saldo_anterior: 100,
+            periodo: ['2024-01-01', '2024-01-31'], saldo_global: 120, contas: [{ conta: 'Conta A', saldo_anterior: 100,
                 subtotal: 20, saldo_final: 120, provisorio: false, meses: [] }]
         } });
         window.pywebview = { api: { get_contas_relatorio: carregar, get_relatorio_conta: gerar } };
@@ -91,6 +91,7 @@ describe('RelatoriosComponent', () => {
         const resultado: HTMLElement = fixture.nativeElement.querySelector('.relatorio-impressao');
         expect(resultado.textContent).toContain('Conta A');
         expect(resultado.textContent).toContain('Saldo final');
+        expect(resultado.textContent).toContain('Total geral');
         expect(resultado.querySelector('[aria-label="Salvar relatório"]')).not.toBeNull();
         expect(resultado.querySelector('[aria-label="Imprimir relatório"]')).not.toBeNull();
     });
@@ -99,7 +100,7 @@ describe('RelatoriosComponent', () => {
         const resultado = TestBed.createComponent(ExtratoContaComponent);
         resultado.componentInstance.modo = 'resultado';
         const transacao = (id: number, data: string) => ({ id, data, descricao: 'Lançamento', tipo: 'Receita', valor: 10, saldo: 10 });
-        resultado.componentInstance.dados = { periodo: ['2024-01-01', '2024-01-31'], contas: [{ conta: 'A', saldo_anterior: 0, subtotal: 30, saldo_final: 30, provisorio: false, meses: [{ mes: '2024-01', subtotal: 30, dias: [
+        resultado.componentInstance.dados = { periodo: ['2024-01-01', '2024-01-31'], saldo_global: 30, contas: [{ conta: 'A', saldo_anterior: 0, subtotal: 30, saldo_final: 30, provisorio: false, meses: [{ mes: '2024-01', subtotal: 30, dias: [
             { data: '2024-01-01', subtotal: 20, saldo_final: 20, transacoes: [transacao(1, '2024-01-01'), transacao(2, '2024-01-01')] },
             { data: '2024-01-02', subtotal: 10, saldo_final: 30, transacoes: [transacao(3, '2024-01-02')] }
         ] }] }] };

@@ -27,7 +27,7 @@
     @for (conta of dados.contas; track conta.conta) {
         <section class="mb-6">
             <h5 class="text-lg font-bold mb-3">{{ conta.conta }}</h5>
-            <p class="font-medium">Saldo anterior: {{ conta.saldo_anterior | currency:'BRL' }}</p>
+            <p class="font-medium text-right">Saldo anterior da conta: {{ conta.saldo_anterior | currency:'BRL' }}</p>
             @for (mes of conta.meses; track mes.mes) {
                 <h6 class="font-semibold mt-4 mb-2">{{ mes.mes.slice(5, 7) }}/{{ mes.mes.slice(0, 4) }}</h6>
                 <div class="overflow-x-auto">
@@ -45,8 +45,8 @@
                 </div>
                 <p class="text-right font-semibold border-b pb-2">Subtotal do mês: {{ mes.subtotal | currency:'BRL' }}</p>
             } @empty { <p class="text-surface-500 mt-3">Nenhuma movimentação no período.</p> }
-            <p class="text-right font-bold mt-3">Subtotal da conta: {{ conta.subtotal | currency:'BRL' }}</p>
-            <p class="text-right font-bold">Saldo final: {{ conta.saldo_final | currency:'BRL' }}</p>
+            <p class="text-right font-bold mt-3">Saldo final da conta: {{ conta.saldo_final | currency:'BRL' }}</p>
         </section>
     }
+    <p class="mt-4 text-right font-bold border-t pt-3">Total geral: {{ dados.saldo_global | currency:'BRL' }}</p>
 }

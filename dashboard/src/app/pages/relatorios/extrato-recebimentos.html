@@ -88,5 +88,5 @@
             <div class="mt-3 text-right font-bold">Subtotal do apartamento: {{ unidade.subtotal | currency:'BRL' }}</div>
         </section>
     } @empty { <p class="text-surface-500">Nenhum apartamento ou lançamento encontrado.</p> }
-    <div class="mt-4 text-right font-bold">Total geral: {{ dados.total | currency:'BRL' }}</div>
+    <div class="mt-4 text-right font-bold border-t pt-3">Total geral: {{ dados.total | currency:'BRL' }}</div>
 }

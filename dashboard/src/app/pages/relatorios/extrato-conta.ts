@@ -8,6 +8,7 @@ import { MultiSelectModule } from 'primeng/multiselect';
 export interface ExtratoContaFiltros { periodo: (Date | null)[] | null; contas: string[]; }
 export interface ExtratoContaResultado {
     periodo: [string, string];
+    saldo_global: number;
     contas: { conta: string; saldo_anterior: number; subtotal: number; saldo_final: number; provisorio: boolean; meses: {
         mes: string; subtotal: number; dias: { data: string; subtotal: number; saldo_final: number; transacoes: {
             id: number; data: string; descricao: string; tipo: string; valor: number; saldo: number;
