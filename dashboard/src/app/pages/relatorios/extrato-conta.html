@@ -1,0 +1,52 @@
+@if (modo === 'formulario') {
+    <form (ngSubmit)="gerarRelatorio()">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="flex flex-col gap-2">
+                <label for="conta-periodo" class="font-medium">Período</label>
+                <p-datepicker inputId="conta-periodo" name="periodo" [(ngModel)]="periodo" selectionMode="range" dateFormat="dd/mm/yy" [showIcon]="true" [readonlyInput]="true" [showClear]="true" placeholder="Selecione início e fim" appendTo="body" class="w-full" styleClass="w-full primary-datepicker-btn" inputStyleClass="w-full"></p-datepicker>
+            </div>
+            <div class="flex flex-col gap-2">
+                <label for="conta-selecao" class="font-medium">Contas</label>
+                <p-multiSelect inputId="conta-selecao" name="contas" [options]="contas" [(ngModel)]="selecionadas" placeholder="Todas as contas" [showClear]="true" [disabled]="carregando || !!erro" appendTo="body" class="w-full" styleClass="w-full" emptyMessage="Nenhuma conta cadastrada">
+                    <ng-template let-value pTemplate="selectedItems">@if (value && value.length) { {{ value[0] }} @if (value.length > 1) { <span>(+ {{ value.length - 1 }} {{ value.length === 2 ? 'conta' : 'contas' }})</span> } }</ng-template>
+                </p-multiSelect>
+                @if (carregando) { <small>Carregando contas...</small> }
+                @if (erro) { <small role="alert" class="text-red-600">{{ erro }}</small><button type="button" class="text-primary text-left" (click)="carregar()">Tentar novamente</button> }
+            </div>
+        </div>
+        <div class="flex justify-end mt-6"><p-button type="submit" label="Gerar" icon="pi pi-file" [disabled]="carregando || !!erro"></p-button></div>
+    </form>
+} @else if (dados) {
+    <div class="border border-surface-200 dark:border-surface-700 rounded-lg p-4 mb-6">
+        <h5 class="font-semibold mb-3">Parâmetros do relatório</h5>
+        <dl class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div><dt class="inline font-medium">Período: </dt><dd class="inline">{{ dados.periodo[0] | date:'dd/MM/yyyy':'UTC' }} a {{ dados.periodo[1] | date:'dd/MM/yyyy':'UTC' }}</dd></div>
+            <div><dt class="inline font-medium">Contas: </dt><dd class="inline">{{ filtros?.contas?.length ? filtros!.contas.join(', ') : 'Todas' }}</dd></div>
+        </dl>
+    </div>
+    @for (conta of dados.contas; track conta.conta) {
+        <section class="mb-6">
+            <h5 class="text-lg font-bold mb-3">{{ conta.conta }}</h5>
+            <p class="font-medium">Saldo anterior: {{ conta.saldo_anterior | currency:'BRL' }}</p>
+            @for (mes of conta.meses; track mes.mes) {
+                <h6 class="font-semibold mt-4 mb-2">{{ mes.mes.slice(5, 7) }}/{{ mes.mes.slice(0, 4) }}</h6>
+                <div class="overflow-x-auto">
+                    <table class="tabela text-left">
+                        <colgroup><col style="width: 14%"><col style="width: 14%"><col style="width: 30%"><col style="width: 14%"><col style="width: 14%"><col style="width: 14%"></colgroup>
+                        <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th class="text-right">Créditos</th><th class="text-right">Débitos</th><th class="text-right">Saldo</th></tr></thead>
+                        <tbody>
+                            @for (dia of mes.dias; track dia.data) {
+                                @for (t of dia.transacoes; track t.id; let ultimo = $last) {
+                                    <tr><td [class.font-bold]="ultimo">{{ t.data | date:'dd/MM/yyyy':'UTC' }}</td><td>{{ t.tipo }}</td><td>{{ t.descricao }}</td><td class="text-right">@if (t.valor >= 0) { {{ t.valor | currency:'BRL' }} }</td><td class="text-right">@if (t.valor < 0) { {{ t.valor | currency:'BRL' }} }</td><td class="text-right" [class.font-bold]="ultimo">{{ t.saldo | currency:'BRL' }}</td></tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="text-right font-semibold border-b pb-2">Subtotal do mês: {{ mes.subtotal | currency:'BRL' }}</p>
+            } @empty { <p class="text-surface-500 mt-3">Nenhuma movimentação no período.</p> }
+            <p class="text-right font-bold mt-3">Subtotal da conta: {{ conta.subtotal | currency:'BRL' }}</p>
+            <p class="text-right font-bold">Saldo final: {{ conta.saldo_final | currency:'BRL' }}</p>
+        </section>
+    }
+}

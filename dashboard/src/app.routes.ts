@@ -21,6 +21,10 @@ export const appRoutes: Routes = [
                 path: 'inadimplencia', 
                 loadComponent: () => import('./app/pages/inadimplencia/inadimplencia').then(m => m.InadimplenciaComponent)
             },
+            {
+                path: 'relatorios',
+                loadComponent: () => import('./app/pages/relatorios/relatorios').then(m => m.RelatoriosComponent)
+            },
 
             { 
                 path: 'configuracoes', 

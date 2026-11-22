@@ -27,7 +27,8 @@ export class AppMenu {
                 label: 'Home',
                 items: [
                     { label: 'Dashboard', icon: 'pi pi-fw pi-home', routerLink: ['/'] },
-                    { label: 'Inadimplência', icon: 'pi pi-fw pi-exclamation-triangle', routerLink: ['/inadimplencia'] }
+                    { label: 'Inadimplência', icon: 'pi pi-fw pi-exclamation-triangle', routerLink: ['/inadimplencia'] },
+                    { label: 'Relatórios', icon: 'pi pi-fw pi-chart-bar', routerLink: ['/relatorios'] }
                 ]
             },
             {

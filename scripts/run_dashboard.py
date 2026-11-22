@@ -115,6 +115,75 @@ class Api:
         threading.Timer(0.5, lambda: os._exit(0)).start()
         return {"status": "success"}
 
+    def salvar_relatorio_pdf(self, nome=None):
+        try:
+            from exportar_relatorio import salvar_pdf
+            return salvar_pdf(self._main_window, nome)
+        except Exception as e:
+            logger.error(f'Erro ao salvar relatório em PDF: {e}')
+            return {'status': 'error', 'message': str(e)}
+
+    def get_contas_relatorio(self):
+        if self.init_error:
+            return {'status': 'error', 'message': self.init_error}
+        try:
+            contas = models.Contas.select(models.Contas.conta).where(models.Contas.condominio_id == self.condo_id).order_by(models.Contas.conta)
+            return {'status': 'success', 'data': [conta.conta for conta in contas if conta.conta]}
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
+
+    def get_relatorio_conta(self, filtros=None):
+        if self.init_error:
+            return {'status': 'error', 'message': self.init_error}
+        try:
+            from relatorio_conta import gerar
+            return {'status': 'success', 'data': gerar(self.condo_id, filtros or {})}
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
+
+    def get_relatorio_inadimplencia(self, filtros=None):
+        try:
+            from relatorio_inadimplencia import formatar
+            filtros = filtros or {}
+            data_corte = filtros.get('data_corte')
+            if not data_corte:
+                return {'status': 'error', 'message': 'Informe a data de corte.'}
+            datetime.strptime(data_corte, '%Y-%m-%d')
+            apartamentos = filtros.get('apartamentos') or []
+            if not isinstance(apartamentos, list) or not all(isinstance(a, str) for a in apartamentos):
+                return {'status': 'error', 'message': 'Filtro de apartamentos inválido.'}
+            resposta = self.get_inadimplencia(data_corte)
+            if resposta.get('status') != 'success':
+                return resposta
+            return {'status': 'success', 'data': formatar(resposta['data'], data_corte, apartamentos)}
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
+
+    def get_relatorio_recebimentos(self, filtros=None):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            from relatorio_recebimentos import gerar
+            return {"status": "success", "data": gerar(self.condo_id, filtros or {})}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    def get_apartamentos(self):
+        if self.init_error:
+            return {"status": "error", "message": self.init_error}
+        try:
+            condo = models.Condominio.get_or_none(id=self.condo_id)
+            if not condo:
+                return {"status": "error", "message": "Condomínio não encontrado."}
+            apartamentos = json.loads(condo.apartamentos) if condo.apartamentos else []
+            if not isinstance(apartamentos, list) or not all(isinstance(a, str) for a in apartamentos):
+                raise ValueError("Cadastro de apartamentos inválido.")
+            return {"status": "success", "data": apartamentos}
+        except (ValueError, TypeError):
+            return {"status": "error", "message": "Cadastro de apartamentos inválido."}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     def get_condominio_config(self):
         if self.init_error:
             return {"status": "error", "message": self.init_error}

@@ -1,3 +1,50 @@
 /* You can add global styles to this file, and also import other style files */
 @use 'primeicons/primeicons.css';
 @use './layout/layout.scss';
+
+.relatorio-acao {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    color: var(--text-color);
+    cursor: pointer;
+    transition: background-color var(--element-transition-duration);
+
+    i { font-size: 1.25rem; }
+    &:hover:not(:disabled) { background-color: var(--surface-hover); }
+    &:focus-visible { outline: 2px solid var(--p-primary-color); outline-offset: 2px; }
+    &:disabled { opacity: .4; cursor: not-allowed; }
+}
+
+@media print {
+    @page { size: landscape; }
+
+    body:has(.relatorio-impressao) {
+        background: white !important;
+
+        app-topbar, app-sidebar, app-footer, p-toast, .layout-mask, .relatorios-controles, .relatorio-acoes {
+            display: none !important;
+        }
+
+        .layout-main-container, .layout-main {
+            margin: 0 !important;
+            padding: 0 !important;
+            min-height: 0 !important;
+            display: block !important;
+        }
+
+        .relatorio-impressao {
+            color: black !important;
+            background: white !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+
+        .relatorio-impressao h4 { color: black !important; }
+    }
+}

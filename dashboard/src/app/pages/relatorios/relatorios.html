@@ -1,0 +1,48 @@
+<p-toast position="bottom-right"></p-toast>
+<div class="card shadow-sm border rounded-xl w-full relative relatorios-controles">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+        <h4 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-0">Relatórios</h4>
+        <p-select inputId="relatorio" ariaLabel="Selecionar relatório" [options]="relatorios"
+                  [(ngModel)]="relatorioSelecionado" (ngModelChange)="alterarRelatorio()" placeholder="Selecione um relatório"
+                  class="w-full md:w-80" styleClass="w-full" appendTo="body"></p-select>
+    </div>
+    @if (!relatorioSelecionado) {
+    <div class="flex flex-col items-center justify-center p-8 text-center bg-surface-50 dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 my-4">
+        <i class="pi pi-chart-bar text-6xl text-surface-400 mb-4"></i>
+        <h5 class="text-xl font-bold text-surface-800 dark:text-surface-100 mb-2">Nenhum relatório selecionado</h5>
+        <p class="text-surface-600 dark:text-surface-400">Selecione um relatório para visualizá-lo.</p>
+    </div>
+    }
+    @if (componenteRelatorio) {
+        <ng-container *ngComponentOutlet="componenteRelatorio; inputs: { modo: 'formulario', aoGerar: relatorioSelecionado === 'inadimplencia' ? aoGerarInadimplencia : relatorioSelecionado === 'extrato-conta' ? aoGerarConta : aoGerarExtrato }"></ng-container>
+    }
+</div>
+
+@if (gerando) {
+    <div class="card shadow-sm border rounded-xl w-full" aria-label="Gerando relatório" aria-busy="true">
+        <p-skeleton width="40%" height="2rem" class="mb-4"></p-skeleton>
+        <p-skeleton width="100%" height="12rem"></p-skeleton>
+    </div>
+}
+@if (erro) { <div class="card" role="alert">{{ erro }}</div> }
+
+@if (extratoGerado || inadimplenciaGerada || contaGerada) {
+    <section class="card shadow-sm border rounded-xl w-full relatorio-impressao" aria-labelledby="titulo-relatorio">
+        <div class="flex justify-between items-center gap-4 mb-4">
+            <h4 id="titulo-relatorio" class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-0">{{ inadimplenciaGerada ? 'Inadimplência' : contaGerada ? 'Extrato de conta' : 'Extrato de recebimentos' }}</h4>
+            <div class="flex items-center gap-1 relatorio-acoes">
+                <button type="button" class="relatorio-acao" [disabled]="salvando" (click)="salvar()" aria-label="Salvar relatório" pTooltip="Salvar PDF" tooltipPosition="bottom"><i class="pi pi-save"></i></button>
+                <button type="button" class="relatorio-acao" (click)="imprimir()" aria-label="Imprimir relatório" pTooltip="Imprimir" tooltipPosition="bottom"><i class="pi pi-print"></i></button>
+            </div>
+        </div>
+        @if (componenteRelatorio && extratoGerado) {
+            <ng-container *ngComponentOutlet="componenteRelatorio; inputs: { modo: 'resultado', dados: extratoGerado, filtrosGerados: filtrosGerados }"></ng-container>
+        }
+        @if (componenteRelatorio && inadimplenciaGerada) {
+            <ng-container *ngComponentOutlet="componenteRelatorio; inputs: { modo: 'resultado', dados: inadimplenciaGerada, filtros: filtrosInadimplencia }"></ng-container>
+        }
+        @if (componenteRelatorio && contaGerada) {
+            <ng-container *ngComponentOutlet="componenteRelatorio; inputs: { modo: 'resultado', dados: contaGerada, filtros: filtrosConta }"></ng-container>
+        }
+    </section>
+}
