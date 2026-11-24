@@ -309,6 +309,16 @@ export class CobrancasComponent implements OnInit {
         return this.taxasParaDesconto.find(t => t.id === this.currentTaxa.taxa_id);
     }
 
+    onTaxaVinculadaChange() {
+        const vencimento = this.getSelectedTaxa()?.vencimento;
+        if (!this.vencimentoDate && vencimento) {
+            const parts = vencimento.split('/');
+            if (parts.length === 3) {
+                this.vencimentoDate = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+            }
+        }
+    }
+
     editTaxa(taxa: any) {
         if (taxa.tipo === 'P' || taxa.tipo === 'R') {
             this.editRenegociacao(taxa.renegociacao_id);
@@ -319,6 +329,8 @@ export class CobrancasComponent implements OnInit {
         this.dialogTitle = taxa.tipo === 'C' ? 'Editar Taxa Comum' : (taxa.tipo === 'E' ? 'Editar Taxa Extra' : (taxa.tipo === 'D' ? 'Editar Desconto' : 'Editar Taxa Individual'));
         this.currentTaxa = { ...taxa };
         
+        this.competenciaDate = null;
+        this.vencimentoDate = null;
         // Converter competencia de YYYY-MM para Date
         if (taxa.competencia) {
             const parts = taxa.competencia.split('-');
@@ -345,7 +357,7 @@ export class CobrancasComponent implements OnInit {
             return;
         }
         
-        if (!this.vencimentoDate && this.currentTaxa.tipo !== 'D') {
+        if (!this.vencimentoDate) {
             this.messageService.add({ severity: 'warn', summary: 'Atenção', detail: 'Preencha a data de vencimento.' });
             return;
         }
@@ -412,7 +424,7 @@ export class CobrancasComponent implements OnInit {
         const payload = {
             ...this.currentTaxa,
             competencia: competencia,
-            vencimento: this.currentTaxa.tipo === 'D' ? null : vencimento,
+            vencimento: vencimento,
             meses_repeticao: this.isEdit ? 1 : this.mesesRepeticao
         };
         

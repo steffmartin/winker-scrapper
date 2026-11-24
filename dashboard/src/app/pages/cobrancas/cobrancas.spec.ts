@@ -19,6 +19,33 @@ describe('Renegociação de cobranças', () => {
         delete (window as any).pywebview;
     });
 
+    it('preenche o vencimento do desconto ao selecionar a taxa somente se estiver vazio', () => {
+        component.currentTaxa = { tipo: 'D', taxa_id: 1 };
+        component.taxasParaDesconto = [{ id: 1, vencimento: '15/01/2023' }];
+        component.vencimentoDate = null;
+        component.onTaxaVinculadaChange();
+        expect(component.vencimentoDate as Date | null).toEqual(new Date(2023, 0, 15));
+        component.vencimentoDate = new Date(2023, 0, 20);
+        component.onTaxaVinculadaChange();
+        expect(component.vencimentoDate).toEqual(new Date(2023, 0, 20));
+    });
+
+    it('envia e reabre o vencimento próprio do desconto', async () => {
+        const salvar = jasmine.createSpy('insert_taxa').and.resolveTo({ status: 'success' });
+        (window as any).pywebview = { api: { insert_taxa: salvar } };
+        spyOn(component, 'loadTaxasIndividuais');
+        component.currentTaxa = { tipo: 'D', taxa_id: 1, apartamento: '101', descricao: 'Desconto', valor_original: 20 };
+        component.apartamentos = ['101'];
+        component.taxasParaDesconto = [{ id: 1, valor_original: 100, desconto_vista: 0, multa_percentual: 0, juros_mes_percentual: 0 }];
+        component.competenciaDate = new Date(2023, 0, 1);
+        component.vencimentoDate = new Date(2023, 0, 20);
+        component.saveTaxa();
+        expect(salvar.calls.mostRecent().args[0].vencimento).toBe('20/01/2023');
+        await Promise.resolve();
+        component.editTaxa({ tipo: 'D', competencia: '2023-01', vencimento: '20/01/2023' });
+        expect(component.vencimentoDate).toEqual(new Date(2023, 0, 20));
+    });
+
     it('oferece parcelas anteriores junto com taxas normais na nova renegociação', async () => {
         const buscar = jasmine.createSpy('get_taxas_por_apartamento').and.resolveTo({
             status: 'success', data: [

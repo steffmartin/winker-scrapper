@@ -15,6 +15,23 @@ from scripts.run_dashboard import Api
 
 class TestRunDashboard(unittest.TestCase):
 
+    def test_desconto_tem_vencimento_proprio_e_respeita_data_de_corte(self):
+        import models
+        taxa = models.Taxas.get(models.Taxas.descricao == 'Taxa Condomínio')
+        payload = {'tipo': 'D', 'taxa_id': taxa.id, 'apartamento': '101',
+                   'competencia': '2023-01', 'vencimento': '20/01/2023',
+                   'descricao': 'Desconto', 'valor_original': 20}
+        self.assertEqual(self.api.insert_taxa(payload)['status'], 'success')
+        desconto = models.Taxas.get(models.Taxas.tipo == 'D')
+        self.assertEqual(desconto.vencimento, '20/01/2023')
+        for corte, valor in [('2023-01-19', 300), ('2023-01-20', 280)]:
+            resultado = self.api.get_inadimplencia(corte)
+            unidade = next(u for u in resultado['data'] if u['unidade'] == '101')
+            self.assertEqual(next(t['valor'] for t in unidade['taxas'] if t['id'] == taxa.id), valor)
+        self.assertEqual(self.api.update_taxa(desconto.id, {'vencimento': '25/01/2023'})['status'], 'success')
+        desconto_lido = next(t for t in self.api.get_taxas(['D'])['data'] if t['id'] == desconto.id)
+        self.assertEqual(desconto_lido['vencimento'], '25/01/2023')
+
     def test_renegociacao_de_taxa_extraordinaria_abate_apenas_unidade_selecionada(self):
         import models
         extra = models.Taxas.create(condominio_id=self.condo_id, tipo='E', competencia='2023-01',

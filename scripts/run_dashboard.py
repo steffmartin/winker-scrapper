@@ -950,6 +950,12 @@ class Api:
                 if t['tipo'] in ['D', 'R']:
                     if t['tipo'] == 'R' and t.get('taxa_id') in descontos_ids:
                         continue
+                    if t['tipo'] == 'D' and t.get('vencimento'):
+                        try:
+                            if datetime.strptime(t['vencimento'], '%d/%m/%Y').date() > corte_dt.date():
+                                continue
+                        except ValueError:
+                            pass
                     key = (t.get('apartamento'), t.get('taxa_id'))
                     if key not in descontos_agregados:
                         descontos_agregados[key] = {
@@ -1200,12 +1206,10 @@ class Api:
             taxa_vinculada_id = payload.get('taxa_id', taxa.taxa_id)
             
             if tipo == 'D' and taxa_vinculada_id:
-                taxa_pai = models.Taxas.get_by_id(taxa_vinculada_id)
-                taxa.vencimento = taxa_pai.vencimento
                 taxa.taxa_id = taxa_vinculada_id
             else:
-                if 'vencimento' in payload: taxa.vencimento = payload['vencimento']
                 taxa.taxa_id = None
+            if 'vencimento' in payload: taxa.vencimento = payload['vencimento']
                 
             if 'descricao' in payload: taxa.descricao = payload['descricao']
             if 'valor_original' in payload: taxa.valor_original = payload['valor_original']
@@ -1229,7 +1233,7 @@ class Api:
             taxa_id_ref = payload.get('taxa_id')
             
             base_vencimento = payload.get('vencimento')
-            if tipo == 'D' and taxa_id_ref:
+            if tipo == 'D' and taxa_id_ref and not base_vencimento:
                 taxa_pai = models.Taxas.get_by_id(taxa_id_ref)
                 base_vencimento = taxa_pai.vencimento
                 
