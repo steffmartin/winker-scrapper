@@ -89,6 +89,8 @@ configuração):
    ```bash
    python scripts/extract_winker.py --config-file config/example.config
    ```
+
+   Se a página de informações do condomínio falhar, o extrator usa o portal ativo da sessão e o JWT obtido na página de boletos para consultar `/v1/portal`. O slug da URL é enviado a `/novo/findCondominio`; o código de segurança só é aceito quando o `id_condominio` retornado coincide com o `id_portal` da sessão. A gestão e a administradora são consultadas em `/v1/portal/{id}/about`. Se a identificação automática falhar, é solicitada a seleção manual de um condomínio cadastrado; sem seleção, a extração é interrompida e a auditoria registra a falha.
    
 2. **Dashboard Financeiro**
    Abre a janela desktop nativa do Dashboard financeiro conectado ao banco de dados SQLite real.
