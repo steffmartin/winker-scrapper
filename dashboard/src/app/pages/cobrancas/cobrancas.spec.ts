@@ -23,7 +23,8 @@ describe('Renegociação de cobranças', () => {
         const buscar = jasmine.createSpy('get_taxas_por_apartamento').and.resolveTo({
             status: 'success', data: [
                 { id: 1, tipo: 'C', descricao: 'Taxa', exibicao: 'NOV/2026', valor_original: 100 },
-                { id: 2, tipo: 'P', descricao: 'Parcela', exibicao: 'NOV/2026', valor_original: 50 }
+                { id: 2, tipo: 'P', descricao: 'Parcela', exibicao: 'NOV/2026', valor_original: 50 },
+                { id: 3, tipo: 'E', descricao: 'Extraordinária', exibicao: 'NOV/2026', valor_original: 75 }
             ]
         });
         (window as any).pywebview = { api: { get_taxas_por_apartamento: buscar } };
@@ -33,7 +34,7 @@ describe('Renegociação de cobranças', () => {
         component.onRenegociacaoFormChange();
         await Promise.resolve();
         expect(buscar).toHaveBeenCalledWith('101', ['2026-11', '2026-11'], ['C', 'E', 'I', 'P', 'D']);
-        expect(component.taxasOriginaisParaRenegociacao.map(t => t.id)).toEqual([1, 2]);
+        expect(component.taxasOriginaisParaRenegociacao.map(t => t.id)).toEqual([1, 2, 3]);
     });
 
     it('aplica o desconto e os percentuais reduzidos à taxa vinculada', () => {

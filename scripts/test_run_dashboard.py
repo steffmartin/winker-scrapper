@@ -15,6 +15,30 @@ from scripts.run_dashboard import Api
 
 class TestRunDashboard(unittest.TestCase):
 
+    def test_renegociacao_de_taxa_extraordinaria_abate_apenas_unidade_selecionada(self):
+        import models
+        extra = models.Taxas.create(condominio_id=self.condo_id, tipo='E', competencia='2023-01',
+                                    exibicao='JAN/2023', vencimento='15/01/2023',
+                                    descricao='Taxa extraordinária', valor_original=75)
+        tipos = ['C', 'E', 'I', 'P', 'D']
+        result = self.api.get_taxas_por_apartamento('101', ['2023-01', '2023-01'], tipos)
+        self.assertEqual(result['status'], 'success')
+        self.assertIn(extra.id, [t['id'] for t in result['data']])
+        payload = {'apartamento': '101', 'competencia_inicial': '2023-01', 'competencia_final': '2023-01',
+                   'data_renegociacao': '18/01/2023', 'taxas_originais': [extra.id],
+                   'parcelas': [{'competencia': '2023-02', 'vencimento': '10/02/2023',
+                                 'descricao': 'Parcela', 'valor_original': 75}]}
+        result = self.api.salvar_renegociacao(payload)
+        self.assertEqual(result['status'], 'success', result.get('message'))
+        acordo = models.Renegociacao.get()
+        self.assertEqual(self.api.get_renegociacao(acordo.id)['data']['taxas_originais'][0]['taxa_id'], extra.id)
+        for corte in ('2023-01-17', '2023-01-18'):
+            resultado = self.api.get_inadimplencia(corte)
+            self.assertEqual(resultado['status'], 'success')
+            for apto in ('101', '102'):
+                taxas = next((u['taxas'] for u in resultado['data'] if u['unidade'] == apto), [])
+                self.assertEqual(extra.id in [t['id'] for t in taxas], apto == '102' or corte == '2023-01-17')
+
     def test_desconto_renegociado_deixa_de_abater_taxa_a_partir_da_data(self):
         import models
         taxa = models.Taxas.get(models.Taxas.descricao == 'Taxa Condomínio')
