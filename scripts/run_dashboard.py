@@ -9,7 +9,6 @@ from datetime import datetime
 
 # Módulos internos independentes
 from utils import logger
-from conciliacao import LimiteConciliacao, encontrar_combinacao
 
 # Garantir dependências antes de importar libs externas
 from setup_deps import install_dependencies
@@ -19,23 +18,8 @@ install_dependencies()
 import webview
 
 import models
-from peewee import JOIN
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
-
-
-def conciliacao_unificada_ativa(config_path=None):
-    """Lê somente a opção funcional; ausência do arquivo ou da chave desativa."""
-    caminho = config_path or os.path.join(project_root, 'config', 'kato.config')
-    try:
-        with open(caminho, encoding='utf-8') as arquivo:
-            config = json.load(arquivo)
-    except FileNotFoundError:
-        return False
-    valor = config.get('conciliacao_unificada', False)
-    if not isinstance(valor, bool):
-        raise ValueError('A opção conciliacao_unificada deve ser true ou false.')
-    return valor
 
 
 def validar_margem_encargos(valor):
@@ -214,20 +198,14 @@ class Api:
             return {"status": "error", "message": self.init_error}
         try:
             filtros = filtros or {}
+            from relatorio_recebimentos import obter_limites
+            limites = obter_limites(self.condo_id)
             if filtros.get('limites'):
-                from relatorio_recebimentos import gerar
-                dados = gerar(self.condo_id, filtros)
-                dados['conciliacao_unificada'] = conciliacao_unificada_ativa()
-                return {"status": "success", "data": dados}
-            if conciliacao_unificada_ativa():
-                from apresentacao_conciliacao import data_corte_extrato, extrato
-                from relatorio_recebimentos import gerar
-                limites = gerar(self.condo_id, {'limites': True})['limites']
-                corte = data_corte_extrato(filtros)
-                posicao = self._calcular_posicao_unificada(corte, filtros)
-                return {'status': 'success', 'data': extrato(posicao, filtros, limites)}
-            from relatorio_recebimentos import gerar
-            return {"status": "success", "data": gerar(self.condo_id, filtros)}
+                return {'status': 'success', 'data': {'limites': limites}}
+            from apresentacao_conciliacao import data_corte_extrato, extrato
+            corte = data_corte_extrato(filtros)
+            posicao = self._calcular_posicao_unificada(corte, filtros)
+            return {'status': 'success', 'data': extrato(posicao, filtros, limites)}
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
@@ -944,258 +922,10 @@ class Api:
             return {"status": "error", "message": self.init_error}
             
         try:
-            if conciliacao_unificada_ativa():
-                from apresentacao_conciliacao import inadimplencia
-                corte = datetime.strptime(data_corte, '%Y-%m-%d').date() if data_corte else datetime.now().date()
-                return {'status': 'success', 'data': inadimplencia(self._calcular_posicao_unificada(corte, {'apartamentos': apartamentos or []}))}
-            # Se data de corte não for informada, utiliza a data do sistema
-            hoje_dt = datetime.now()
-            if data_corte:
-                corte_dt = datetime.strptime(data_corte, "%Y-%m-%d")
-            else:
-                corte_dt = hoje_dt
-                data_corte = hoje_dt.strftime("%Y-%m-%d")
-                
-            hoje_str = hoje_dt.strftime("%Y-%m-%d")
-            
-            condo = models.Condominio.get_or_none(models.Condominio.id == self.condo_id)
-            if not condo:
-                return {"status": "error", "message": "Condomínio não encontrado."}
-                
-            apartamentos = []
-            if condo.apartamentos:
-                apartamentos = json.loads(condo.apartamentos)
-                
-            taxas_query = models.Taxas.select(
-                models.Taxas, models.Renegociacao.data_renegociacao
-            ).join(
-                models.Renegociacao, JOIN.LEFT_OUTER, on=(models.Taxas.renegociacao_id == models.Renegociacao.id)
-            ).where(
-                (models.Taxas.condominio_id == self.condo_id) &
-                (models.Taxas.tipo.in_(['C', 'I', 'D', 'E', 'P', 'R']))
-            )
-            taxas = list(taxas_query.dicts())
-            
-            # Pre-filter taxas by date in Python to avoid SQLite string format issues
-            # vencimento is stored as DD/MM/YYYY
-            taxas_comuns_filtradas = []
-            taxas_individuais_map = {}
-            
-            descontos_agregados = {}
-            descontos_cancelados = {}
-            descontos_ids = {t['id'] for t in taxas if t['tipo'] == 'D'}
-            campos_abatimento = ('valor_original', 'desconto_vista', 'multa_percentual', 'juros_mes_percentual')
-            for t in taxas:
-                if t['tipo'] != 'R' or t.get('taxa_id') not in descontos_ids:
-                    continue
-                try:
-                    data_ren = datetime.strptime(t['data_renegociacao'], '%d/%m/%Y').date()
-                except (ValueError, TypeError):
-                    try:
-                        data_ren = datetime.strptime(t['data_renegociacao'], '%Y-%m-%d').date()
-                    except (ValueError, TypeError):
-                        data_ren = None
-                if data_ren and data_ren > corte_dt.date():
-                    continue
-                key = (t.get('apartamento'), t['taxa_id'])
-                cancelado = descontos_cancelados.setdefault(key, {campo: 0 for campo in campos_abatimento})
-                for campo in campos_abatimento:
-                    cancelado[campo] += t.get(campo) or 0
-            
-            for t in taxas:
-                if t['tipo'] in ['P', 'R']:
-                    if t.get('data_renegociacao'):
-                        try:
-                            # Tenta parsear formato do bd
-                            dt_ren = datetime.strptime(t['data_renegociacao'], "%d/%m/%Y")
-                        except Exception:
-                            try:
-                                dt_ren = datetime.strptime(t['data_renegociacao'], "%Y-%m-%d")
-                            except Exception:
-                                dt_ren = None
-                        if dt_ren and corte_dt.date() < dt_ren.date():
-                            continue # descarta
-                            
-                if t['tipo'] in ['D', 'R']:
-                    if t['tipo'] == 'R' and t.get('taxa_id') in descontos_ids:
-                        continue
-                    if t['tipo'] == 'D' and t.get('vencimento'):
-                        try:
-                            if datetime.strptime(t['vencimento'], '%d/%m/%Y').date() > corte_dt.date():
-                                continue
-                        except ValueError:
-                            pass
-                    key = (t.get('apartamento'), t.get('taxa_id'))
-                    if key not in descontos_agregados:
-                        descontos_agregados[key] = {
-                            'valor_original': 0, 'desconto_vista': 0, 
-                            'multa_percentual': 0, 'juros_mes_percentual': 0
-                        }
-                    d_agg = descontos_agregados[key]
-                    cancelado = descontos_cancelados.get((t.get('apartamento'), t['id']), {}) if t['tipo'] == 'D' else {}
-                    for campo in campos_abatimento:
-                        d_agg[campo] += max(0, (t.get(campo) or 0) - cancelado.get(campo, 0))
-                    continue
-                try:
-                    v_dt = datetime.strptime(t['vencimento'], "%d/%m/%Y")
-                    if v_dt < corte_dt:
-                        t['_venc_dt'] = v_dt
-                        if t['tipo'] in ['C', 'E']:
-                            taxas_comuns_filtradas.append(t)
-                        elif t['tipo'] in ['I', 'P']:
-                            apto_taxa = t.get('apartamento')
-                            if apto_taxa:
-                                if apto_taxa not in taxas_individuais_map:
-                                    taxas_individuais_map[apto_taxa] = []
-                                taxas_individuais_map[apto_taxa].append(t)
-                except Exception:
-                    pass
-            
-            # Buscar transações de recebimento (tipo 'R') do condomínio
-            todas_transacoes = list(models.Transacoes.select(
-                models.Transacoes.apartamento,
-                models.Transacoes.competencia,
-                models.Transacoes.valor,
-                models.Transacoes.data
-            ).join(models.Subcategorias).join(models.Categorias).join(models.Meses).where(
-                (models.Meses.condominio_id == self.condo_id) &
-                (models.Transacoes.tipo == 'R') &
-                (models.Transacoes.apartamento.is_null(False)) &
-                (models.Transacoes.competencia.is_null(False))
-            ).dicts())
-            
-            # Filtrar transações por data_corte no Python, já que SQLite não suporta string compare para DD/MM/YYYY
-            transacoes_por_apto = {}
-            for t in todas_transacoes:
-                try:
-                    t_data = datetime.strptime(t['data'], "%d/%m/%Y").date()
-                except Exception:
-                    try:
-                        t_data = datetime.strptime(t['data'], "%Y-%m-%d").date()
-                    except Exception:
-                        continue
-                
-                if t_data <= corte_dt.date():
-                    t['_data'] = t_data
-                    por_competencia = transacoes_por_apto.setdefault(t['apartamento'], {})
-                    por_competencia.setdefault(t['competencia'], []).append(t)
-            
-            resultado = []
-            
-            for apto in apartamentos:
-                taxas_apto = [dict(t) for t in taxas_comuns_filtradas] # Cópia independente
-                if apto in taxas_individuais_map:
-                    taxas_apto.extend([dict(t) for t in taxas_individuais_map[apto]])
-                    
-                # Aplicar descontos na memória
-                for t_apto in taxas_apto:
-                    key = (apto, t_apto['id'])
-                    if key in descontos_agregados:
-                        d_agg = descontos_agregados[key]
-                        t_apto['valor_original'] = max(0, t_apto['valor_original'] - d_agg['valor_original'])
-                        t_apto['desconto_vista'] = max(0, (t_apto['desconto_vista'] or 0) - d_agg['desconto_vista'])
-                        t_apto['multa_percentual'] = max(0, (t_apto['multa_percentual'] or 0) - d_agg['multa_percentual'])
-                        t_apto['juros_mes_percentual'] = max(0, (t_apto['juros_mes_percentual'] or 0) - d_agg['juros_mes_percentual'])
-                
-                # Cada apartamento recebe listas independentes, como na regra anterior.
-                transacoes_apto_map = {
-                    comp: list(itens)
-                    for comp, itens in transacoes_por_apto.get(apto, {}).items()
-                }
-                
-                taxas_nao_pagas = []
-                for taxa in taxas_apto:
-                    if taxa['valor_original'] == 0:
-                        continue # Deduzido a zero, considerada paga
-                    pagamento_encontrado = False
-                    comp_taxa = taxa['competencia']
-                    
-                    if comp_taxa in transacoes_apto_map:
-                        transacoes_comp = transacoes_apto_map[comp_taxa]
-                        # Encontrar se houve pagamento exato correspondente considerando desconto_vista
-                        for idx, transacao in enumerate(transacoes_comp):
-                            t_data = transacao['_data']
-                            v_date = taxa['_venc_dt'].date()
-                            if t_data <= v_date:
-                                valor_esperado = taxa['valor_original'] - (taxa['desconto_vista'] or 0)
-                            else:
-                                valor_esperado = taxa['valor_original']
-                                
-                            if abs(transacao['valor'] - valor_esperado) < 0.01:
-                                pagamento_encontrado = True
-                                # Remover a transação para não dar match duplo
-                                transacoes_comp.pop(idx)
-                                break
-                                
-                        if not pagamento_encontrado:
-                            try:
-                                indices = encontrar_combinacao(
-                                    [(t['valor'], t['_data']) for t in transacoes_comp],
-                                    taxa['_venc_dt'].date(), taxa['valor_original'],
-                                    taxa['desconto_vista'],
-                                )
-                            except LimiteConciliacao as exc:
-                                raise LimiteConciliacao(
-                                    f"Conciliação pendente para a unidade {apto}, "
-                                    f"competência {comp_taxa}: {exc}"
-                                ) from exc
-                            if indices is not None:
-                                pagamento_encontrado = True
-                                for idx in reversed(indices):
-                                    transacoes_comp.pop(idx)
-                            
-                    if not pagamento_encontrado:
-                        taxa_venc_dt = taxa['_venc_dt']
-                        dias_atraso = (corte_dt.date() - taxa_venc_dt.date()).days
-                        if dias_atraso < 0:
-                            dias_atraso = 0
-                            
-                        total_sem_desconto = taxa['valor_original']
-                        juros_perc = taxa['juros_mes_percentual'] or 0.0
-                        multa_perc = (taxa['multa_percentual'] or 0.0) if dias_atraso > 0 else 0.0
-                        tipo_jm = condo.tipo_juros_multa or 'N'
-                        
-                        if tipo_jm == 'M':
-                            juros_total = total_sem_desconto * (juros_perc / 30.0 / 100.0) * dias_atraso
-                            multa_total = (total_sem_desconto + juros_total) * (multa_perc / 100.0)
-                        elif tipo_jm == 'J':
-                            multa_total = total_sem_desconto * (multa_perc / 100.0)
-                            juros_total = (total_sem_desconto + multa_total) * (juros_perc / 30.0 / 100.0) * dias_atraso
-                        else:
-                            juros_total = total_sem_desconto * (juros_perc / 30.0 / 100.0) * dias_atraso
-                            multa_total = total_sem_desconto * (multa_perc / 100.0)
-                        
-                        taxas_nao_pagas.append({
-                            "id": taxa.get('id'),
-                            "competencia": taxa['competencia'],
-                            "exibicao": taxa['exibicao'],
-                            "valor": taxa['valor_original'],
-                            "vencimento": taxa['vencimento'],
-                            "descricao": taxa['descricao'],
-                            "multa": multa_total,
-                            "juros_total": juros_total,
-                            "dias_vencidos": dias_atraso,
-                            "_venc_dt": taxa_venc_dt
-                        })
-                
-                if taxas_nao_pagas:
-                    # Ordenar taxas_nao_pagas por ordem crescente (do mais antigo para o mais recente)
-                    taxas_nao_pagas.sort(key=lambda x: x['_venc_dt'])
-                    # Remover campo auxiliar antes de devolver ao front
-                    for t in taxas_nao_pagas:
-                        t.pop('_venc_dt', None)
-                        
-                    resultado.append({
-                        "unidade": apto,
-                        "taxas": taxas_nao_pagas
-                    })
-                    
-            # Ordenar os apartamentos alfabeticamente
-            resultado.sort(key=lambda x: str(x['unidade']))
-            
-                    
-            return {"status": "success", "data": resultado}
-            
+            from apresentacao_conciliacao import inadimplencia
+            corte = datetime.strptime(data_corte, '%Y-%m-%d').date() if data_corte else datetime.now().date()
+            posicao = self._calcular_posicao_unificada(corte, {'apartamentos': apartamentos or []})
+            return {'status': 'success', 'data': inadimplencia(posicao)}
         except Exception as e:
             logger.error(f"Erro em get_inadimplencia: {e}")
             return {"status": "error", "message": str(e)}

@@ -2,8 +2,7 @@ import unittest
 import sqlite3
 import os
 import sys
-import itertools
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 from datetime import date
 
 # Add the project root to sys.path if needed
@@ -12,7 +11,7 @@ project_root = os.path.dirname(script_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from scripts.run_dashboard import Api, conciliacao_unificada_ativa
+from scripts.run_dashboard import Api
 
 class TestRunDashboard(unittest.TestCase):
 
@@ -43,43 +42,20 @@ class TestRunDashboard(unittest.TestCase):
             self.api._calcular_posicao_unificada('2023-01-20')
         self.assertEqual(calcular.call_args.kwargs['margem_encargos_centavos'], 0)
 
-    def test_toggle_conciliacao_le_apenas_booleano_e_padrao_desligado(self):
-        for conteudo, esperado in [('{}', False), ('{"conciliacao_unificada": false}', False),
-                                   ('{"conciliacao_unificada": true}', True)]:
-            with self.subTest(conteudo=conteudo), patch('builtins.open', mock_open(read_data=conteudo)):
-                self.assertEqual(conciliacao_unificada_ativa('arquivo-simulado'), esperado)
-        with patch('builtins.open', mock_open(read_data='{"conciliacao_unificada": "false"}')):
-            with self.assertRaises(ValueError):
-                conciliacao_unificada_ativa('arquivo-simulado')
-
     @patch('apresentacao_conciliacao.date', wraps=date)
-    def test_toggle_ativada_compartilha_posicao_entre_os_tres_pontos(self, data_simulada):
+    def test_compartilha_posicao_entre_os_tres_pontos(self, data_simulada):
         data_simulada.today.return_value = date(2023, 1, 20)
-        with patch('scripts.run_dashboard.conciliacao_unificada_ativa', return_value=True):
-            tela = self.api.get_inadimplencia('2023-01-20')
-            relatorio = self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20'})
-            extrato = self.api.get_relatorio_recebimentos({'tipo': 'completo', 'data_corte': '2023-01-20'})
-            self.assertEqual([tela['status'], relatorio['status'], extrato['status']], ['success'] * 3)
-            self.assertEqual(tela['data'][0]['taxas'][0]['valor'], 300)
-            self.assertEqual(relatorio['data']['total'], 300)
-            grupo = next(u for u in extrato['data']['apartamentos'] if u['apartamento'] == '101')['competencias'][0]
-            self.assertEqual(grupo['saldo_original'], 300)
-            self.assertEqual(extrato['data']['data_corte'], '2023-01-20')
-            na_data = self.api.get_inadimplencia('2023-01-15')
-            self.assertEqual(na_data['data'], [])
-
-    @patch('apresentacao_conciliacao.date', wraps=date)
-    def test_desativar_toggle_restaura_contrato_anterior_do_extrato(self, data_simulada):
-        data_simulada.today.return_value = date(2023, 1, 20)
-        filtros = {'tipo': 'completo', 'data_corte': '2023-01-20'}
-        with patch('scripts.run_dashboard.conciliacao_unificada_ativa', return_value=True):
-            novo = self.api.get_relatorio_recebimentos(filtros)
-        with patch('scripts.run_dashboard.conciliacao_unificada_ativa', return_value=False):
-            anterior = self.api.get_relatorio_recebimentos(filtros)
-        self.assertEqual((novo['status'], anterior['status']), ('success', 'success'))
-        self.assertIn('saldo_original', novo['data'])
-        self.assertNotIn('saldo_original', anterior['data'])
-        self.assertEqual(novo['data']['data_corte'], '2023-01-20')
+        tela = self.api.get_inadimplencia('2023-01-20')
+        relatorio = self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20'})
+        extrato = self.api.get_relatorio_recebimentos({'tipo': 'completo', 'data_corte': '2023-01-20'})
+        self.assertEqual([tela['status'], relatorio['status'], extrato['status']], ['success'] * 3)
+        self.assertEqual(tela['data'][0]['taxas'][0]['valor'], 300)
+        self.assertEqual(relatorio['data']['total'], 300)
+        grupo = next(u for u in extrato['data']['apartamentos'] if u['apartamento'] == '101')['competencias'][0]
+        self.assertEqual(grupo['saldo_original'], 300)
+        self.assertEqual(extrato['data']['data_corte'], '2023-01-20')
+        na_data = self.api.get_inadimplencia('2023-01-15')
+        self.assertEqual(na_data['data'], [])
 
     @patch('apresentacao_conciliacao.date', wraps=date)
     def test_receitas_incompletas_entram_apos_revisao_e_negativas_nao_abatem(self, data_simulada):
@@ -92,30 +68,28 @@ class TestRunDashboard(unittest.TestCase):
         negativa = models.Transacoes.create(subcategoria_id=1, tipo='R', apartamento='101', competencia='2023-01',
                                             data='14/01/2023', descricao='Origem desconhecida', valor=-3)
         filtros = {'tipo': 'completo', 'data_corte': '2023-01-20', 'apartamentos': ['101']}
-        with patch('scripts.run_dashboard.conciliacao_unificada_ativa', return_value=True):
-            antes = self.api.get_relatorio_recebimentos(filtros)
-            saldo_antes = self.api.get_inadimplencia('2023-01-20')
-            self.assertEqual((antes['status'], saldo_antes['status']), ('success', 'success'))
-            linhas = [l for u in antes['data']['apartamentos'] for g in u['competencias'] for l in g['lancamentos']]
-            self.assertNotIn(incompleta.id, [l['id'] for l in linhas])
-            self.assertNotIn(sem_apartamento.id, [l['id'] for l in linhas])
-            self.assertEqual(next((l['tipo'], l['valor']) for l in linhas if l['id'] == negativa.id),
-                             ('Valor negativo de origem a esclarecer', -3))
-            self.assertEqual(saldo_antes['data'][0]['taxas'][0]['valor'], 300)
-            incompleta.competencia = '2023-01'
-            incompleta.save()
-            depois = self.api.get_relatorio_recebimentos(filtros)
-            saldo_depois = self.api.get_inadimplencia('2023-01-20')
-            linhas = [l for u in depois['data']['apartamentos'] for g in u['competencias'] for l in g['lancamentos']]
-            self.assertIn(incompleta.id, [l['id'] for l in linhas if l['tipo'] == 'Recebimento'])
-            self.assertEqual(saldo_depois['data'][0]['taxas'][0]['valor'], 250)
+        antes = self.api.get_relatorio_recebimentos(filtros)
+        saldo_antes = self.api.get_inadimplencia('2023-01-20')
+        self.assertEqual((antes['status'], saldo_antes['status']), ('success', 'success'))
+        linhas = [l for u in antes['data']['apartamentos'] for g in u['competencias'] for l in g['lancamentos']]
+        self.assertNotIn(incompleta.id, [l['id'] for l in linhas])
+        self.assertNotIn(sem_apartamento.id, [l['id'] for l in linhas])
+        self.assertEqual(next((l['tipo'], l['valor']) for l in linhas if l['id'] == negativa.id),
+                         ('Valor negativo de origem a esclarecer', -3))
+        self.assertEqual(saldo_antes['data'][0]['taxas'][0]['valor'], 300)
+        incompleta.competencia = '2023-01'
+        incompleta.save()
+        depois = self.api.get_relatorio_recebimentos(filtros)
+        saldo_depois = self.api.get_inadimplencia('2023-01-20')
+        linhas = [l for u in depois['data']['apartamentos'] for g in u['competencias'] for l in g['lancamentos']]
+        self.assertIn(incompleta.id, [l['id'] for l in linhas if l['tipo'] == 'Recebimento'])
+        self.assertEqual(saldo_depois['data'][0]['taxas'][0]['valor'], 250)
 
     def test_filtro_de_movimento_exclui_grupos_sem_movimento_no_periodo(self):
         filtros = {'tipo': 'recebimento', 'periodo': ['2023-01-20', '2023-01-20'],
                    'data_corte': '2023-01-14', 'apartamentos': ['101']}
-        with patch('scripts.run_dashboard.conciliacao_unificada_ativa', return_value=True):
-            extrato = self.api.get_relatorio_recebimentos(filtros)
-            relatorio = self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20', 'apartamentos': ['101']})
+        extrato = self.api.get_relatorio_recebimentos(filtros)
+        relatorio = self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20', 'apartamentos': ['101']})
         self.assertEqual((extrato['status'], relatorio['status']), ('success', 'success'))
         self.assertEqual(extrato['data']['apartamentos'][0]['competencias'], [])
         self.assertEqual(extrato['data']['total'], 0)
@@ -123,8 +97,7 @@ class TestRunDashboard(unittest.TestCase):
 
     def test_limite_de_conciliacao_produz_erro_nos_tres_pontos(self):
         from conciliacao_unificada import ConciliacaoInconclusiva
-        with patch('scripts.run_dashboard.conciliacao_unificada_ativa', return_value=True), \
-             patch('conciliacao_unificada.conciliar_exatos', side_effect=ConciliacaoInconclusiva('Limite de teste')):
+        with patch('conciliacao_unificada.conciliar_exatos', side_effect=ConciliacaoInconclusiva('Limite de teste')):
             respostas = [self.api.get_inadimplencia('2023-01-20'),
                          self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20'}),
                          self.api.get_relatorio_recebimentos({'tipo': 'completo', 'data_corte': '2023-01-20'})]
@@ -209,7 +182,7 @@ class TestRunDashboard(unittest.TestCase):
         self.assertEqual(self.api.update_taxa(desconto.id, {})['status'], 'error')
         resultado = self.api.get_inadimplencia('2023-01-18')
         unidade = next((u for u in resultado['data'] if u['unidade'] == '101'), {'taxas': []})
-        self.assertNotIn(taxa.id, [t['id'] for t in unidade['taxas']])
+        self.assertEqual(next(t['valor'] for t in unidade['taxas'] if t['id'] == taxa.id), 0)
         self.assertEqual(self.api.delete_renegociacao(ren.id)['status'], 'success')
         resultado = self.api.get_inadimplencia('2023-01-18')
         unidade = next(u for u in resultado['data'] if u['unidade'] == '101')
@@ -425,11 +398,7 @@ class TestRunDashboard(unittest.TestCase):
                 with patch.dict(Api.get_inadimplencia.__globals__, datetime=DataFixa):
                     resultado = self.api.get_inadimplencia()
                 self.assertEqual(resultado['status'], 'success')
-                unidade = next(item for item in resultado['data'] if item['unidade'] == '101')
-                taxa = unidade['taxas'][0]
-                self.assertEqual(taxa['dias_vencidos'], 0)
-                self.assertEqual(taxa['multa'], 0)
-                self.assertEqual(taxa['juros_total'], 0)
+                self.assertFalse(any(item['unidade'] == '101' for item in resultado['data']))
 
     def test_get_inadimplencia_multiple_match(self):
         self.cursor.execute("INSERT INTO taxas (condominio_id, competencia, exibicao, vencimento, descricao, valor_original, desconto_vista, multa_percentual, juros_mes_percentual, tipo) VALUES (?, '2023-01', 'JAN/2023', '15/01/2023', 'Taxa Teste Match Múltiplo', 100.0, 0.0, 2.0, 1.0, 'C')", (self.condo_id,))
@@ -447,63 +416,6 @@ class TestRunDashboard(unittest.TestCase):
         taxas_103 = next((d["taxas"] for d in result["data"] if d["unidade"] == "103"), [])
         descricoes_103 = [t["descricao"] for t in taxas_103]
         self.assertNotIn("Taxa Teste Match Múltiplo", descricoes_103)
-
-    def test_inadimplencia_regressao_com_descontos_estornos_e_corte(self):
-        # Dados sintéticos: a mesma transação não pode quitar duas taxas.
-        self.cursor.execute("UPDATE condominio SET apartamentos = ? WHERE id = ?",
-                            ('["101", "102", "103"]', self.condo_id))
-        taxa_id = self.cursor.execute("SELECT id FROM taxas WHERE descricao = 'Taxa Condomínio'").fetchone()[0]
-        self.cursor.execute("INSERT INTO taxas (condominio_id, taxa_id, apartamento, tipo, valor_original, desconto_vista, multa_percentual, juros_mes_percentual) VALUES (?, ?, '101', 'D', 20, 2, 0.5, 0.2)",
-                            (self.condo_id, taxa_id))
-        self.cursor.execute("INSERT INTO taxas (condominio_id, competencia, exibicao, vencimento, descricao, valor_original, desconto_vista, multa_percentual, juros_mes_percentual, tipo) VALUES (?, '2023-01', 'JAN/2023', '15/01/2023', 'Taxa adicional', 100, 0, 2, 1, 'C')", (self.condo_id,))
-        self.cursor.execute("INSERT INTO renegociacao (id, condominio_id, apartamento, data_renegociacao, quantidade_parcelas, despesas_adicionais, descontos_adicionais) VALUES (1, ?, '103', '18/01/2023', 1, 0, 0)", (self.condo_id,))
-        self.cursor.execute("INSERT INTO taxas (condominio_id, renegociacao_id, competencia, exibicao, vencimento, descricao, valor_original, desconto_vista, multa_percentual, juros_mes_percentual, apartamento, tipo) VALUES (?, 1, '2023-01', 'JAN/2023', '10/01/2023', 'Parcela renegociada', 50, 0, 2, 1, '103', 'P')", (self.condo_id,))
-        for transacao in [
-            (3, '101', 25, '14/01/2023'), (4, '101', 75, '14/01/2023'),
-            (5, '103', 150, '14/01/2023'), (6, '103', 160, '14/01/2023'),
-            (7, '103', -20, '14/01/2023'), (8, '103', 50, '19/01/2023'),
-        ]:
-            self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, apartamento, competencia, valor, data, anexos, consistente, revisado_usuario) VALUES (?, 1, 'R', ?, '2023-01', ?, ?, 0, 1, 0)", transacao)
-        self.conn.commit()
-
-        def busca_anterior(transacoes, vencimento, valor, desconto):
-            for tamanho in range(2, len(transacoes) + 1):
-                for indices in itertools.combinations(range(len(transacoes)), tamanho):
-                    soma = sum(transacoes[i][0] for i in indices)
-                    datas = [transacoes[i][1] for i in indices if transacoes[i][1] is not None]
-                    if abs(soma - valor) < 0.01 or (datas and max(datas) <= vencimento and abs(soma - (valor - (desconto or 0))) < 0.01):
-                        return indices
-            return None
-
-        # A conexão da aplicação é estritamente de leitura durante os cálculos.
-        import models
-        models.db.execute_sql('PRAGMA query_only = ON')
-        for corte in ('2023-01-16', '2023-01-18', '2023-01-20'):
-            with self.subTest(corte=corte):
-                resultado = self.api.get_inadimplencia(data_corte=corte)
-                with patch.dict(Api.get_inadimplencia.__globals__, encontrar_combinacao=busca_anterior):
-                    anterior = self.api.get_inadimplencia(data_corte=corte)
-                self.assertEqual(resultado, anterior)
-                self.assertEqual(resultado['status'], 'success')
-
-        resultado = self.api.get_inadimplencia(data_corte='2023-01-20')
-        unidade_101 = next(item for item in resultado['data'] if item['unidade'] == '101')
-        self.assertEqual([taxa['descricao'] for taxa in unidade_101['taxas']], ['Taxa Condomínio'])
-        self.assertEqual(unidade_101['taxas'][0]['valor'], 280)
-
-    def test_limite_de_conciliacao_retorna_erro_sem_resultado_parcial(self):
-        from conciliacao import LimiteConciliacao
-
-        self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, apartamento, competencia, valor, data, anexos, consistente, revisado_usuario) VALUES (3, 1, 'R', '101', '2023-01', 20, '14/01/2023', 0, 1, 0)")
-        self.cursor.execute("INSERT INTO transacoes (id, subcategoria_id, tipo, apartamento, competencia, valor, data, anexos, consistente, revisado_usuario) VALUES (4, 1, 'R', '101', '2023-01', 30, '14/01/2023', 0, 1, 0)")
-        self.conn.commit()
-        def excede_limite(*args, **kwargs):
-            raise LimiteConciliacao('Limite de teste')
-        with patch.dict(Api.get_inadimplencia.__globals__, encontrar_combinacao=excede_limite):
-            resultado = self.api.get_inadimplencia(data_corte='2023-01-20')
-        self.assertEqual(resultado['status'], 'error')
-        self.assertIn('Conciliação pendente', resultado['message'])
-        self.assertNotIn('data', resultado)
 
     def test_recebimentos_agrupados_nao_quitam_duas_taxas(self):
         for descricao in ('Primeira taxa', 'Segunda taxa'):

@@ -45,11 +45,11 @@ describe('RelatoriosComponent', () => {
         expect(gerar).toHaveBeenCalledWith({ tipo: 'competencia', periodo: ['2024-01', '2024-02'], apartamentos: [] });
     });
 
-    it('não apresenta campo de corte com conciliação unificada ativa', async () => {
+    it('não apresenta campo adicional de corte no formulário', async () => {
         window.pywebview = { api: {
             get_apartamentos: () => Promise.resolve({ status: 'success', data: ['101'] }),
             get_relatorio_recebimentos: () => Promise.resolve({ status: 'success', data: {
-                limites: { inicio: '2023-01-01', fim: '2023-12-31' }, conciliacao_unificada: true
+                limites: { inicio: '2023-01-01', fim: '2023-12-31' }
             } })
         } };
         const formulario = TestBed.createComponent(ExtratoRecebimentosComponent);
