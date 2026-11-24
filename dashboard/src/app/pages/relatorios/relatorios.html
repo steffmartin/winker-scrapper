@@ -2,9 +2,12 @@
 <div class="card shadow-sm border rounded-xl w-full relative relatorios-controles">
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
         <h4 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-0">Relatórios</h4>
-        <p-select inputId="relatorio" ariaLabel="Selecionar relatório" [options]="relatorios"
-                  [(ngModel)]="relatorioSelecionado" (ngModelChange)="alterarRelatorio()" placeholder="Selecione um relatório"
-                  class="w-full md:w-80" styleClass="w-full" appendTo="body"></p-select>
+        <div class="flex items-center gap-2 w-full md:w-auto">
+            <label for="relatorio" class="font-medium text-slate-700 dark:text-slate-300">Relatório</label>
+            <p-select inputId="relatorio" [options]="relatorios"
+                      [(ngModel)]="relatorioSelecionado" (ngModelChange)="alterarRelatorio()" placeholder="Selecione um relatório"
+                      class="flex-1 md:flex-none md:w-80" styleClass="w-full" appendTo="body"></p-select>
+        </div>
     </div>
     @if (!relatorioSelecionado) {
     <div class="flex flex-col items-center justify-center p-8 text-center bg-surface-50 dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 my-4">
@@ -28,21 +31,48 @@
 
 @if (extratoGerado || inadimplenciaGerada || contaGerada) {
     <section class="card shadow-sm border rounded-xl w-full relatorio-impressao" aria-labelledby="titulo-relatorio">
-        <div class="flex justify-between items-center gap-4 mb-4">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
             <h4 id="titulo-relatorio" class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-0">{{ inadimplenciaGerada ? 'Inadimplência' : contaGerada ? 'Extrato de conta' : 'Extrato de recebimentos' }}</h4>
-            <div class="flex items-center gap-1 relatorio-acoes">
+            <div class="flex items-center gap-2 relatorio-acoes flex-wrap sm:flex-nowrap">
                 <button type="button" class="relatorio-acao" [disabled]="salvando" (click)="salvar()" aria-label="Salvar relatório" pTooltip="Salvar PDF" tooltipPosition="bottom"><i class="pi pi-save"></i></button>
                 <button type="button" class="relatorio-acao" (click)="imprimir()" aria-label="Imprimir relatório" pTooltip="Imprimir" tooltipPosition="bottom"><i class="pi pi-print"></i></button>
+                <p-inputgroup class="w-full sm:w-96">
+                    <div class="relative flex flex-1">
+                        <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-surface-400 dark:text-surface-500 z-10 pointer-events-none"></i>
+                        <input pInputText #campoBusca type="text" class="w-full !pl-10 !pr-10" style="border-top-right-radius: 0; border-bottom-right-radius: 0;" placeholder="Buscar no relatório..."
+                               [(ngModel)]="termoBusca"
+                               (ngModelChange)="aoDigitarBusca()"
+                               (keydown.enter)="aoPressionarEnter($event)"
+                               (keydown.escape)="limparBusca()"
+                               aria-label="Buscar no relatório" />
+                        @if (termoBusca) {
+                            <i class="pi pi-times absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-surface-500 hover:text-surface-900 dark:hover:text-surface-0 transition-colors z-10"
+                               (click)="limparBusca()" aria-label="Limpar busca"
+                               pTooltip="Limpar" tooltipPosition="bottom"></i>
+                        }
+                    </div>
+                    @if (termoBusca) {
+                        <p-inputgroup-addon class="text-xs">{{ totalOcorrencias > 0 ? (indiceAtual + 1) + '/' + totalOcorrencias : '0/0' }}</p-inputgroup-addon>
+                    }
+                    <button type="button" pButton icon="pi pi-chevron-up" [disabled]="totalOcorrencias <= 1"
+                            (click)="anteriorOcorrencia()" aria-label="Ocorrência anterior"
+                            pTooltip="Anterior (Shift+Enter)" tooltipPosition="bottom"></button>
+                    <button type="button" pButton icon="pi pi-chevron-down" [disabled]="totalOcorrencias <= 1"
+                            (click)="proximaOcorrencia()" aria-label="Próxima ocorrência"
+                            pTooltip="Próxima (Enter)" tooltipPosition="bottom"></button>
+                </p-inputgroup>
             </div>
         </div>
-        @if (componenteRelatorio && extratoGerado) {
-            <ng-container *ngComponentOutlet="componenteRelatorio; inputs: { modo: 'resultado', dados: extratoGerado, filtrosGerados: filtrosGerados }"></ng-container>
-        }
-        @if (componenteRelatorio && inadimplenciaGerada) {
-            <ng-container *ngComponentOutlet="componenteRelatorio; inputs: { modo: 'resultado', dados: inadimplenciaGerada, filtros: filtrosInadimplencia }"></ng-container>
-        }
-        @if (componenteRelatorio && contaGerada) {
-            <ng-container *ngComponentOutlet="componenteRelatorio; inputs: { modo: 'resultado', dados: contaGerada, filtros: filtrosConta }"></ng-container>
-        }
+        <div id="corpo-relatorio-conteudo">
+            @if (componenteRelatorio && extratoGerado) {
+                <ng-container *ngComponentOutlet="componenteRelatorio; inputs: { modo: 'resultado', dados: extratoGerado, filtrosGerados: filtrosGerados }"></ng-container>
+            }
+            @if (componenteRelatorio && inadimplenciaGerada) {
+                <ng-container *ngComponentOutlet="componenteRelatorio; inputs: { modo: 'resultado', dados: inadimplenciaGerada, filtros: filtrosInadimplencia }"></ng-container>
+            }
+            @if (componenteRelatorio && contaGerada) {
+                <ng-container *ngComponentOutlet="componenteRelatorio; inputs: { modo: 'resultado', dados: contaGerada, filtros: filtrosConta }"></ng-container>
+            }
+        </div>
     </section>
 }

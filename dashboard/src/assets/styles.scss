@@ -19,6 +19,21 @@
     &:disabled { opacity: .4; cursor: not-allowed; }
 }
 
+mark.relatorio-busca-termo {
+    background-color: #fde047 !important;
+    color: #1e293b !important;
+    border-radius: 2px;
+    padding: 1px 2px;
+    box-shadow: 0 0 0 1px rgba(202, 138, 4, 0.4);
+
+    &.relatorio-busca-ativo {
+        background-color: #ea580c !important;
+        color: #ffffff !important;
+        box-shadow: 0 0 0 2px #c2410c !important;
+        font-weight: 600;
+    }
+}
+
 @media print {
     @page { size: landscape; }
 
@@ -46,5 +61,11 @@
         }
 
         .relatorio-impressao h4 { color: black !important; }
+
+        mark.relatorio-busca-termo {
+            background: transparent !important;
+            color: inherit !important;
+            box-shadow: none !important;
+        }
     }
 }

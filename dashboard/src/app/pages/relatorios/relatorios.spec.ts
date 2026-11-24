@@ -282,4 +282,62 @@ describe('RelatoriosComponent', () => {
         expect(formulario.tipo).toBe('recebimento');
         expect(formulario.periodo).toBeNull();
     });
+
+    it('busca e destaca termos com marcatexto amarelo no relatório e permite navegar entre resultados', async () => {
+        component.extratoGerado = {
+            data_corte: '2023-12-31',
+            total: 200,
+            apartamentos: [{
+                apartamento: '101',
+                subtotal: 200,
+                competencias: [{
+                    competencia: '2023-01',
+                    subtotal: 200,
+                    lancamentos: [
+                        { id: 1, data: '2023-01-10', descricao: 'Taxa Ordinária Apto 101', tipo: 'Cobrança', valor: 100, desconto_vista: 0, renegociado: false },
+                        { id: 2, data: '2023-01-10', descricao: 'Fundo Reserva Apto 101', tipo: 'Cobrança', valor: 100, desconto_vista: 0, renegociado: false }
+                    ]
+                }]
+            }]
+        };
+        component.relatorioSelecionado = 'extrato-recebimentos';
+        component.componenteRelatorio = ExtratoRecebimentosComponent;
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        const campoBusca = fixture.nativeElement.querySelector('input[placeholder="Buscar no relatório..."]') as HTMLInputElement;
+        expect(campoBusca).not.toBeNull();
+
+        // Busca pelo termo "101"
+        component.termoBusca = '101';
+        component.executarBusca();
+        fixture.detectChanges();
+
+        expect(component.totalOcorrencias).toBeGreaterThanOrEqual(2);
+        expect(component.indiceAtual).toBe(0);
+
+        const marks = fixture.nativeElement.querySelectorAll('mark.relatorio-busca-termo');
+        expect(marks.length).toBe(component.totalOcorrencias);
+        expect(marks[0].classList.contains('relatorio-busca-ativo')).toBeTrue();
+
+        // Avançar para próximo
+        component.proximaOcorrencia();
+        fixture.detectChanges();
+        expect(component.indiceAtual).toBe(1);
+        expect(marks[0].classList.contains('relatorio-busca-ativo')).toBeFalse();
+        expect(marks[1].classList.contains('relatorio-busca-ativo')).toBeTrue();
+
+        // Voltar para anterior
+        component.anteriorOcorrencia();
+        fixture.detectChanges();
+        expect(component.indiceAtual).toBe(0);
+        expect(marks[0].classList.contains('relatorio-busca-ativo')).toBeTrue();
+
+        // Limpar busca
+        component.limparBusca();
+        fixture.detectChanges();
+        expect(component.totalOcorrencias).toBe(0);
+        expect(component.indiceAtual).toBe(-1);
+        expect(fixture.nativeElement.querySelectorAll('mark.relatorio-busca-termo').length).toBe(0);
+    });
 });
