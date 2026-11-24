@@ -71,7 +71,7 @@ class Api:
         except Exception:
             pass
 
-    def _calcular_posicao_unificada(self, data_corte, filtros=None):
+    def _calcular_posicao_unificada(self, data_corte, filtros=None, permitir_inconclusivo=False):
         """Consulta e calcula a posição sem alterar os registros de origem."""
         from conciliacao_unificada import calcular_posicao, consultar
         condo = models.Condominio.get_or_none(models.Condominio.id == self.condo_id)
@@ -89,7 +89,8 @@ class Api:
         taxas, recebimentos = consultar(models.db.connection(), self.condo_id, selecionados)
         return calcular_posicao(self.condo_id, data_corte, apartamentos, taxas, recebimentos,
                                 condo.tipo_juros_multa or 'N',
-                                margem_encargos_centavos=validar_margem_encargos(condo.margem_diferenca_encargos), filtros=filtros)
+                                margem_encargos_centavos=validar_margem_encargos(condo.margem_diferenca_encargos), filtros=filtros,
+                                permitir_inconclusivo=permitir_inconclusivo)
 
     def get_nome_condominio(self):
         if self.init_error:
@@ -186,10 +187,9 @@ class Api:
             apartamentos = filtros.get('apartamentos') or []
             if not isinstance(apartamentos, list) or not all(isinstance(a, str) for a in apartamentos):
                 return {'status': 'error', 'message': 'Filtro de apartamentos inválido.'}
-            resposta = self.get_inadimplencia(data_corte, apartamentos)
-            if resposta.get('status') != 'success':
-                return resposta
-            return {'status': 'success', 'data': formatar(resposta['data'], data_corte, apartamentos)}
+            from apresentacao_conciliacao import inadimplencia
+            posicao = self._calcular_posicao_unificada(data_corte, {'apartamentos': apartamentos}, permitir_inconclusivo=True)
+            return {'status': 'success', 'data': formatar(inadimplencia(posicao), data_corte, apartamentos)}
         except Exception as e:
             return {'status': 'error', 'message': str(e)}
 
@@ -204,7 +204,7 @@ class Api:
                 return {'status': 'success', 'data': {'limites': limites}}
             from apresentacao_conciliacao import data_corte_extrato, extrato
             corte = data_corte_extrato(filtros)
-            posicao = self._calcular_posicao_unificada(corte, filtros)
+            posicao = self._calcular_posicao_unificada(corte, filtros, permitir_inconclusivo=True)
             return {'status': 'success', 'data': extrato(posicao, filtros, limites)}
         except Exception as e:
             return {"status": "error", "message": str(e)}
@@ -924,7 +924,7 @@ class Api:
         try:
             from apresentacao_conciliacao import inadimplencia
             corte = datetime.strptime(data_corte, '%Y-%m-%d').date() if data_corte else datetime.now().date()
-            posicao = self._calcular_posicao_unificada(corte, {'apartamentos': apartamentos or []})
+            posicao = self._calcular_posicao_unificada(corte, {'apartamentos': apartamentos or []}, permitir_inconclusivo=True)
             return {'status': 'success', 'data': inadimplencia(posicao)}
         except Exception as e:
             logger.error(f"Erro em get_inadimplencia: {e}")

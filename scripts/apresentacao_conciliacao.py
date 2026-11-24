@@ -34,7 +34,7 @@ def inadimplencia(posicao):
     corte = posicao['data_corte']
     unidades = defaultdict(list)
     for grupo in posicao['grupos']:
-        for saldo in grupo['saldos']:
+        for saldo in grupo.get('saldos_abertos', grupo['saldos']):
             taxa = saldo['taxa']
             if taxa['vencimento'] >= corte or saldo['total_centavos'] <= 0:
                 continue
@@ -82,6 +82,7 @@ def extrato(posicao, filtros, limites):
         limites = {**limites, 'fim': min(limites['fim'], fim_corte)}
     unidades = defaultdict(list)
     saldos_unidades = defaultdict(int)
+    unidades_inconclusivas = set()
     for grupo in posicao['grupos']:
         apartamento, competencia = grupo['apartamento'], grupo['competencia']
         if escolhidos and apartamento not in escolhidos:
@@ -90,6 +91,8 @@ def extrato(posicao, filtros, limites):
             continue
         if tipo == 'completo' and competencia > corte.strftime('%Y-%m'):
             continue
+        if grupo.get('conciliacao_inconclusiva'):
+            unidades_inconclusivas.add(apartamento)
         saldo_original = sum(s['principal_centavos'] for s in grupo['saldos']
                              if s['taxa']['vencimento'] < corte)
         saldos_unidades[apartamento] += saldo_original
@@ -186,15 +189,16 @@ def extrato(posicao, filtros, limites):
         if tipo == 'recebimento' and not linhas:
             continue
         unidades[apartamento].append({'competencia': competencia, 'lancamentos': linhas,
-                                      'subtotal': subtotal / 100, 'saldo_original': saldo_original / 100})
+                                      'subtotal': subtotal / 100, 'saldo_original': None if grupo.get('conciliacao_inconclusiva') else saldo_original / 100,
+                                      'conciliacao_inconclusiva': bool(grupo.get('conciliacao_inconclusiva'))})
     resultado = []
     apartamentos = escolhidos or posicao.get('apartamentos', [])
     for apartamento in sorted(set(unidades) | set(apartamentos) | set(saldos_unidades)):
         competencias = sorted(unidades[apartamento], key=lambda g: g['competencia'])
         subtotal = sum(_centavos(g['subtotal']) for g in competencias)
         resultado.append({'apartamento': apartamento, 'competencias': competencias, 'subtotal': subtotal / 100,
-                          'saldo_original': saldos_unidades[apartamento] / 100})
+                          'saldo_original': None if apartamento in unidades_inconclusivas else saldos_unidades[apartamento] / 100})
     total = sum(_centavos(u['subtotal']) for u in resultado)
-    saldo_original = sum(_centavos(u['saldo_original']) for u in resultado)
+    saldo_original = None if unidades_inconclusivas else sum(_centavos(u['saldo_original']) for u in resultado)
     return {'limites': limites, 'data_corte': corte.isoformat(), 'tipo': tipo,
-            'apartamentos': resultado, 'total': total / 100, 'saldo_original': saldo_original / 100}
+            'apartamentos': resultado, 'total': total / 100, 'saldo_original': None if saldo_original is None else saldo_original / 100}

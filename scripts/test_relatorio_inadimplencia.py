@@ -11,16 +11,18 @@ with patch('setup_deps.install_dependencies'):
 class TestRelatorioInadimplencia(unittest.TestCase):
     def test_filtra_agrupa_ordena_e_totaliza_sem_encargos(self):
         api = Api.__new__(Api)
-        api.get_inadimplencia = Mock(return_value={'status': 'success', 'data': [
+        api._calcular_posicao_unificada = Mock(return_value={'grupos': []})
+        resultado = [
             {'unidade': '202', 'taxas': [{'id': 4, 'competencia': '2024-02', 'vencimento': '12/02/2024', 'valor': 999, 'multa': 3}]},
             {'unidade': '101', 'taxas': [
                 {'id': 1, 'competencia': '2024-02', 'vencimento': '10/02/2024', 'descricao': 'B', 'valor': 10.1, 'juros_total': 100},
                 {'id': 2, 'competencia': '2024-01', 'vencimento': '10/01/2024', 'descricao': 'A', 'valor': 20.2, 'multa': 90},
                 {'id': 3, 'competencia': '2024-02', 'vencimento': '10/02/2024', 'descricao': 'C', 'valor': 30.3, 'total': 900},
             ]}
-        ]})
-        resposta = api.get_relatorio_inadimplencia({'data_corte': '2024-03-01', 'apartamentos': ['101']})
-        api.get_inadimplencia.assert_called_once_with('2024-03-01', ['101'])
+        ]
+        with patch('apresentacao_conciliacao.inadimplencia', return_value=resultado):
+            resposta = api.get_relatorio_inadimplencia({'data_corte': '2024-03-01', 'apartamentos': ['101']})
+        api._calcular_posicao_unificada.assert_called_once_with('2024-03-01', {'apartamentos': ['101']}, permitir_inconclusivo=True)
         dados = resposta['data']
         self.assertEqual([u['apartamento'] for u in dados['apartamentos']], ['101'])
         unidade = dados['apartamentos'][0]
@@ -34,6 +36,6 @@ class TestRelatorioInadimplencia(unittest.TestCase):
 
     def test_retorna_erro_do_calculo_e_valida_data(self):
         api = Api.__new__(Api)
-        api.get_inadimplencia = Mock(return_value={'status': 'error', 'message': 'Falha de conciliação'})
+        api._calcular_posicao_unificada = Mock(side_effect=ValueError('Falha de conciliação'))
         self.assertEqual(api.get_relatorio_inadimplencia({'data_corte': '2024-01-01'}), {'status': 'error', 'message': 'Falha de conciliação'})
         self.assertEqual(api.get_relatorio_inadimplencia({})['status'], 'error')

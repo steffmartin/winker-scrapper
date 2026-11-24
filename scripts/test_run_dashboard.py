@@ -95,16 +95,43 @@ class TestRunDashboard(unittest.TestCase):
         self.assertEqual(extrato['data']['total'], 0)
         self.assertEqual((extrato['data']['saldo_original'], relatorio['data']['total']), (0, 300))
 
-    def test_limite_de_conciliacao_produz_erro_nos_tres_pontos(self):
+    def test_extrato_mostra_origem_quando_conciliacao_e_inconclusiva(self):
         from conciliacao_unificada import ConciliacaoInconclusiva
         with patch('conciliacao_unificada.conciliar_exatos', side_effect=ConciliacaoInconclusiva('Limite de teste')):
-            respostas = [self.api.get_inadimplencia('2023-01-20'),
-                         self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20'}),
-                         self.api.get_relatorio_recebimentos({'tipo': 'completo', 'data_corte': '2023-01-20'})]
-        for resposta in respostas:
-            self.assertEqual(resposta['status'], 'error')
-            self.assertIn('Limite de teste', resposta['message'])
-            self.assertNotIn('data', resposta)
+            inadimplencia = self.api.get_inadimplencia('2023-01-20')
+            relatorio = self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20'})
+            extrato = self.api.get_relatorio_recebimentos({'tipo': 'competencia', 'periodo': ['2023-01', '2023-01']})
+        self.assertEqual(inadimplencia['status'], 'success')
+        self.assertEqual(next(u for u in inadimplencia['data'] if u['unidade'] == '101')['taxas'][0]['valor'], 300)
+        self.assertEqual(relatorio['status'], 'success')
+        self.assertEqual(next(u for u in relatorio['data']['apartamentos'] if u['apartamento'] == '101')['subtotal'], 300)
+        self.assertEqual(extrato['status'], 'success')
+        unidade = next(u for u in extrato['data']['apartamentos'] if u['apartamento'] == '101')
+        grupo = unidade['competencias'][0]
+        self.assertTrue(grupo['conciliacao_inconclusiva'])
+        self.assertIsNone(grupo['saldo_original'])
+        self.assertIsNone(unidade['saldo_original'])
+        self.assertIsNone(extrato['data']['saldo_original'])
+        self.assertEqual(grupo['subtotal'], sum(l['valor'] for l in grupo['lancamentos'] if not l['renegociado'] and not l['informativo']))
+        self.assertTrue(any(l['tipo'] == 'Cobrança' for l in grupo['lancamentos']))
+        self.assertFalse(any(l['tipo'] in ('Acréscimo', 'Desconto à vista') for l in grupo['lancamentos']))
+
+    def test_inadimplencia_inconclusiva_mostra_taxa_aberta_apos_desconto_manual(self):
+        import models
+        from conciliacao_unificada import ConciliacaoInconclusiva
+        taxa = models.Taxas.get(models.Taxas.descricao == 'Taxa Condomínio')
+        self.assertEqual(self.api.insert_taxa({'tipo': 'D', 'taxa_id': taxa.id, 'apartamento': '101',
+            'competencia': '2023-01', 'vencimento': '15/01/2023', 'descricao': 'Desconto manual',
+            'valor_original': 70})['status'], 'success')
+        models.Transacoes.create(subcategoria_id=1, tipo='R', apartamento='101', competencia='2023-01',
+                                  data='14/01/2023', descricao='Pagamento', valor=40)
+        with patch('conciliacao_unificada.conciliar_historicos', side_effect=ConciliacaoInconclusiva('Limite')):
+            tela = self.api.get_inadimplencia('2023-01-20', ['101'])
+            relatorio = self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20', 'apartamentos': ['101']})
+        self.assertEqual(tela['status'], 'success')
+        self.assertEqual(tela['data'][0]['taxas'][0]['valor'], 230)
+        self.assertEqual(relatorio['data']['total'], 230)
+        self.assertGreater(tela['data'][0]['taxas'][0]['juros_total'], 0)
 
     def test_desconto_tem_vencimento_proprio_e_respeita_data_de_corte(self):
         import models
