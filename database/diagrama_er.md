@@ -36,6 +36,8 @@ erDiagram
         TEXT ultima_atualizacao
         INTEGER prazo_fechamento
         REAL saldo_declarado
+        TEXT tipo_juros_multa
+        REAL margem_diferenca_encargos
     }
 
     contas {

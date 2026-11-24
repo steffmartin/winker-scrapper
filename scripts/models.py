@@ -27,6 +27,7 @@ class Condominio(BaseModel):
     prazo_fechamento = IntegerField(null=True)
     saldo_declarado = FloatField(null=True)
     tipo_juros_multa = CharField(null=True, default='N')
+    margem_diferenca_encargos = FloatField(default=0.10, constraints=[SQL('DEFAULT 0.10')])
 
     class Meta:
         table_name = 'condominio'

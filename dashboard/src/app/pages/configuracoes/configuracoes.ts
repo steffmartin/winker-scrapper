@@ -85,6 +85,7 @@ export class ConfiguracoesComponent implements OnInit {
                 administradora: [''],
                 telefone_administradora: this.fb.array([]),
                 apartamentos: this.fb.array([]),
+                margem_diferenca_encargos: [0.10, [Validators.required, Validators.min(0)]],
                 prazo_fechamento: [0, Validators.min(0)],
                 inadimplencia_data_corte: [null],
                 inadimplencia_unidades: [0],

@@ -16,8 +16,9 @@ export interface ExtratoRecebimentosFiltros {
 export interface ExtratoRecebimentosResultado {
     data_corte: string;
     total: number;
+    saldo_original?: number;
     limites?: { inicio: string; fim: string };
-    apartamentos: { apartamento: string | null; subtotal: number; competencias: { competencia: string | null; subtotal: number; lancamentos: { id: number; data: string; descricao: string; tipo: string; valor: number; desconto_vista: number; renegociado: boolean }[] }[] }[];
+    apartamentos: { apartamento: string | null; subtotal: number; saldo_original?: number; competencias: { competencia: string | null; subtotal: number; saldo_original?: number; lancamentos: { id: number; data: string; descricao: string; tipo: string; valor: number; desconto_vista: number; renegociado: boolean; informativo?: boolean; ajuste_automatico?: boolean }[] }[] }[];
 }
 
 @Component({

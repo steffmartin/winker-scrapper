@@ -3,7 +3,8 @@ import sqlite3
 import os
 import sys
 import itertools
-from unittest.mock import patch
+from unittest.mock import patch, mock_open
+from datetime import date
 
 # Add the project root to sys.path if needed
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -11,9 +12,126 @@ project_root = os.path.dirname(script_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from scripts.run_dashboard import Api
+from scripts.run_dashboard import Api, conciliacao_unificada_ativa
 
 class TestRunDashboard(unittest.TestCase):
+
+    def test_posicao_unificada_pode_ser_calculada_em_conexao_somente_leitura(self):
+        import models
+        from apresentacao_conciliacao import inadimplencia
+        models.db.execute_sql('PRAGMA query_only = ON')
+        posicao = self.api._calcular_posicao_unificada('2023-01-20')
+        resultado = inadimplencia(posicao)
+        self.assertEqual([(u['unidade'], u['taxas'][0]['valor']) for u in resultado], [('101', 300)])
+
+    def test_configuracao_da_margem_e_usada_sem_consultas_por_grupo(self):
+        import models
+        self.assertEqual(self.api.get_condominio_config()['data']['condominio']['margem_diferenca_encargos'], 0.10)
+        payload = {'condominio': {'margem_diferenca_encargos': 0.25}, 'membros': [], 'contas': []}
+        self.assertEqual(self.api.update_condominio_config(payload)['status'], 'success')
+        self.assertEqual(self.api.get_condominio_config()['data']['condominio']['margem_diferenca_encargos'], 0.25)
+        with patch('conciliacao_unificada.calcular_posicao', return_value={}) as calcular:
+            self.api._calcular_posicao_unificada('2023-01-20')
+        self.assertEqual(calcular.call_args.kwargs['margem_encargos_centavos'], 25)
+        for invalido in (-0.01, None, 'abc', 0.001, True):
+            with self.subTest(invalido=invalido):
+                resposta = self.api.update_condominio_config({'condominio': {'margem_diferenca_encargos': invalido}})
+                self.assertEqual(resposta['status'], 'error')
+                self.assertEqual(models.Condominio.get_by_id(self.condo_id).margem_diferenca_encargos, 0.25)
+        self.assertEqual(self.api.update_condominio_config({'condominio': {'margem_diferenca_encargos': 0}})['status'], 'success')
+        with patch('conciliacao_unificada.calcular_posicao', return_value={}) as calcular:
+            self.api._calcular_posicao_unificada('2023-01-20')
+        self.assertEqual(calcular.call_args.kwargs['margem_encargos_centavos'], 0)
+
+    def test_toggle_conciliacao_le_apenas_booleano_e_padrao_desligado(self):
+        for conteudo, esperado in [('{}', False), ('{"conciliacao_unificada": false}', False),
+                                   ('{"conciliacao_unificada": true}', True)]:
+            with self.subTest(conteudo=conteudo), patch('builtins.open', mock_open(read_data=conteudo)):
+                self.assertEqual(conciliacao_unificada_ativa('arquivo-simulado'), esperado)
+        with patch('builtins.open', mock_open(read_data='{"conciliacao_unificada": "false"}')):
+            with self.assertRaises(ValueError):
+                conciliacao_unificada_ativa('arquivo-simulado')
+
+    @patch('apresentacao_conciliacao.date', wraps=date)
+    def test_toggle_ativada_compartilha_posicao_entre_os_tres_pontos(self, data_simulada):
+        data_simulada.today.return_value = date(2023, 1, 20)
+        with patch('scripts.run_dashboard.conciliacao_unificada_ativa', return_value=True):
+            tela = self.api.get_inadimplencia('2023-01-20')
+            relatorio = self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20'})
+            extrato = self.api.get_relatorio_recebimentos({'tipo': 'completo', 'data_corte': '2023-01-20'})
+            self.assertEqual([tela['status'], relatorio['status'], extrato['status']], ['success'] * 3)
+            self.assertEqual(tela['data'][0]['taxas'][0]['valor'], 300)
+            self.assertEqual(relatorio['data']['total'], 300)
+            grupo = next(u for u in extrato['data']['apartamentos'] if u['apartamento'] == '101')['competencias'][0]
+            self.assertEqual(grupo['saldo_original'], 300)
+            self.assertEqual(extrato['data']['data_corte'], '2023-01-20')
+            na_data = self.api.get_inadimplencia('2023-01-15')
+            self.assertEqual(na_data['data'], [])
+
+    @patch('apresentacao_conciliacao.date', wraps=date)
+    def test_desativar_toggle_restaura_contrato_anterior_do_extrato(self, data_simulada):
+        data_simulada.today.return_value = date(2023, 1, 20)
+        filtros = {'tipo': 'completo', 'data_corte': '2023-01-20'}
+        with patch('scripts.run_dashboard.conciliacao_unificada_ativa', return_value=True):
+            novo = self.api.get_relatorio_recebimentos(filtros)
+        with patch('scripts.run_dashboard.conciliacao_unificada_ativa', return_value=False):
+            anterior = self.api.get_relatorio_recebimentos(filtros)
+        self.assertEqual((novo['status'], anterior['status']), ('success', 'success'))
+        self.assertIn('saldo_original', novo['data'])
+        self.assertNotIn('saldo_original', anterior['data'])
+        self.assertEqual(novo['data']['data_corte'], '2023-01-20')
+
+    @patch('apresentacao_conciliacao.date', wraps=date)
+    def test_receitas_incompletas_entram_apos_revisao_e_negativas_nao_abatem(self, data_simulada):
+        data_simulada.today.return_value = date(2023, 1, 20)
+        import models
+        incompleta = models.Transacoes.create(subcategoria_id=1, tipo='R', apartamento='101', competencia=None,
+                                              data='14/01/2023', descricao='Pagamento', valor=50)
+        sem_apartamento = models.Transacoes.create(subcategoria_id=1, tipo='R', apartamento=None, competencia='2023-01',
+                                                   data='14/01/2023', descricao='Pagamento', valor=60)
+        negativa = models.Transacoes.create(subcategoria_id=1, tipo='R', apartamento='101', competencia='2023-01',
+                                            data='14/01/2023', descricao='Origem desconhecida', valor=-3)
+        filtros = {'tipo': 'completo', 'data_corte': '2023-01-20', 'apartamentos': ['101']}
+        with patch('scripts.run_dashboard.conciliacao_unificada_ativa', return_value=True):
+            antes = self.api.get_relatorio_recebimentos(filtros)
+            saldo_antes = self.api.get_inadimplencia('2023-01-20')
+            self.assertEqual((antes['status'], saldo_antes['status']), ('success', 'success'))
+            linhas = [l for u in antes['data']['apartamentos'] for g in u['competencias'] for l in g['lancamentos']]
+            self.assertNotIn(incompleta.id, [l['id'] for l in linhas])
+            self.assertNotIn(sem_apartamento.id, [l['id'] for l in linhas])
+            self.assertEqual(next((l['tipo'], l['valor']) for l in linhas if l['id'] == negativa.id),
+                             ('Valor negativo de origem a esclarecer', -3))
+            self.assertEqual(saldo_antes['data'][0]['taxas'][0]['valor'], 300)
+            incompleta.competencia = '2023-01'
+            incompleta.save()
+            depois = self.api.get_relatorio_recebimentos(filtros)
+            saldo_depois = self.api.get_inadimplencia('2023-01-20')
+            linhas = [l for u in depois['data']['apartamentos'] for g in u['competencias'] for l in g['lancamentos']]
+            self.assertIn(incompleta.id, [l['id'] for l in linhas if l['tipo'] == 'Recebimento'])
+            self.assertEqual(saldo_depois['data'][0]['taxas'][0]['valor'], 250)
+
+    def test_filtro_de_movimento_exclui_grupos_sem_movimento_no_periodo(self):
+        filtros = {'tipo': 'recebimento', 'periodo': ['2023-01-20', '2023-01-20'],
+                   'data_corte': '2023-01-14', 'apartamentos': ['101']}
+        with patch('scripts.run_dashboard.conciliacao_unificada_ativa', return_value=True):
+            extrato = self.api.get_relatorio_recebimentos(filtros)
+            relatorio = self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20', 'apartamentos': ['101']})
+        self.assertEqual((extrato['status'], relatorio['status']), ('success', 'success'))
+        self.assertEqual(extrato['data']['apartamentos'][0]['competencias'], [])
+        self.assertEqual(extrato['data']['total'], 0)
+        self.assertEqual((extrato['data']['saldo_original'], relatorio['data']['total']), (0, 300))
+
+    def test_limite_de_conciliacao_produz_erro_nos_tres_pontos(self):
+        from conciliacao_unificada import ConciliacaoInconclusiva
+        with patch('scripts.run_dashboard.conciliacao_unificada_ativa', return_value=True), \
+             patch('conciliacao_unificada.conciliar_exatos', side_effect=ConciliacaoInconclusiva('Limite de teste')):
+            respostas = [self.api.get_inadimplencia('2023-01-20'),
+                         self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20'}),
+                         self.api.get_relatorio_recebimentos({'tipo': 'completo', 'data_corte': '2023-01-20'})]
+        for resposta in respostas:
+            self.assertEqual(resposta['status'], 'error')
+            self.assertIn('Limite de teste', resposta['message'])
+            self.assertNotIn('data', resposta)
 
     def test_desconto_tem_vencimento_proprio_e_respeita_data_de_corte(self):
         import models

@@ -20,7 +20,7 @@ class TestRelatorioInadimplencia(unittest.TestCase):
             ]}
         ]})
         resposta = api.get_relatorio_inadimplencia({'data_corte': '2024-03-01', 'apartamentos': ['101']})
-        api.get_inadimplencia.assert_called_once_with('2024-03-01')
+        api.get_inadimplencia.assert_called_once_with('2024-03-01', ['101'])
         dados = resposta['data']
         self.assertEqual([u['apartamento'] for u in dados['apartamentos']], ['101'])
         unidade = dados['apartamentos'][0]

@@ -4,6 +4,7 @@ import subprocess
 import sys
 import json
 import calendar
+from decimal import Decimal, InvalidOperation
 from datetime import datetime
 
 # Módulos internos independentes
@@ -21,6 +22,35 @@ import models
 from peewee import JOIN
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
+
+
+def conciliacao_unificada_ativa(config_path=None):
+    """Lê somente a opção funcional; ausência do arquivo ou da chave desativa."""
+    caminho = config_path or os.path.join(project_root, 'config', 'kato.config')
+    try:
+        with open(caminho, encoding='utf-8') as arquivo:
+            config = json.load(arquivo)
+    except FileNotFoundError:
+        return False
+    valor = config.get('conciliacao_unificada', False)
+    if not isinstance(valor, bool):
+        raise ValueError('A opção conciliacao_unificada deve ser true ou false.')
+    return valor
+
+
+def validar_margem_encargos(valor):
+    """Valida a margem em reais e retorna centavos inteiros."""
+    try:
+        if valor is None or isinstance(valor, bool):
+            raise ValueError
+        numero = Decimal(str(valor))
+        centavos = numero * 100
+        if not numero.is_finite() or numero < 0 or centavos != centavos.to_integral_value():
+            raise ValueError
+        return int(centavos)
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError('Informe uma margem de diferença de encargos válida, não negativa e com até dois decimais.')
+
 
 class Api:
     def __init__(self, db_path=None):
@@ -56,6 +86,26 @@ class Api:
                         pref.save()
         except Exception:
             pass
+
+    def _calcular_posicao_unificada(self, data_corte, filtros=None):
+        """Consulta e calcula a posição sem alterar os registros de origem."""
+        from conciliacao_unificada import calcular_posicao, consultar
+        condo = models.Condominio.get_or_none(models.Condominio.id == self.condo_id)
+        if not condo:
+            raise ValueError('Condomínio não encontrado.')
+        apartamentos = json.loads(condo.apartamentos or '[]')
+        if not isinstance(apartamentos, list) or not all(isinstance(a, str) for a in apartamentos):
+            raise ValueError('Cadastro de apartamentos inválido.')
+        filtros = filtros or {}
+        selecionados = filtros.get('apartamentos') or []
+        if not isinstance(selecionados, list) or not all(isinstance(a, str) for a in selecionados):
+            raise ValueError('Filtro de apartamentos inválido.')
+        if selecionados:
+            apartamentos = list(dict.fromkeys(selecionados))
+        taxas, recebimentos = consultar(models.db.connection(), self.condo_id, selecionados)
+        return calcular_posicao(self.condo_id, data_corte, apartamentos, taxas, recebimentos,
+                                condo.tipo_juros_multa or 'N',
+                                margem_encargos_centavos=validar_margem_encargos(condo.margem_diferenca_encargos), filtros=filtros)
 
     def get_nome_condominio(self):
         if self.init_error:
@@ -152,7 +202,7 @@ class Api:
             apartamentos = filtros.get('apartamentos') or []
             if not isinstance(apartamentos, list) or not all(isinstance(a, str) for a in apartamentos):
                 return {'status': 'error', 'message': 'Filtro de apartamentos inválido.'}
-            resposta = self.get_inadimplencia(data_corte)
+            resposta = self.get_inadimplencia(data_corte, apartamentos)
             if resposta.get('status') != 'success':
                 return resposta
             return {'status': 'success', 'data': formatar(resposta['data'], data_corte, apartamentos)}
@@ -163,8 +213,21 @@ class Api:
         if self.init_error:
             return {"status": "error", "message": self.init_error}
         try:
+            filtros = filtros or {}
+            if filtros.get('limites'):
+                from relatorio_recebimentos import gerar
+                dados = gerar(self.condo_id, filtros)
+                dados['conciliacao_unificada'] = conciliacao_unificada_ativa()
+                return {"status": "success", "data": dados}
+            if conciliacao_unificada_ativa():
+                from apresentacao_conciliacao import data_corte_extrato, extrato
+                from relatorio_recebimentos import gerar
+                limites = gerar(self.condo_id, {'limites': True})['limites']
+                corte = data_corte_extrato(filtros)
+                posicao = self._calcular_posicao_unificada(corte, filtros)
+                return {'status': 'success', 'data': extrato(posicao, filtros, limites)}
             from relatorio_recebimentos import gerar
-            return {"status": "success", "data": gerar(self.condo_id, filtros or {})}
+            return {"status": "success", "data": gerar(self.condo_id, filtros)}
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
@@ -223,6 +286,8 @@ class Api:
                 condo_data = payload.get("condominio", {})
                 membros_data = payload.get("membros", [])
                 
+                if 'margem_diferenca_encargos' in condo_data:
+                    condo.margem_diferenca_encargos = validar_margem_encargos(condo_data['margem_diferenca_encargos']) / 100
                 if 'nome' in condo_data: condo.nome = condo_data['nome']
                 if 'administradora' in condo_data: condo.administradora = condo_data['administradora']
                 if 'telefone_administradora' in condo_data: condo.telefone_administradora = json.dumps(condo_data['telefone_administradora'])
@@ -874,11 +939,15 @@ class Api:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
-    def get_inadimplencia(self, data_corte=None):
+    def get_inadimplencia(self, data_corte=None, apartamentos=None):
         if self.init_error:
             return {"status": "error", "message": self.init_error}
             
         try:
+            if conciliacao_unificada_ativa():
+                from apresentacao_conciliacao import inadimplencia
+                corte = datetime.strptime(data_corte, '%Y-%m-%d').date() if data_corte else datetime.now().date()
+                return {'status': 'success', 'data': inadimplencia(self._calcular_posicao_unificada(corte, {'apartamentos': apartamentos or []}))}
             # Se data de corte não for informada, utiliza a data do sistema
             hoje_dt = datetime.now()
             if data_corte:

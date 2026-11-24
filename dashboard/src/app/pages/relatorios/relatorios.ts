@@ -111,7 +111,7 @@ export class RelatoriosComponent implements OnDestroy {
                 const ano = data.getFullYear(), mes = String(data.getMonth() + 1).padStart(2, '0');
                 return filtros.tipo === 'competencia' ? `${ano}-${mes}` : `${ano}-${mes}-${String(data.getDate()).padStart(2, '0')}`;
             }) ?? null;
-            const resposta = await window.pywebview.api.get_relatorio_recebimentos({ ...filtros, periodo });
+            const resposta = await window.pywebview.api.get_relatorio_recebimentos({ tipo: filtros.tipo, apartamentos: filtros.apartamentos, periodo });
             if (requisicao !== this.requisicao) return;
             if (resposta.status !== 'success') throw new Error(resposta.message || 'Não foi possível gerar o relatório.');
             this.extratoGerado = resposta.data;

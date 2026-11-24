@@ -58,6 +58,35 @@ class TestExtractWinker(unittest.TestCase):
         self.assertIsNone(apto)
         self.assertIsNone(comp)
 
+    def test_receita_extraida_mantem_competencia_propria_na_conciliacao(self):
+        import os
+        import tempfile
+        import models
+        from datetime import date
+        from extract_winker import save_extraction_data_to_db
+        from conciliacao_unificada import calcular_posicao, consultar
+
+        with tempfile.TemporaryDirectory() as diretorio:
+            models.init_models(os.path.join(diretorio, 'isolado.db'))
+            try:
+                models.Condominio.create(id='a', apartamentos='["101"]')
+                models.Taxas.create(condominio_id='a', tipo='I', apartamento='101', competencia='2022-06',
+                                    vencimento='10/06/2022', valor_original=100)
+                detalhes = {'receitas': [{'nome': 'Receitas', 'valor': '100,00', 'subcategorias': [
+                    {'nome': 'Taxas', 'valor': '100,00', 'itens': [
+                        {'nome': 'Taxa Apto - 101 JUN 2022 (05/09/2022)', 'valor': '100,00'}]}]}],
+                    'despesas': []}
+                save_extraction_data_to_db('2022-09', 'SET', 2022, 100, 0, detalhes, diretorio, condominio_id='a')
+                transacao = models.Transacoes.get()
+                self.assertEqual((transacao.apartamento, transacao.competencia, transacao.data),
+                                 ('101', '2022-06', '05/09/2022'))
+                self.assertEqual(models.Meses.get().competencia, '2022-09')
+                taxas, receitas = consultar(models.db.connection(), 'a')
+                posicao = calcular_posicao('a', date(2022, 9, 5), ['101'], taxas, receitas, 'N')
+                self.assertEqual(posicao['grupos'][0]['quitacoes_exatas'][0]['recebimentos'], [transacao.id])
+            finally:
+                models.db.close()
+
     def test_parse_fornecedor(self):
         self.assertIsNone(parse_fornecedor("Tarifa Mensal Cobrança"))
         self.assertIsNone(parse_fornecedor("IOF s/ Aplicação"))

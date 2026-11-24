@@ -132,7 +132,9 @@ def gerar(condo_id, filtros):
         raise ValueError('Cadastro de apartamentos inválido.')
     unidades = list(dict.fromkeys(selecionados or apartamentos))
     if tipo == 'completo':
-        inicio, fim, corte = meses[0], meses[-1], date.today()
+        corte = date.today()
+        inicio, fim = meses[0], min(meses[-1], corte.replace(day=1))
+        limites = {**limites, 'fim': fim.replace(day=calendar.monthrange(fim.year, fim.month)[1]).isoformat()}
     else:
         periodo = filtros.get('periodo')
         if not isinstance(periodo, list) or len(periodo) != 2 or not all(periodo):

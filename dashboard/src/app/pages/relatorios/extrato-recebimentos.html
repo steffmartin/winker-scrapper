@@ -71,11 +71,11 @@
                         <colgroup><col style="width: 14%"><col style="width: 18%"><col style="width: 40%"><col style="width: 14%"><col style="width: 14%"></colgroup>
                         <thead><tr><th scope="col">Data</th><th scope="col">Tipo</th><th scope="col">Descrição</th><th scope="col" class="valor">Cobranças</th><th scope="col" class="valor">Recebimentos</th></tr></thead>
                         <tbody>
-                            @for (linha of grupo.lancamentos; track linha.tipo + linha.id) {
-                                <tr>
+                            @for (linha of grupo.lancamentos; track $index) {
+                                <tr [class.text-red-600]="linha.ajuste_automatico" [class.dark:text-red-400]="linha.ajuste_automatico">
                                     <td><span [class.line-through]="linha.renegociado">{{ linha.data | date:'dd/MM/yyyy':'UTC' }}</span></td>
                                     <td><span [class.line-through]="linha.renegociado">{{ linha.tipo }}</span></td>
-                                    <td><span [class.line-through]="linha.renegociado">{{ linha.descricao }}</span>@if (linha.renegociado) { <span>&nbsp;(renegociado)</span> }</td>
+                                    <td><span [class.line-through]="linha.renegociado">{{ linha.descricao }}</span>@if (linha.renegociado) { <span>&nbsp;(renegociado)</span> } @if (linha.informativo) { <span>&nbsp;(informativo; já incluído no recebimento)</span> }</td>
                                     <td class="valor"><span [class.line-through]="linha.renegociado">@if (linha.valor >= 0) { {{ linha.valor | currency:'BRL' }} }</span></td>
                                     <td class="valor"><span [class.line-through]="linha.renegociado">@if (linha.valor < 0) { {{ linha.valor | currency:'BRL' }} }</span></td>
                                 </tr>

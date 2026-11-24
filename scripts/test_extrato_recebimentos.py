@@ -1,5 +1,6 @@
 import sys
 import unittest
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -69,6 +70,15 @@ class TestExtratoRecebimentos(unittest.TestCase):
         grupos = dados['apartamentos'][0]['competencias']
         self.assertEqual([g['competencia'] for g in grupos], ['2023-01', '2023-02', '2023-03', None])
         self.assertEqual([l['valor'] for l in grupos[-1]['lancamentos']], [-20])
+
+    def test_completo_termina_na_competencia_do_corte_com_meses_futuros(self):
+        models.Meses.create(condominio_id='a', competencia='2023-04')
+        with patch('relatorio_recebimentos.date', wraps=date) as data:
+            data.today.return_value = date(2023, 3, 15)
+            dados = gerar('a', {'tipo': 'completo'})
+        self.assertEqual(dados['data_corte'], '2023-03-15')
+        self.assertEqual(dados['limites']['fim'], '2023-03-31')
+        self.assertEqual([g['competencia'] for g in dados['apartamentos'][0]['competencias']], ['2023-01', '2023-02', '2023-03'])
 
     def test_conciliacao_prioriza_valores_iguais_e_nao_reutiliza_pagamento(self):
         def item(id, tipo, valor, desconto=0):

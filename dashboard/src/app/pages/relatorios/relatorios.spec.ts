@@ -38,6 +38,59 @@ describe('RelatoriosComponent', () => {
         expect(consulta).toHaveBeenCalledTimes(1);
     });
 
+    it('envia o período sem campo de data de corte', async () => {
+        const gerar = jasmine.createSpy('get_relatorio_recebimentos').and.callFake(relatorio);
+        window.pywebview = { api: { get_relatorio_recebimentos: gerar } };
+        await component.gerarExtrato({ tipo: 'competencia', periodo: [new Date(2024, 0, 1), new Date(2024, 1, 1)], apartamentos: [] });
+        expect(gerar).toHaveBeenCalledWith({ tipo: 'competencia', periodo: ['2024-01', '2024-02'], apartamentos: [] });
+    });
+
+    it('não apresenta campo de corte com conciliação unificada ativa', async () => {
+        window.pywebview = { api: {
+            get_apartamentos: () => Promise.resolve({ status: 'success', data: ['101'] }),
+            get_relatorio_recebimentos: () => Promise.resolve({ status: 'success', data: {
+                limites: { inicio: '2023-01-01', fim: '2023-12-31' }, conciliacao_unificada: true
+            } })
+        } };
+        const formulario = TestBed.createComponent(ExtratoRecebimentosComponent);
+        formulario.detectChanges();
+        await formulario.whenStable();
+        formulario.detectChanges();
+        expect(formulario.nativeElement.querySelector('#extrato-corte')).toBeNull();
+    });
+
+    it('identifica o excedente e mantém somente os subtotais do relatório', () => {
+        const resultado = TestBed.createComponent(ExtratoRecebimentosComponent);
+        resultado.componentInstance.modo = 'resultado';
+        resultado.componentInstance.dados = { data_corte: '2023-01-20', total: -20, saldo_original: 0,
+            apartamentos: [{ apartamento: '101', subtotal: -20, saldo_original: 0, competencias: [{ competencia: '2023-01', subtotal: -20,
+                saldo_original: 0, lancamentos: [{ id: 1, data: '2023-01-15', descricao: 'Pagamento',
+                    tipo: 'Excedente de origem não identificada', valor: -20, desconto_vista: 0, renegociado: false, informativo: true }] }] }] };
+        resultado.detectChanges();
+        expect(resultado.nativeElement.textContent).toContain('informativo; já incluído no recebimento');
+        expect(resultado.nativeElement.textContent).not.toContain('Saldo original na data de corte');
+        expect(resultado.nativeElement.textContent).toContain('Subtotal da competência');
+        expect(resultado.nativeElement.textContent).toContain('Subtotal do apartamento');
+        expect(resultado.nativeElement.textContent).toContain('Total geral');
+    });
+
+    it('destaca excedentes e diferenças, mas não encargos nem descontos à vista', () => {
+        const resultado = TestBed.createComponent(ExtratoRecebimentosComponent);
+        resultado.componentInstance.modo = 'resultado';
+        const linha = (tipo: string, valor: number, ajuste_automatico = false, informativo = false) => ({
+            id: valor, data: '2023-01-15', descricao: tipo, tipo, valor, desconto_vista: 0, renegociado: false, informativo, ajuste_automatico
+        });
+        resultado.componentInstance.dados = { data_corte: '2023-01-20', total: 0, apartamentos: [
+            { apartamento: '101', subtotal: 0, competencias: [{ competencia: '2023-01', subtotal: 0, lancamentos: [
+                linha('Excedente de origem não identificada', -10, true, true), linha('Diferença', -0.01, true), linha('Diferença', 0.01, true),
+                linha('Acréscimo', 5), linha('Desconto à vista', -5), linha('Recebimento', -100)
+            ] }] }
+        ] };
+        resultado.detectChanges();
+        const linhas = Array.from(resultado.nativeElement.querySelectorAll('tbody tr')) as HTMLElement[];
+        expect(linhas.map(l => l.classList.contains('text-red-600'))).toEqual([true, true, true, false, false, false]);
+    });
+
     it('carrega e gera o relatório de inadimplência ao selecioná-lo', async () => {
         const apartamentos = jasmine.createSpy('get_apartamentos').and.resolveTo({ status: 'success', data: ['101'] });
         const gerar = jasmine.createSpy('get_relatorio_inadimplencia').and.resolveTo({ status: 'success', data: {
