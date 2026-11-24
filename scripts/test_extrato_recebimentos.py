@@ -80,6 +80,21 @@ class TestExtratoRecebimentos(unittest.TestCase):
         self.assertEqual(resultado[0]['desconto_vista'], 10)
         self.assertEqual(linhas[0]['desconto_vista'], 10)
 
+    def test_prioriza_recebimentos_na_data_da_cobranca_antes_de_valores_integrais_em_outras_datas(self):
+        def item(id, tipo, valor, data, desconto=0):
+            return {'id': id, 'data': data, 'descricao': str(id), 'tipo': tipo, 'valor': valor,
+                    'desconto_vista': desconto, 'renegociado': False, 'ordem': 1 if tipo == 'Recebimento' else 0}
+        linhas = [item(1, 'Parcela de renegociação', 452.89, '2025-01-07'),
+                  item(2, 'Cobrança', 360.22, '2025-01-10', 36.02), item(3, 'Cobrança', 36.02, '2025-01-10', 3.60),
+                  item(4, 'Recebimento', -360.22, '2025-01-07'), item(5, 'Recebimento', -36.02, '2025-01-07'),
+                  item(6, 'Recebimento', -41.17, '2025-01-07'), item(7, 'Recebimento', -15.48, '2025-01-07'),
+                  item(8, 'Recebimento', -324.20, '2025-01-10'), item(9, 'Recebimento', -32.42, '2025-01-10')]
+        resultado = _conciliar_lancamentos(linhas)
+        descontos = [linha for linha in resultado if linha['tipo'] == 'Desconto à vista']
+        self.assertCountEqual([linha['valor'] for linha in descontos], [-36.02, -3.60])
+        self.assertTrue(all(linha['data'] == '2025-01-10' for linha in descontos))
+        self.assertFalse(any(linha['tipo'] == 'Acréscimo' for linha in resultado))
+
     def test_desconto_e_acrescimo_gerados_apenas_no_relatorio(self):
         models.Taxas.create(condominio_id='a', apartamento='101', tipo='I', competencia='2023-01', vencimento='10/01/2023', descricao='Mensal', valor_original=100, desconto_vista=10)
         models.Taxas.create(condominio_id='a', apartamento='101', tipo='I', competencia='2023-01', vencimento='10/01/2023', descricao='Extra', valor_original=50)
@@ -176,14 +191,14 @@ class TestExtratoRecebimentos(unittest.TestCase):
         self.assertCountEqual([l['valor'] for l in linhas if l['tipo'] == 'Desconto à vista'], [-18.01, -1.80])
         self.assertEqual(sum(round(l['valor'] * 100) for l in linhas), 0)
 
-    def test_ordena_por_tipo_data_e_valor_decrescente(self):
+    def test_ordena_por_data_positivo_desc_e_negativo_asc(self):
         for valor in (20, 50):
             models.Taxas.create(condominio_id='a', apartamento='101', tipo='I', competencia='2023-01', vencimento='10/01/2023', valor_original=valor)
         for valor in (5, 10):
             models.Transacoes.create(subcategoria_id=self.sub, tipo='R', data='10/01/2023', apartamento='101', competencia='2023-01', valor=valor)
         models.Transacoes.create(subcategoria_id=self.sub, tipo='R', data='09/01/2023', apartamento='101', competencia='2023-01', valor=2)
         linhas = gerar('a', {'tipo': 'completo', 'apartamentos': ['101']})['apartamentos'][0]['competencias'][0]['lancamentos']
-        self.assertEqual([l['valor'] for l in linhas], [50, 20, -2, -5, -10])
+        self.assertEqual([l['valor'] for l in linhas], [-2, 50, 20, -10, -5])
 
     def test_apartamentos_selecionados_em_ordem_crescente(self):
         dados = gerar('a', {'tipo': 'completo', 'apartamentos': ['102', '101']})

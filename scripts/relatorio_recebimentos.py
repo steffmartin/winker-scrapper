@@ -34,6 +34,11 @@ def _centavos(valor):
     return int((Decimal(str(valor or 0)) * 100).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
 
 
+def _chave_ordenacao_linha(linha):
+    valor = linha['valor']
+    return (linha['data'], 0 if valor >= 0 else 1, -valor if valor >= 0 else valor, linha['id'])
+
+
 def _conciliar_lancamentos(linhas):
     """Gera ajustes apenas na resposta, sem modificar os registros de origem."""
     linhas = [dict(linha) for linha in linhas]
@@ -41,50 +46,58 @@ def _conciliar_lancamentos(linhas):
     negativas = [i for i, linha in enumerate(linhas) if not linha['renegociado'] and _centavos(linha['valor']) < 0]
     usadas = set()
 
-    # A primeira passagem reserva pares de mesmo valor, antes de procurar descontos.
-    for i in positivas:
-        j = next((j for j in negativas if j not in usadas and _centavos(linhas[i]['valor']) == -_centavos(linhas[j]['valor'])), None)
-        if j is not None:
+    # Esgota combinações com recebimento na mesma data antes de usar outras datas.
+    for mesma_data in (True, False):
+        def data_compativel(cobranca, outra):
+            return (cobranca['data'] == outra['data']) == mesma_data
+
+        for i in positivas:
+            if i in usadas:
+                continue
+            j = next((j for j in negativas if j not in usadas and data_compativel(linhas[i], linhas[j])
+                      and _centavos(linhas[i]['valor']) == -_centavos(linhas[j]['valor'])), None)
+            if j is not None:
+                usadas.update((i, j))
+
+        for i in positivas:
+            linha = linhas[i]
+            desconto = _centavos(linha['desconto_vista'])
+            if i in usadas or desconto <= 0:
+                continue
+            esperado = _centavos(linha['valor']) - desconto
+            if esperado <= 0:
+                continue
+            j = next((j for j in negativas if j not in usadas and linhas[j]['tipo'] == 'Recebimento'
+                      and data_compativel(linha, linhas[j]) and -_centavos(linhas[j]['valor']) == esperado), None)
+            if j is None:
+                continue
             usadas.update((i, j))
+            linha['desconto_vista'] = 0
+            linhas.append({'id': -linha['id'], 'data': linhas[j]['data'], 'descricao': linha['descricao'],
+                           'tipo': 'Desconto à vista', 'valor': -desconto / 100, 'desconto_vista': 0,
+                           'renegociado': False, 'ordem': 0})
 
-    for i in positivas:
-        linha = linhas[i]
-        desconto = _centavos(linha['desconto_vista'])
-        if i in usadas or desconto <= 0:
-            continue
-        esperado = _centavos(linha['valor']) - desconto
-        if esperado <= 0:
-            continue
-        j = next((j for j in negativas if j not in usadas and linhas[j]['tipo'] == 'Recebimento' and -_centavos(linhas[j]['valor']) == esperado), None)
-        if j is None:
-            continue
-        usadas.update((i, j))
-        linha['desconto_vista'] = 0
-        linhas.append({'id': -linha['id'], 'data': linhas[j]['data'], 'descricao': linha['descricao'],
-                       'tipo': 'Desconto à vista', 'valor': -desconto / 100, 'desconto_vista': 0,
-                       'renegociado': False, 'ordem': 0})
-
-    # Um desconto já registrado pode compor o valor exato junto ao desconto à vista.
-    for i in positivas:
-        linha = linhas[i]
-        desconto_vista = _centavos(linha['desconto_vista'])
-        if i in usadas or desconto_vista <= 0:
-            continue
-        combinado = next(((j, k, desconto_efetivo) for j in negativas
-                          if j not in usadas and linhas[j]['tipo'] == 'Desconto' and linhas[j]['data'] == linha['data']
-                          for desconto_efetivo in [desconto_vista - _centavos(linhas[j]['desconto_vista'])]
-                          if desconto_efetivo > 0
-                          for k in negativas
-                          if k not in usadas and linhas[k]['tipo'] == 'Recebimento'
-                          and _centavos(linha['valor']) + _centavos(linhas[j]['valor']) + _centavos(linhas[k]['valor']) == desconto_efetivo), None)
-        if combinado is None:
-            continue
-        j, k, desconto_efetivo = combinado
-        usadas.update((i, j, k))
-        linha['desconto_vista'] = 0
-        linhas.append({'id': -linha['id'], 'data': linhas[k]['data'], 'descricao': linha['descricao'],
-                       'tipo': 'Desconto à vista', 'valor': -desconto_efetivo / 100, 'desconto_vista': 0,
-                       'renegociado': False, 'ordem': 0})
+        # Um desconto registrado na data da cobrança pode compor o valor exato.
+        for i in positivas:
+            linha = linhas[i]
+            desconto_vista = _centavos(linha['desconto_vista'])
+            if i in usadas or desconto_vista <= 0:
+                continue
+            combinado = next(((j, k, desconto_efetivo) for j in negativas
+                              if j not in usadas and linhas[j]['tipo'] == 'Desconto' and linhas[j]['data'] == linha['data']
+                              for desconto_efetivo in [desconto_vista - _centavos(linhas[j]['desconto_vista'])]
+                              if desconto_efetivo > 0
+                              for k in negativas
+                              if k not in usadas and linhas[k]['tipo'] == 'Recebimento' and data_compativel(linha, linhas[k])
+                              and _centavos(linha['valor']) + _centavos(linhas[j]['valor']) + _centavos(linhas[k]['valor']) == desconto_efetivo), None)
+            if combinado is None:
+                continue
+            j, k, desconto_efetivo = combinado
+            usadas.update((i, j, k))
+            linha['desconto_vista'] = 0
+            linhas.append({'id': -linha['id'], 'data': linhas[k]['data'], 'descricao': linha['descricao'],
+                           'tipo': 'Desconto à vista', 'valor': -desconto_efetivo / 100, 'desconto_vista': 0,
+                           'renegociado': False, 'ordem': 0})
 
     cobrancas = [linhas[i] for i in positivas if i not in usadas]
     recebimentos = [linhas[i] for i in negativas if i not in usadas and linhas[i]['tipo'] == 'Recebimento']
@@ -194,9 +207,9 @@ def gerar(condo_id, filtros):
         subtotal_unidade = 0
         for comp in competencias + ([None] if any(r[1] is None for r in itens_unidade) else []):
             linhas = [r[3] for r in itens_unidade if r[1] == comp]
-            linhas.sort(key=lambda linha: (linha['ordem'], linha['data'], -linha['valor'], linha['id']))
+            linhas.sort(key=_chave_ordenacao_linha)
             linhas = _conciliar_lancamentos(linhas)
-            linhas.sort(key=lambda linha: (linha['ordem'], linha['data'], -linha['valor'], linha['id']))
+            linhas.sort(key=_chave_ordenacao_linha)
             subtotal = sum(_centavos(linha['valor']) for linha in linhas if not linha['renegociado'])
             subtotal_unidade += subtotal
             grupos_comp.append({'competencia': comp, 'lancamentos': linhas, 'subtotal': subtotal / 100})
