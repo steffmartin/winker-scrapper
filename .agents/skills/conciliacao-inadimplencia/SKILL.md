@@ -55,6 +55,18 @@ Leia o valor atual do banco, sem presumir valor fixo. A conciliação tem limite
 de busca e pode sinalizar `ConciliacaoInconclusiva`; não apresente resultado
 inconclusivo como completo nem suprima os limites ou validações.
 
+Na quitação exata de um conjunto para recebimentos da mesma data, a distribuição
+prioriza correspondências individuais exatas antes de fracionar outros valores.
+Essa prioridade não se estende automaticamente ao caminho com ajustes históricos
+ou à busca em datas distintas. Não presuma concessão de desconto à vista por
+proximidade quando o pagamento é insuficiente.
+
+No extrato, `pares` é uma apresentação das alocações calculadas, com taxas e
+acréscimos à esquerda e pagamentos e descontos à direita. Movimentos da mesma
+taxa, data e descrição podem ser aglutinados visualmente; confira os recebimentos
+originais e seus IDs antes de inferir quantos pagamentos ocorreram. Diferença de
+encargos de uma quitação conjunta não implica vínculo a uma taxa individual.
+
 O corte do extrato completo é a data do sistema; por competência é o último dia
 da competência final; por recebimento é a data final do filtro, preservando o
 histórico dos grupos com movimento no intervalo. Subtotais de movimento não

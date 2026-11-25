@@ -7,6 +7,7 @@ import { RadioButtonModule } from 'primeng/radiobutton';
 import { CommonModule } from '@angular/common';
 
 type TipoExtrato = 'completo' | 'competencia' | 'recebimento';
+type LancamentoExtrato = { id: number; data: string; descricao: string; tipo: string; valor: number; desconto_vista: number; renegociado: boolean; informativo?: boolean; ajuste_automatico?: boolean };
 
 export interface ExtratoRecebimentosFiltros {
     tipo: TipoExtrato;
@@ -18,7 +19,7 @@ export interface ExtratoRecebimentosResultado {
     total: number;
     saldo_original?: number;
     limites?: { inicio: string; fim: string };
-    apartamentos: { apartamento: string | null; subtotal: number; saldo_original?: number; competencias: { competencia: string | null; subtotal: number; saldo_original?: number | null; conciliacao_inconclusiva?: boolean; lancamentos: { id: number; data: string; descricao: string; tipo: string; valor: number; desconto_vista: number; renegociado: boolean; informativo?: boolean; ajuste_automatico?: boolean }[] }[] }[];
+    apartamentos: { apartamento: string | null; subtotal: number; saldo_original?: number; competencias: { competencia: string | null; subtotal: number; saldo_original?: number | null; conciliacao_inconclusiva?: boolean; lancamentos: LancamentoExtrato[]; pares?: { taxa: LancamentoExtrato | null; movimento: LancamentoExtrato | null }[] }[] }[];
 }
 
 @Component({
@@ -39,6 +40,7 @@ export interface ExtratoRecebimentosResultado {
         .tabela-extrato { width: 100%; min-width: 44rem; table-layout: fixed; border-collapse: collapse; }
         .tabela-extrato th, .tabela-extrato td { padding: .5rem; vertical-align: top; overflow-wrap: anywhere; }
         .tabela-extrato .valor { text-align: right; white-space: nowrap; }
+        .tabela-extrato .separador { border-left: 1px solid var(--surface-border); }
         .fim-competencia { border-bottom: 1px solid var(--surface-border); }
         @media print { .tabela-extrato { min-width: 0; } }
     `]

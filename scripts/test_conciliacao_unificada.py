@@ -148,6 +148,36 @@ class TestConsulta(unittest.TestCase):
 
 
 class TestCorrespondenciasExatas(unittest.TestCase):
+    def test_distribuicao_do_grupo_prioriza_pagamentos_individuais_exatos(self):
+        comum = dict(apartamento='201', competencia='2022-04')
+        taxas = [dict(comum, id=333, vencimento=date(2022, 4, 1), valor_centavos=20000, desconto_vista=0),
+                 dict(comum, id=221, vencimento=date(2022, 4, 11), valor_centavos=25000, desconto_vista=25),
+                 dict(comum, id=211, vencimento=date(2022, 4, 11), valor_centavos=1000, desconto_vista=0),
+                 dict(comum, id=205, vencimento=date(2022, 4, 11), valor_centavos=930, desconto_vista=0)]
+        receitas = [dict(comum, id=i, data=date(2022, 4, 1), valor_centavos=valor)
+                    for i, valor in [(20330, 22500), (20327, 20000), (20329, 1000), (20328, 930)]]
+        resultado = conciliar_exatos(taxas, receitas, 'M')
+        quitacao = resultado['alocacoes'][0]
+        pagamentos = quitacao['detalhes']['recebimentos']
+        self.assertEqual({p['recebimento_id']: [(a['taxa_id'], a['principal_centavos']) for a in p['alocacoes']]
+                          for p in pagamentos},
+                         {20330: [(221, 22500)], 20327: [(333, 20000)],
+                          20329: [(211, 1000)], 20328: [(205, 930)]})
+        self.assertEqual(sum(p['valor_centavos'] for p in pagamentos), 44430)
+
+    def test_reserva_encaixe_exato_antes_de_fracionar_pagamento_maior(self):
+        comum = dict(apartamento='201', competencia='2022-04')
+        taxas = [dict(comum, id=1, vencimento=date(2022, 4, 1), valor_centavos=5000, desconto_vista=0),
+                 dict(comum, id=2, vencimento=date(2022, 4, 11), valor_centavos=10000, desconto_vista=10),
+                 dict(comum, id=3, vencimento=date(2022, 4, 11), valor_centavos=3000, desconto_vista=0)]
+        receitas = [dict(comum, id=i, data=date(2022, 4, 1), valor_centavos=valor)
+                    for i, valor in [(1, 12000), (2, 5000)]]
+        pagamentos = conciliar_exatos(taxas, receitas, 'M')['alocacoes'][0]['detalhes']['recebimentos']
+        alocacoes = {p['recebimento_id']: [(a['taxa_id'], a['principal_centavos']) for a in p['alocacoes']]
+                     for p in pagamentos}
+        self.assertEqual(alocacoes[2], [(1, 5000)])
+        self.assertEqual(alocacoes[1], [(2, 9000), (3, 3000)])
+
     def test_concilia_grupo_de_taxas_e_pagamentos_sem_consumir_duas_vezes(self):
         taxas = [dict(id=i, apartamento='101', competencia='2022-05', vencimento=date(2022, 5, 10),
                       valor_centavos=valor, desconto_vista=desconto)
@@ -411,6 +441,22 @@ class TestPosicao(unittest.TestCase):
         self.assertEqual((relatorio['total'], relatorio['saldo_original']), (0, 0))
         self.assertEqual(inadimplencia(posicao), [])
 
+    def test_extrato_alinha_encargos_e_diferenca_positivos_com_pagamento(self):
+        taxa = dict(id=206, condominio_id='a', tipo='I', apartamento='803', competencia='2022-05',
+                    vencimento='10/05/2022', descricao='Seguro', valor_original=9.30,
+                    juros_mes_percentual=1, multa_percentual=2)
+        receita = dict(id=20546, condominio_id='a', tipo='R', apartamento='803', competencia='2022-05',
+                       data='12/05/2022', valor=9.50)
+        posicao = calcular_posicao('a', date(2022, 5, 12), ['803'], [taxa], [receita], 'M', 10)
+        grupo = extrato(posicao, {'tipo': 'completo'}, {})['apartamentos'][0]['competencias'][0]
+        pares = grupo['pares']
+        self.assertEqual([(p['taxa']['tipo'] if p['taxa'] else None,
+                           p['movimento']['tipo'] if p['movimento'] else None) for p in pares],
+                         [('Cobrança', 'Recebimento'), ('Acréscimo', None), ('Diferença', None)])
+        self.assertEqual(pares[2]['taxa']['valor'], 0.01)
+        self.assertTrue(pares[2]['taxa']['ajuste_automatico'])
+        self.assertEqual(grupo['subtotal'], 0)
+
     def test_posicao_calcula_cada_unidade_e_competencia_sem_reaproveitar(self):
         taxas = [dict(id=1, condominio_id='a', tipo='C', competencia='2023-01', vencimento='10/01/2023', valor_original=100),
                  dict(id=2, condominio_id='a', tipo='C', competencia='2023-02', vencimento='10/02/2023', valor_original=100)]
@@ -449,6 +495,58 @@ class TestPosicao(unittest.TestCase):
         self.assertEqual((relatorio['total'], relatorio['saldo_original']), (90, 90))
         linhas = relatorio['apartamentos'][0]['competencias'][0]['lancamentos']
         self.assertEqual([l['valor'] for l in linhas if l['tipo'] == 'Recebimento'], [-100])
+
+    def test_extrato_vincula_parcelas_do_mesmo_recebimento_as_taxas(self):
+        comum = dict(condominio_id='a', tipo='I', apartamento='101', competencia='2023-01', vencimento='20/01/2023')
+        taxas = [dict(comum, id=1, descricao='Ordinária', valor_original=100, desconto_vista=10),
+                 dict(comum, id=2, descricao='Fundo', valor_original=50)]
+        receita = dict(id=1, condominio_id='a', tipo='R', apartamento='101', competencia='2023-01',
+                       data='10/01/2023', descricao='Pagamento', valor=110)
+        posicao = calcular_posicao('a', date(2023, 1, 21), ['101'], taxas, [receita], 'N')
+        grupo = extrato(posicao, {'tipo': 'completo'}, {})['apartamentos'][0]['competencias'][0]
+        pares = grupo['pares']
+        self.assertEqual([(p['taxa']['id'] if p['taxa'] else None,
+                           p['movimento']['tipo'] if p['movimento'] else None,
+                           p['movimento']['valor'] if p['movimento'] else None) for p in pares],
+                         [(1, 'Recebimento', -90), (None, 'Desconto à vista', -10), (2, 'Recebimento', -20)])
+        self.assertEqual(grupo['subtotal'], 30)
+        filtrado = extrato(posicao, {'tipo': 'recebimento', 'periodo': ['2023-01-10', '2023-01-10']}, {})
+        pares_filtrados = filtrado['apartamentos'][0]['competencias'][0]['pares']
+        self.assertTrue(all(p['taxa'] is None for p in pares_filtrados))
+        self.assertEqual(sum(p['movimento']['valor'] for p in pares_filtrados), -120)
+
+    def test_extrato_ordena_taxas_e_movimentos_por_data_e_valor(self):
+        comum = dict(condominio_id='a', tipo='I', apartamento='101', competencia='2023-01')
+        taxas = [dict(comum, id=1, descricao='Menor', vencimento='20/01/2023', valor_original=100),
+                 dict(comum, id=2, descricao='Maior', vencimento='20/01/2023', valor_original=200),
+                 dict(comum, id=3, descricao='Anterior', vencimento='19/01/2023', valor_original=10)]
+        receitas = [dict(id=i, condominio_id='a', tipo='R', apartamento='101', competencia='2023-01',
+                         data=data, descricao=f'Pagamento {i}', valor=valor)
+                    for i, data, valor in [(1, '10/01/2023', 20), (2, '10/01/2023', 60), (3, '09/01/2023', 10)]]
+        posicao = calcular_posicao('a', date(2023, 1, 20), ['101'], taxas, receitas, 'N')
+        pares = extrato(posicao, {'tipo': 'completo'}, {})['apartamentos'][0]['competencias'][0]['pares']
+        self.assertEqual([p['taxa']['id'] for p in pares if p['taxa']], [3, 2, 1])
+        inicio = next(i for i, p in enumerate(pares) if p['taxa'] and p['taxa']['id'] == 2)
+        fim = next(i for i, p in enumerate(pares) if p['taxa'] and p['taxa']['id'] == 1)
+        self.assertEqual([p['movimento']['valor'] for p in pares[inicio:fim]], [-60, -20])
+
+    def test_extrato_aglutina_movimentos_da_mesma_taxa_data_e_descricao(self):
+        taxa = dict(id=1, condominio_id='a', tipo='I', apartamento='101', competencia='2023-01',
+                    vencimento='20/01/2023', descricao='Ordinária', valor_original=200)
+        receitas = [dict(id=i, condominio_id='a', tipo='R', apartamento='101', competencia='2023-01',
+                         data=data, descricao=descricao, valor=valor)
+                    for i, data, descricao, valor in [(1, '10/01/2023', 'Pagamento', 60),
+                                                     (2, '10/01/2023', 'Pagamento', 20),
+                                                     (3, '11/01/2023', 'Pagamento', 10),
+                                                     (4, '10/01/2023', 'Outro pagamento', 5)]]
+        posicao = calcular_posicao('a', date(2023, 1, 20), ['101'], [taxa], receitas, 'N')
+        grupo = extrato(posicao, {'tipo': 'completo'}, {})['apartamentos'][0]['competencias'][0]
+        self.assertEqual([(p['movimento']['data'], p['movimento']['descricao'], p['movimento']['valor'])
+                          for p in grupo['pares'] if p['movimento']],
+                         [('2023-01-10', 'Pagamento', -80), ('2023-01-10', 'Outro pagamento', -5),
+                          ('2023-01-11', 'Pagamento', -10)])
+        self.assertEqual(len([l for l in grupo['lancamentos'] if l['tipo'] == 'Recebimento']), 4)
+        self.assertEqual(grupo['subtotal'], 105)
 
     def test_recebimentos_agrupados_podem_consumir_apenas_parte_do_ultimo(self):
         comum = dict(condominio_id='a', tipo='I', apartamento='101', competencia='2023-01', vencimento='20/01/2023')

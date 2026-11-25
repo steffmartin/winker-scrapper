@@ -68,25 +68,26 @@
                 <h6 class="font-semibold mt-4 mb-2">{{ grupo.competencia ? (grupo.competencia.slice(5, 7) + '/' + grupo.competencia.slice(0, 4)) : 'Sem competência' }}</h6>
                 <div class="overflow-x-auto">
                     <table class="tabela-extrato text-left">
-                        <colgroup><col style="width: 14%"><col style="width: 18%"><col style="width: 40%"><col style="width: 14%"><col style="width: 14%"></colgroup>
-                        <thead><tr><th scope="col">Data</th><th scope="col">Tipo</th><th scope="col">Descrição</th><th scope="col" class="valor">Cobranças</th><th scope="col" class="valor">Recebimentos</th></tr></thead>
+                        <colgroup><col style="width: 10%"><col style="width: 24%"><col style="width: 11%"><col style="width: 10%"><col style="width: 34%"><col style="width: 11%"></colgroup>
+                        <thead><tr><th scope="col">Data</th><th scope="col">Descrição</th><th scope="col" class="valor">Valor</th><th scope="col" class="separador">Data</th><th scope="col">Descrição</th><th scope="col" class="valor">Valor</th></tr></thead>
                         <tbody>
-                            @for (linha of grupo.lancamentos; track $index) {
-                                <tr [class.text-red-600]="linha.ajuste_automatico" [class.dark:text-red-400]="linha.ajuste_automatico">
-                                    <td><span [class.line-through]="linha.renegociado">{{ linha.data | date:'dd/MM/yyyy':'UTC' }}</span></td>
-                                    <td><span [class.line-through]="linha.renegociado">{{ linha.tipo }}</span></td>
-                                    <td><span [class.line-through]="linha.renegociado">{{ linha.descricao }}</span>@if (linha.renegociado) { <span>&nbsp;(renegociado)</span> } @if (linha.informativo) { <span>&nbsp;(informativo; já incluído no recebimento)</span> }</td>
-                                    <td class="valor"><span [class.line-through]="linha.renegociado">@if (linha.valor >= 0) { {{ linha.valor | currency:'BRL' }} }</span></td>
-                                    <td class="valor"><span [class.line-through]="linha.renegociado">@if (linha.valor < 0) { {{ linha.valor | currency:'BRL' }} }</span></td>
+                            @for (par of grupo.pares; track $index) {
+                                <tr>
+                                    <td [class.text-red-600]="par.taxa?.ajuste_automatico" [class.dark:text-red-400]="par.taxa?.ajuste_automatico"><span [class.line-through]="par.taxa?.renegociado">@if (par.taxa?.tipo !== 'Acréscimo' && par.taxa?.tipo !== 'Diferença') { {{ par.taxa?.data | date:'dd/MM/yyyy':'UTC' }} }</span></td>
+                                    <td [class.text-red-600]="par.taxa?.ajuste_automatico" [class.dark:text-red-400]="par.taxa?.ajuste_automatico"><span [class.line-through]="par.taxa?.renegociado">@if (par.taxa && par.taxa.tipo !== 'Cobrança' && par.taxa.tipo !== 'Parcela de renegociação') { {{ par.taxa.tipo }}: } {{ par.taxa?.descricao }}</span>@if (par.taxa?.renegociado) { <span>&nbsp;(renegociado)</span> }</td>
+                                    <td class="valor" [class.text-red-600]="par.taxa?.ajuste_automatico" [class.dark:text-red-400]="par.taxa?.ajuste_automatico"><span [class.line-through]="par.taxa?.renegociado">@if (par.taxa) { {{ par.taxa.valor | currency:'BRL' }} }</span></td>
+                                    <td class="separador" [class.text-red-600]="par.movimento?.ajuste_automatico"><span [class.line-through]="par.movimento?.renegociado">{{ par.movimento?.data | date:'dd/MM/yyyy':'UTC' }}</span></td>
+                                    <td [class.text-red-600]="par.movimento?.ajuste_automatico"><span [class.line-through]="par.movimento?.renegociado">@if (par.movimento && par.movimento.tipo !== 'Recebimento') { {{ par.movimento.tipo }}: } {{ par.movimento?.descricao }}</span>@if (par.movimento?.renegociado) { <span>&nbsp;(renegociado)</span> } @if (par.movimento?.informativo) { <span>&nbsp;(informativo; já incluído no recebimento)</span> }</td>
+                                    <td class="valor" [class.text-red-600]="par.movimento?.ajuste_automatico"><span [class.line-through]="par.movimento?.renegociado">@if (par.movimento) { {{ par.movimento.valor | currency:'BRL' }} }</span></td>
                                 </tr>
-                            } @empty { <tr><td colspan="5" class="text-surface-500">Nenhum lançamento.</td></tr> }
+                            } @empty { <tr><td colspan="6" class="text-surface-500">Nenhum lançamento.</td></tr> }
                         </tbody>
-                        <tfoot><tr class="fim-competencia font-semibold"><th colspan="4" scope="row" class="text-right">Subtotal da competência</th><td class="valor">{{ grupo.subtotal | currency:'BRL' }}</td></tr></tfoot>
+                        <tfoot><tr class="fim-competencia font-semibold" [class.text-red-600]="grupo.subtotal !== 0" [class.dark:text-red-400]="grupo.subtotal !== 0"><th colspan="5" scope="row" class="text-right">Subtotal da competência</th><td class="valor">{{ grupo.subtotal | currency:'BRL' }}</td></tr></tfoot>
                     </table>
                 </div>
             } @empty { <p class="text-surface-500">Nenhum lançamento no período.</p> }
-            <div class="mt-3 text-right font-bold">Subtotal do apartamento: {{ unidade.subtotal | currency:'BRL' }}</div>
+            <div class="mt-3 text-right font-bold" [class.text-red-600]="unidade.subtotal !== 0" [class.dark:text-red-400]="unidade.subtotal !== 0">Subtotal do apartamento: {{ unidade.subtotal | currency:'BRL' }}</div>
         </section>
     } @empty { <p class="text-surface-500">Nenhum apartamento ou lançamento encontrado.</p> }
-    <div class="mt-4 text-right font-bold border-t pt-3">Total geral: {{ dados.total | currency:'BRL' }}</div>
+    <div class="mt-4 text-right font-bold border-t pt-3" [class.text-red-600]="dados.total !== 0" [class.dark:text-red-400]="dados.total !== 0">Total geral: {{ dados.total | currency:'BRL' }}</div>
 }

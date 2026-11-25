@@ -1,6 +1,7 @@
 """Adaptadores de apresentação para os resultados da conciliação unificada."""
 from collections import defaultdict
 from datetime import date, datetime
+from itertools import zip_longest
 import calendar
 from conciliacao_unificada import _centavos, _data
 
@@ -99,12 +100,13 @@ def extrato(posicao, filtros, limites):
         linhas = []
         marcados = {a.get('taxa_id') for a in grupo['ajustes_origem'] if a['tipo'] == 'R'}
 
-        def incluir(id, data, descricao, nome, centavos, renegociado=False, desconto=0, informativo=False, ajuste_automatico=False):
+        def incluir(id, data, descricao, nome, centavos, renegociado=False, desconto=0, informativo=False, ajuste_automatico=False, taxa_id=None):
             if data > corte or (tipo == 'recebimento' and not inicio <= data <= fim):
                 return
             linhas.append({'id': id, 'data': data.isoformat(), 'descricao': descricao or '', 'tipo': nome,
                            'valor': centavos / 100, 'desconto_vista': desconto / 100,
-                           'renegociado': renegociado, 'informativo': informativo, 'ajuste_automatico': ajuste_automatico})
+                           'renegociado': renegociado, 'informativo': informativo, 'ajuste_automatico': ajuste_automatico,
+                           'taxa_id': taxa_id})
 
         originais = {t['id']: t for t in grupo['taxas_origem']}
         encargos_agrupados = {}
@@ -131,7 +133,7 @@ def extrato(posicao, filtros, limites):
             vencimento = ajuste.get('vencimento') or (vinculada and vinculada['vencimento'])
             if vencimento:
                 incluir(ajuste['id'], _data(vencimento), ajuste.get('descricao'), 'Desconto',
-                        -_centavos(ajuste.get('valor_original')), ajuste['id'] in marcados)
+                        -_centavos(ajuste.get('valor_original')), ajuste['id'] in marcados, taxa_id=ajuste.get('taxa_id'))
         recebimentos = {r['id']: r for r in grupo['recebimentos_origem']}
         parciais = {p['recebimento_id']: p for p in grupo['pagamentos_parciais']}
         for receita in grupo['recebimentos_origem']:
@@ -167,7 +169,7 @@ def extrato(posicao, filtros, limites):
             for saldo in detalhes['saldos']:
                 if saldo['desconto_concedido_centavos']:
                     incluir(-saldo['taxa']['id'], saldo['desconto_data'], saldo['taxa'].get('descricao'),
-                            'Desconto à vista', -saldo['desconto_concedido_centavos'])
+                            'Desconto à vista', -saldo['desconto_concedido_centavos'], taxa_id=saldo['taxa']['id'])
             for pagamento in detalhes['recebimentos']:
                 for alocacao in pagamento['alocacoes']:
                     acumular_encargo(alocacao['taxa_id'], recebimentos[pagamento['recebimento_id']]['data'],
@@ -176,19 +178,79 @@ def extrato(posicao, filtros, limites):
                 acumular_encargo(saldo['taxa']['id'], data, saldo['juros_centavos'] + saldo['multa_centavos'])
             if quitacao['diferenca_centavos']:
                 incluir(-numero, data, 'Diferença de encargos', 'Diferença', quitacao['diferenca_centavos'],
-                        ajuste_automatico=quitacao['ajuste_automatico'])
+                        ajuste_automatico=quitacao['ajuste_automatico'],
+                        taxa_id=quitacao['taxas'][0] if len(quitacao['taxas']) == 1 else None)
         for saldo in grupo['saldos']:
             if saldo.get('desconto_concedido_centavos'):
                 incluir(-saldo['taxa']['id'], saldo['desconto_data'], saldo['taxa'].get('descricao'),
-                        'Desconto à vista', -saldo['desconto_concedido_centavos'])
+                        'Desconto à vista', -saldo['desconto_concedido_centavos'], taxa_id=saldo['taxa']['id'])
         for taxa_id, (data_encargo, encargos) in encargos_agrupados.items():
-            incluir(-taxa_id, data_encargo, descricao_encargos(taxa_id), 'Acréscimo', encargos)
+            incluir(-taxa_id, data_encargo, descricao_encargos(taxa_id), 'Acréscimo', encargos, taxa_id=taxa_id)
         linhas.sort(key=lambda l: (l['data'], 0 if l['valor'] >= 0 else 1,
                                   -l['valor'] if l['valor'] >= 0 else l['valor'], l['tipo'], str(l['id'])))
         subtotal = sum(_centavos(l['valor']) for l in linhas if not l['renegociado'] and not l['informativo'])
+        # A visualização reparte recebimentos conforme as alocações reais,
+        # mantendo a lista e os totais originais para os demais consumidores.
+        alocacoes = defaultdict(lambda: defaultdict(int))
+        pagamentos = [p for q in grupo['quitacoes_exatas'] for p in q['detalhes']['recebimentos']]
+        pagamentos += [p for p in grupo['pagamentos_parciais'] if not p.get('quitacao_exata')]
+        for pagamento in pagamentos:
+            for alocacao in pagamento['alocacoes']:
+                alocacoes[pagamento['recebimento_id']][alocacao['taxa_id']] += sum(
+                    alocacao[campo] for campo in ('principal_centavos', 'juros_centavos', 'multa_centavos'))
+        for quitacao in grupo['quitacoes_exatas']:
+            if quitacao['diferenca_centavos'] > 0 and len(quitacao['taxas']) == 1:
+                for pagamento in quitacao['detalhes']['recebimentos']:
+                    alocacoes[pagamento['recebimento_id']][quitacao['taxas'][0]] += pagamento['nao_alocado_centavos']
+        vinculados = defaultdict(list)
+        avulsos = []
+
+        def aglutinar(itens):
+            grupos = {}
+            for item in itens:
+                chave = (item.get('taxa_id'), item['data'], item['descricao'], item['tipo'],
+                         item['renegociado'], item['informativo'], item['ajuste_automatico'], item['valor'] < 0)
+                if chave not in grupos:
+                    grupos[chave] = dict(item)
+                else:
+                    grupos[chave]['valor'] = (_centavos(grupos[chave]['valor']) + _centavos(item['valor'])) / 100
+            return list(grupos.values())
+
+        cobrancas = sorted((l for l in linhas if l['tipo'] in ('Cobrança', 'Parcela de renegociação')),
+                           key=lambda l: (l['data'], -_centavos(l['valor']), str(l['id'])))
+        for linha in linhas:
+            if linha in cobrancas:
+                continue
+            if linha['tipo'] == 'Recebimento':
+                repartido = 0
+                for taxa_id, valor in alocacoes[linha['id']].items():
+                    if valor:
+                        vinculados[taxa_id].append({**linha, 'valor': -valor / 100, 'taxa_id': taxa_id})
+                        repartido += valor
+                restante = -_centavos(linha['valor']) - repartido
+                if restante:
+                    avulsos.append({**linha, 'valor': -restante / 100})
+            elif linha.get('taxa_id') in originais:
+                vinculados[linha['taxa_id']].append(linha)
+            else:
+                avulsos.append(linha)
+        pares = []
+        for cobranca in cobrancas:
+            relacionados = aglutinar(vinculados.pop(cobranca['id'], []))
+            acrescimos = sorted((l for l in relacionados if l['valor'] >= 0),
+                                key=lambda l: (-_centavos(l['valor']), l['tipo'], str(l['id'])))
+            movimentos = sorted((l for l in relacionados if l['valor'] < 0),
+                                key=lambda l: (l['data'], _centavos(l['valor']), l['tipo'], str(l['id'])))
+            pares.extend({'taxa': taxa, 'movimento': movimento}
+                         for taxa, movimento in zip_longest([cobranca, *acrescimos], movimentos))
+        avulsos += [linha for relacionados in vinculados.values() for linha in relacionados]
+        avulsos = aglutinar(avulsos)
+        pares += [{'taxa': linha if linha['valor'] >= 0 else None,
+                   'movimento': linha if linha['valor'] < 0 else None} for linha in sorted(
+            avulsos, key=lambda l: (l['data'], _centavos(l['valor']), l['tipo'], str(l['id'])))]
         if tipo == 'recebimento' and not linhas:
             continue
-        unidades[apartamento].append({'competencia': competencia, 'lancamentos': linhas,
+        unidades[apartamento].append({'competencia': competencia, 'lancamentos': linhas, 'pares': pares,
                                       'subtotal': subtotal / 100, 'saldo_original': None if grupo.get('conciliacao_inconclusiva') else saldo_original / 100,
                                       'conciliacao_inconclusiva': bool(grupo.get('conciliacao_inconclusiva'))})
     resultado = []

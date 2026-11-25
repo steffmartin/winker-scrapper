@@ -6,7 +6,7 @@ resultado inconclusivo em vez de retornar quitações parciais como completas.
 """
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_DOWN
-from itertools import combinations, permutations
+from itertools import combinations, permutations, groupby
 from math import factorial
 from collections import defaultdict
 
@@ -199,7 +199,8 @@ def conciliar_exatos(taxas, recebimentos, modalidade, limite_operacoes=3000000, 
                         if melhor is None or chave < melhor[0]:
                             detalhes_candidato = distribuir_parciais(
                                 list(grupo_taxas), list(grupo_receitas), max(r['data'] for r in grupo_receitas),
-                                modalidade, habilitar_desconto=(prioridade == 1), desconto_agrupado=True)
+                                modalidade, habilitar_desconto=(prioridade == 1), desconto_agrupado=True,
+                                priorizar_exatos=True)
                             try:
                                 _validar_detalhes_quitacao(detalhes_candidato, desconto, encargos, diferenca)
                             except ConciliacaoInconclusiva:
@@ -306,7 +307,8 @@ def conciliar_exatos(taxas, recebimentos, modalidade, limite_operacoes=3000000, 
             chave_selecao, grupo_taxas, grupo_receitas, desconto, encargos, diferenca = melhor
             detalhes = distribuir_parciais(list(grupo_taxas), list(grupo_receitas),
                                           max(r['data'] for r in grupo_receitas), modalidade,
-                                          habilitar_desconto=(prioridade == 1), desconto_agrupado=(chave_selecao[2] == 0))
+                                          habilitar_desconto=(prioridade == 1), desconto_agrupado=(chave_selecao[2] == 0),
+                                          priorizar_exatos=(chave_selecao[2] == 0))
             _validar_detalhes_quitacao(detalhes, desconto, encargos, diferenca)
             origens_atuais = {r['id']: r['valor_centavos'] for r in receitas_restantes}
             fracionados = [r['id'] for r in grupo_receitas if r['valor_centavos'] < origens_atuais[r['id']]]
@@ -422,7 +424,8 @@ def aplicar_ajustes(dados):
 
 
 def distribuir_parciais(taxas, recebimentos, data_corte, modalidade, ajustes=None, habilitar_desconto=False,
-                         desconto_agrupado=False, ordem_taxas=None, reservas=None, data_reserva=None):
+                         desconto_agrupado=False, ordem_taxas=None, reservas=None, data_reserva=None,
+                         priorizar_exatos=False):
     """Distribui recebimentos remanescentes sem alterar os registros de origem.
 
     O principal é amortizado primeiro, seguido de juros e multa. A multa é
@@ -494,8 +497,29 @@ def distribuir_parciais(taxas, recebimentos, data_corte, modalidade, ajustes=Non
     reservas = reservas or {}
     recebimentos_reservados = {item for grupo in reservas.values() for item in grupo}
 
-    def alocar(pagamento, disponivel, data):
+    def saldo_exato(recebimento_id, valor, data):
+        if not priorizar_exatos or valor <= 0:
+            return None
         for saldo in saldos:
+            taxa = saldo['taxa']
+            if (taxa['id'] in reservas and recebimento_id not in reservas[taxa['id']]
+                    and data_reserva is not None and data <= data_reserva):
+                continue
+            if taxa.get('tipo') == 'P' and taxa.get('data_renegociacao') and data < _data(taxa['data_renegociacao']):
+                continue
+            atualizar(saldo, data)
+            desconto = (min(saldo['principal_centavos'], _centavos(taxa.get('desconto_vista')))
+                        if habilitar_desconto and data <= taxa['vencimento']
+                        and not saldo['desconto_concedido_centavos'] else 0)
+            devido = saldo['principal_centavos'] - desconto + saldo['juros_centavos'] + saldo['multa_centavos']
+            if devido == valor:
+                return saldo
+        return None
+
+    def alocar(pagamento, disponivel, data):
+        exato = saldo_exato(pagamento['recebimento_id'], disponivel, data)
+        ordem_saldos = ([exato] + [s for s in saldos if s is not exato]) if exato else saldos
+        for saldo in ordem_saldos:
             if (saldo['taxa']['id'] in reservas and pagamento['recebimento_id'] not in reservas[saldo['taxa']['id']]
                     and data_reserva is not None and data <= data_reserva):
                 continue
@@ -586,21 +610,27 @@ def distribuir_parciais(taxas, recebimentos, data_corte, modalidade, ajustes=Non
                         if not usado:
                             break
 
-    for receita in sorted(recebimentos, key=lambda r: (r['data'], r['id'] not in recebimentos_reservados,
-                                                        -r['valor_centavos'], str(r['id']))):
-        data = _data(receita['data'])
+    receitas_ordenadas = sorted(recebimentos, key=lambda r: (r['data'], r['id'] not in recebimentos_reservados,
+                                                             -r['valor_centavos'], str(r['id'])))
+    receitas_por_data = groupby(receitas_ordenadas, key=lambda r: _data(r['data']))
+    for data, receitas_dia in receitas_por_data:
         if data > corte:
             continue
         aplicar_eventos_ate(data)
-        disponivel = receita['valor_centavos']
-        pagamentos.append({'recebimento_id': receita['id'], 'valor_centavos': disponivel,
-                           'alocacoes': [], 'movimentacoes': [], 'credito_ajuste_centavos': 0, 'creditos_ajuste': [],
-                           'nao_alocado_centavos': disponivel})
-        pagamento = pagamentos[-1]
-        pagamentos_por_id[receita['id']] = pagamento
-        if disponivel <= 0:
-            continue
-        pagamento['nao_alocado_centavos'] = alocar(pagamento, disponivel, data)
+        pendentes = list(receitas_dia)
+        while pendentes:
+            indice = next((i for i, r in enumerate(pendentes)
+                           if saldo_exato(r['id'], r['valor_centavos'], data)), 0)
+            receita = pendentes.pop(indice)
+            disponivel = receita['valor_centavos']
+            pagamentos.append({'recebimento_id': receita['id'], 'valor_centavos': disponivel,
+                               'alocacoes': [], 'movimentacoes': [], 'credito_ajuste_centavos': 0, 'creditos_ajuste': [],
+                               'nao_alocado_centavos': disponivel})
+            pagamento = pagamentos[-1]
+            pagamentos_por_id[receita['id']] = pagamento
+            if disponivel <= 0:
+                continue
+            pagamento['nao_alocado_centavos'] = alocar(pagamento, disponivel, data)
     aplicar_eventos_ate(corte)
     for saldo in saldos:
         atualizar(saldo, corte)

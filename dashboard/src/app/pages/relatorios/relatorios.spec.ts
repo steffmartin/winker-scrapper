@@ -65,7 +65,7 @@ describe('RelatoriosComponent', () => {
         resultado.componentInstance.dados = { data_corte: '2023-01-20', total: -20, saldo_original: 0,
             apartamentos: [{ apartamento: '101', subtotal: -20, saldo_original: 0, competencias: [{ competencia: '2023-01', subtotal: -20,
                 saldo_original: 0, lancamentos: [{ id: 1, data: '2023-01-15', descricao: 'Pagamento',
-                    tipo: 'Excedente de origem não identificada', valor: -20, desconto_vista: 0, renegociado: false, informativo: true }] }] }] };
+                    tipo: 'Excedente de origem não identificada', valor: -20, desconto_vista: 0, renegociado: false, informativo: true }], pares: [{ taxa: null, movimento: { id: 1, data: '2023-01-15', descricao: 'Pagamento', tipo: 'Excedente de origem não identificada', valor: -20, desconto_vista: 0, renegociado: false, informativo: true } }] }] }] };
         resultado.detectChanges();
         expect(resultado.nativeElement.textContent).toContain('informativo; já incluído no recebimento');
         expect(resultado.nativeElement.textContent).not.toContain('Saldo original na data de corte');
@@ -84,11 +84,29 @@ describe('RelatoriosComponent', () => {
             { apartamento: '101', subtotal: 0, competencias: [{ competencia: '2023-01', subtotal: 0, lancamentos: [
                 linha('Excedente de origem não identificada', -10, true, true), linha('Diferença', -0.01, true), linha('Diferença', 0.01, true),
                 linha('Acréscimo', 5), linha('Desconto à vista', -5), linha('Recebimento', -100)
-            ] }] }
+            ], pares: [linha('Excedente de origem não identificada', -10, true, true), linha('Diferença', -0.01, true), linha('Diferença', 0.01, true), linha('Acréscimo', 5), linha('Desconto à vista', -5), linha('Recebimento', -100)].map(movimento => ({ taxa: null, movimento })) }] }
         ] };
         resultado.detectChanges();
         const linhas = Array.from(resultado.nativeElement.querySelectorAll('tbody tr')) as HTMLElement[];
-        expect(linhas.map(l => l.classList.contains('text-red-600'))).toEqual([true, true, true, false, false, false]);
+        expect(linhas.map(l => !!l.querySelector('.text-red-600'))).toEqual([true, true, true, false, false, false]);
+    });
+
+    it('omite a data dos acréscimos e diferenças positivos alinhados aos recebimentos', () => {
+        const resultado = TestBed.createComponent(ExtratoRecebimentosComponent);
+        resultado.componentInstance.modo = 'resultado';
+        const linha = (tipo: string, valor: number) => ({ id: valor, data: '2023-01-15', descricao: 'Taxa', tipo, valor, desconto_vista: 0, renegociado: false });
+        resultado.componentInstance.dados = { data_corte: '2023-01-20', total: 0, apartamentos: [{ apartamento: '101', subtotal: 0,
+            competencias: [{ competencia: '2023-01', subtotal: 0, lancamentos: [], pares: [
+                { taxa: linha('Cobrança', 100), movimento: linha('Recebimento', -90) },
+                { taxa: linha('Acréscimo', 2), movimento: linha('Recebimento', -12) },
+                { taxa: linha('Diferença', 0.01), movimento: null }
+            ] }] }] };
+        resultado.detectChanges();
+        const linhas = resultado.nativeElement.querySelectorAll('tbody tr');
+        expect(linhas[0].children[0].textContent).toContain('15/01/2023');
+        expect(linhas[1].children[0].textContent.trim()).toBe('');
+        expect(linhas[1].children[5].textContent).toContain('12.00');
+        expect(linhas[2].children[0].textContent.trim()).toBe('');
     });
 
     it('carrega e gera o relatório de inadimplência ao selecioná-lo', async () => {
@@ -189,17 +207,16 @@ describe('RelatoriosComponent', () => {
         resultado.componentInstance.modo = 'resultado';
         const lancamento = (id: number, valor: number) => ({ id, valor, data: '2023-01-10', descricao: 'Teste', tipo: 'Cobrança', desconto_vista: 0, renegociado: false });
         resultado.componentInstance.dados = { data_corte: '2023-12-31', total: 80, apartamentos: [{ apartamento: '101', subtotal: 80, competencias: [
-            { competencia: '2023-01', subtotal: 70, lancamentos: [lancamento(1, 100), lancamento(2, -30), { ...lancamento(4, 200), renegociado: true }] },
-            { competencia: '2023-02', subtotal: 10, lancamentos: [lancamento(3, 10)] }
+            { competencia: '2023-01', subtotal: 70, lancamentos: [lancamento(1, 100), lancamento(2, -30), { ...lancamento(4, 200), renegociado: true }], pares: [{ taxa: lancamento(1, 100), movimento: lancamento(2, -30) }, { taxa: { ...lancamento(4, 200), renegociado: true }, movimento: null }] },
+            { competencia: '2023-02', subtotal: 10, lancamentos: [lancamento(3, 10)], pares: [{ taxa: lancamento(3, 10), movimento: null }] }
         ] }] };
         resultado.detectChanges();
         const tabelas = resultado.nativeElement.querySelectorAll('table');
         expect(tabelas.length).toBe(2);
         const linhas = tabelas[0].querySelectorAll('tbody tr');
-        expect(linhas[0].children[3].textContent).toContain('100.00');
-        expect(linhas[0].children[4].textContent.trim()).toBe('');
-        expect(linhas[1].children[3].textContent.trim()).toBe('');
-        expect(linhas[1].children[4].textContent).toContain('30.00');
+        expect(linhas[0].children[2].textContent).toContain('100.00');
+        expect(linhas[0].children[5].textContent).toContain('30.00');
+        expect(linhas[1].children[5].textContent.trim()).toBe('');
         expect(tabelas[0].querySelector('tfoot').textContent).toContain('70.00');
         expect(resultado.nativeElement.textContent).toContain('80.00');
     });
@@ -349,6 +366,9 @@ describe('RelatoriosComponent', () => {
                     lancamentos: [
                         { id: 1, data: '2023-01-10', descricao: 'Taxa Ordinária Apto 101', tipo: 'Cobrança', valor: 100, desconto_vista: 0, renegociado: false },
                         { id: 2, data: '2023-01-10', descricao: 'Fundo Reserva Apto 101', tipo: 'Cobrança', valor: 100, desconto_vista: 0, renegociado: false }
+                    ], pares: [
+                        { taxa: { id: 1, data: '2023-01-10', descricao: 'Taxa Ordinária Apto 101', tipo: 'Cobrança', valor: 100, desconto_vista: 0, renegociado: false }, movimento: null },
+                        { taxa: { id: 2, data: '2023-01-10', descricao: 'Fundo Reserva Apto 101', tipo: 'Cobrança', valor: 100, desconto_vista: 0, renegociado: false }, movimento: null }
                     ]
                 }]
             }]
