@@ -8,7 +8,9 @@ import socket
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
+import threading
 import urllib.request
 import uuid
 from datetime import datetime, timedelta
@@ -832,6 +834,23 @@ def save_condominio_and_gestao(condo_id, condo_nome, data_corte, unidades, valor
 
 
 def get_ip_address():
+    result = []
+    def lookup():
+        result.append(_get_ip_address())
+    worker = threading.Thread(target=lookup, daemon=True)
+    worker.start()
+    worker.join(timeout=2)
+    if result and result[0]:
+        return result[0]
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(1)
+            sock.connect(('8.8.8.8', 80))
+            return sock.getsockname()[0] or 'indisponível'
+    except OSError:
+        return 'indisponível'
+
+def _get_ip_address():
     url_list = ["https://api.ipify.org", "https://www.meuip.com/api/meuip.php", "https://ipinfo.io/ip"]
     for url in url_list:
         try:
@@ -868,7 +887,7 @@ def get_mac_address():
         
         if local_ip:
             cmd = ["powershell", "-Command", f"(Get-NetIPAddress -IPAddress {local_ip} | Get-NetAdapter).MacAddress"]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=2)
             mac = result.stdout.strip()
             if mac:
                 mac_clean = mac.replace("-", ":").lower()
@@ -886,7 +905,8 @@ def create_auditoria(periodo_inicio, periodo_fim):
         aud = models.Auditoria.create(
             periodo_inicio=periodo_inicio,
             periodo_fim=periodo_fim,
-            data_hora_captura=datetime.now().isoformat()
+            data_hora_captura=datetime.now().isoformat(),
+            ip=get_ip_address(), mac=get_mac_address(), status='ativa'
         )
         return aud.id
     except Exception as e:
@@ -917,8 +937,6 @@ def update_auditoria(auditoria_id, user_data, downloads_realizados, transacoes_l
             usuario_rg=user_data.get("rg"),
             usuario_fone=user_data.get("fone"),
             usuario_apto=user_data.get("apto"),
-            ip=get_ip_address(),
-            mac=get_mac_address(),
             downloads_realizados=downloads_realizados,
             transacoes_lidas=transacoes_lidas,
             tempo_duracao=tempo_duracao,
@@ -1008,11 +1026,17 @@ def evaluate_entity_consistency(entity_type, **kwargs):
                 fields_ok = False
         elif tipo_flag == "D":
             fornecedor = parse_fornecedor(desc_f)
-            if not (fornecedor and fornecedor.strip()):
-                fields_ok = False
                 
         contas_list = kwargs.get('contas_list', [])
         conta = parse_conta(desc_completa, contas_list=contas_list)
+        for regra in kwargs.get('regras_preenchimento', []):
+            if regra['descricao_contem'].strip() and regra['descricao_contem'].casefold() in desc_completa.casefold():
+                if regra['campo'] == 'fornecedor' and tipo_flag == 'D' and not (fornecedor and fornecedor.strip()):
+                    fornecedor = regra['valor']
+                elif regra['campo'] == 'conta' and not (conta and conta.strip()):
+                    conta = regra['valor']
+        if tipo_flag == 'D' and not (fornecedor and fornecedor.strip()):
+            fields_ok = False
         if not (conta and conta.strip()):
             fields_ok = False
             
@@ -1066,7 +1090,115 @@ def evaluate_entity_consistency(entity_type, **kwargs):
     else:
         raise ValueError(f"Tipo de entidade desconhecido para validação de consistência: {entity_type}")
 
-def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root, condominio_id=None, prestacao_contas_info=None, contas_list=None):
+def _snapshot_revisoes(mes):
+    snapshot = {'mes': None, 'categorias': {}, 'subcategorias': {}, 'transacoes': {}}
+    if not mes:
+        return snapshot
+    def revisado(obj):
+        return obj.revisado_usuario == 1 and obj.consistente == 0
+    def documentos(query):
+        return [dict(caminho_local=d.caminho_local, nome_original=d.nome_original,
+                     extensao=d.extensao, consistente=d.consistente,
+                     motivo_inconsistencia=d.motivo_inconsistencia,
+                     revisado_usuario=d.revisado_usuario) for d in query]
+    if revisado(mes):
+        snapshot['mes'] = (mes.receita_total, mes.despesa_total)
+    ocorrencias = {}
+    for cat in mes.categorias.order_by(models.Categorias.id):
+        ck = (cat.tipo, cat.nome)
+        if revisado(cat):
+            snapshot['categorias'][ck] = cat.valor
+        for sub in cat.subcategorias.order_by(models.Subcategorias.id):
+            sk = ck + (sub.nome,)
+            if revisado(sub):
+                snapshot['subcategorias'][sk] = sub.valor
+            for trans in sub.transacoes.order_by(models.Transacoes.id):
+                base = sk + (trans.tipo, trans.data, trans.descricao, trans.valor)
+                n = ocorrencias.get(base, 0)
+                ocorrencias[base] = n + 1
+                if revisado(trans):
+                    snapshot['transacoes'][base + (n,)] = {
+                        'motivos': trans.motivo_inconsistencia,
+                        'campos': {campo: getattr(trans, campo) for campo in ('apartamento', 'competencia', 'fornecedor', 'conta')},
+                        'documentos': documentos(trans.lista_anexos),
+                    }
+    return snapshot
+
+def _motivos(valor):
+    try:
+        motivos = json.loads(valor or '[]')
+        return set(motivos) if isinstance(motivos, list) and all(isinstance(m, str) for m in motivos) else set()
+    except (TypeError, ValueError):
+        return set()
+
+def _reaplicar_revisao_transacao(transacao, revisao, anexos_esperados):
+    anteriores = _motivos(revisao['motivos'])
+    atuais = _motivos(transacao.motivo_inconsistencia)
+    corrigidos = set()
+    campos = {
+        'Apartamento não identificado': 'apartamento',
+        'Competência não identificada': 'competencia',
+        'Fornecedor não identificado': 'fornecedor',
+        'Conta não identificada': 'conta',
+    }
+    for motivo, campo in campos.items():
+        valor = revisao['campos'][campo]
+        if motivo in anteriores and motivo in atuais and isinstance(valor, str) and valor.strip():
+            setattr(transacao, campo, valor)
+            corrigidos.add(motivo)
+    documentos_anteriores = {d['nome_original'] for d in revisao['documentos']}
+    documentos_atuais = list(transacao.lista_anexos)
+    preservou_documento = any(d.nome_original in documentos_anteriores for d in documentos_atuais)
+    if preservou_documento and 'Despesa sem comprovantes' in anteriores & atuais:
+        corrigidos.add('Despesa sem comprovantes')
+    if preservou_documento and len(documentos_atuais) >= anexos_esperados and 'Quantidade de anexos divergente' in anteriores & atuais:
+        corrigidos.add('Quantidade de anexos divergente')
+    # Um motivo desconhecido ou uma correção vazia exige nova revisão.
+    transacao.revisado_usuario = int(not atuais if transacao.consistente else bool(atuais) and atuais <= corrigidos)
+    transacao.save()
+
+def _restaurar_documentos(modelo, campo_pai, pai_id, documentos, project_root):
+    existentes = {d.nome_original for d in modelo.select().where(campo_pai == pai_id)}
+    restaurados = []
+    for doc in documentos:
+        if doc['nome_original'] not in existentes:
+            caminho = doc['caminho_local']
+            if not caminho or not os.path.isfile(os.path.join(project_root, caminho)):
+                raise FileNotFoundError(f"Documento de revisão não encontrado: {caminho}")
+            modelo.create(**{campo_pai.name: pai_id}, **doc)
+            restaurados.append(caminho)
+            existentes.add(doc['nome_original'])
+    return restaurados
+
+def _atualizar_arquivos_mes(project_root, mes_dir, anexos_preservados, anexos_para_mover):
+    # Somente anexos elegíveis são copiados para o diretório temporário do sistema.
+    with tempfile.TemporaryDirectory(prefix="winker_revisao_") as temp_preservados:
+        staged = []
+        for caminho in dict.fromkeys(anexos_preservados):
+            origem = os.path.abspath(os.path.join(project_root, caminho))
+            copia = os.path.join(temp_preservados, str(len(staged)))
+            shutil.copy2(origem, copia)
+            staged.append((copia, origem))
+        for mov in anexos_para_mover:
+            if not os.path.isfile(mov['temp_path']):
+                raise FileNotFoundError(mov['temp_path'])
+        try:
+            if os.path.exists(mes_dir):
+                shutil.rmtree(mes_dir)
+            for copia, destino in staged:
+                os.makedirs(os.path.dirname(destino), exist_ok=True)
+                shutil.copy2(copia, destino)
+            for mov in anexos_para_mover:
+                os.makedirs(os.path.dirname(mov['caminho_final']), exist_ok=True)
+                shutil.copy2(mov['temp_path'], mov['caminho_final'])
+        except Exception:
+            # Preserva os arquivos de revisão mesmo se houver erro ao recriar a pasta.
+            for copia, destino in staged:
+                os.makedirs(os.path.dirname(destino), exist_ok=True)
+                shutil.copy2(copia, destino)
+            raise
+
+def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root, condominio_id=None, prestacao_contas_info=None, contas_list=None, regras_preenchimento=None, anexos_preservados=None):
     if contas_list is None: contas_list = []
     db_conn = models.db
     anexos_para_mover = []
@@ -1074,6 +1206,9 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
     
     try:
         with db_conn.atomic():
+            antigo = models.Meses.get_or_none((models.Meses.exibicao == exibicao) & (models.Meses.condominio_id == condominio_id))
+            snapshot = _snapshot_revisoes(antigo)
+            ocorrencias = {}
             models.Meses.delete().where((models.Meses.exibicao == exibicao) & (models.Meses.condominio_id == condominio_id)).execute()
             
             soma_cat_rec = sum(parse_currency(cat['valor']) for cat in detalhes_mes["receitas"])
@@ -1098,6 +1233,10 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                 consistente=mes_consistente, motivo_inconsistencia=mes_motivo, revisado_usuario=mes_consistente
             )
             mes_id = mes.id
+            if snapshot['mes'] is not None:
+                mes.receita_total, mes.despesa_total = snapshot['mes'][:2]
+                mes.revisado_usuario = 1
+                mes.save()
             
             if prestacao_contas_info:
                 models.PrestacoesContas.create(
@@ -1127,6 +1266,11 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                         consistente=cat_consistente, motivo_inconsistencia=cat_motivo, revisado_usuario=cat_consistente
                     )
                     cat_id = cat_obj.id
+                    ck = (tipo_flag, cat['nome'])
+                    if ck in snapshot['categorias']:
+                        cat_obj.valor = snapshot['categorias'][ck]
+                        cat_obj.revisado_usuario = 1
+                        cat_obj.save()
                     
                     for sub in cat['subcategorias']:
                         sub_val_num = parse_currency(sub['valor'])
@@ -1139,6 +1283,11 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                             consistente=sub_consistente, motivo_inconsistencia=sub_motivo, revisado_usuario=sub_consistente
                         )
                         sub_id = sub_obj.id
+                        sk = ck + (sub['nome'],)
+                        if sk in snapshot['subcategorias']:
+                            sub_obj.valor = snapshot['subcategorias'][sk]
+                            sub_obj.revisado_usuario = 1
+                            sub_obj.save()
                         
                         for item in sub['itens']:
                             desc_completa = item['nome']
@@ -1156,7 +1305,7 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                             trans_consistente, trans_motivo, apto, comp, fornecedor, conta = evaluate_entity_consistency(
                                 'transacao', tipo_flag=tipo_flag, desc_completa=desc_completa, desc_f=desc_f,
                                 anexos_esperados=anexos_esperados, anexos_baixados=anexos_baixados, despesa_anexo_valido=despesa_anexo_valido,
-                                contas_list=contas_list
+                                contas_list=contas_list, regras_preenchimento=regras_preenchimento or []
                             )
 
                             if not trans_consistente:
@@ -1169,7 +1318,10 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                                 consistente=trans_consistente, motivo_inconsistencia=trans_motivo, revisado_usuario=trans_consistente
                             )
                             transacao_id = trans_obj.id
-
+                            base = sk + (tipo_flag, data_t, desc_f, parse_currency(item['valor']))
+                            n = ocorrencias.get(base, 0)
+                            ocorrencias[base] = n + 1
+                            revisao = snapshot['transacoes'].get(base + (n,))
                             for anexo in item.get("anexos", []):
                                 temp_path = anexo["temp_path"]
                                 nome_orig = anexo["nome_original"]
@@ -1194,6 +1346,13 @@ def save_extraction_data_to_db(chave_unica, nome_mes_abbr, ano_item, rec_total_m
                                     caminho_final = os.path.join(mes_dir, nome_final)
                                     
                                     anexos_para_mover.append({"temp_path": temp_path, "caminho_final": caminho_final})
+                            if revisao is not None:
+                                motivos_anexo = {'Despesa sem comprovantes', 'Quantidade de anexos divergente'}
+                                if motivos_anexo & _motivos(revisao['motivos']) & _motivos(trans_motivo):
+                                    restaurados = _restaurar_documentos(models.Anexos, models.Anexos.transacao_id, transacao_id, revisao['documentos'], project_root)
+                                    if anexos_preservados is not None:
+                                        anexos_preservados.extend(restaurados)
+                                _reaplicar_revisao_transacao(trans_obj, revisao, anexos_esperados)
     except Exception as e:
         logger.error(f"Erro DB {chave_unica}: {e}")
         raise e
@@ -1223,8 +1382,9 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
     condo_id_extraido = None  # Será preenchido após a extração obrigatória do condomínio
     condo_nome = None
     lista_contas_db = []
+    regras_preenchimento = []
     
-    def update_current_audit():
+    def update_current_audit(status=None, erro=None):
         if auditoria_id is not None:
             duration = time.time() - start_time
             update_auditoria(
@@ -1237,6 +1397,11 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                 capturou_inadimplencia=capturou_inadimplencia,
                 capturou_membros=capturou_membros
             )
+            if status:
+                try:
+                    models.Auditoria.update(status=status, erro=erro).where(models.Auditoria.id == auditoria_id).execute()
+                except Exception as exc:
+                    logger.error('Erro ao atualizar status da auditoria: %s', exc)
             
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
@@ -1260,6 +1425,8 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
         page.on("response", handle_response)
 
         try:
+            init_db()
+            auditoria_id = create_auditoria(start_date_obj.strftime("%Y-%m"), end_date_obj.strftime("%Y-%m"))
             # Login no portal
             login_url = f"https://app.winker.com.br/intra/default/login?wl={wl}"
             page.goto(login_url, wait_until="networkidle")
@@ -1282,12 +1449,6 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
                 page.wait_for_url("**/intra", timeout=60000)
             else:
                 page.wait_for_url("**/intra", timeout=60000)
-
-            # Inicializa tabelas uma única vez no início
-            init_db()
-
-            # Cria registro inicial de auditoria (condominio_id começa como NULL)
-            auditoria_id = create_auditoria(start_date_obj.strftime("%Y-%m"), end_date_obj.strftime("%Y-%m"))
 
             portal_id, token_api = None, None
             try:
@@ -1348,6 +1509,7 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
 
             # 4. Atualiza condominio_id na auditoria assim que o id é obtido e carrega as contas do banco
             update_auditoria_condominio_id(auditoria_id, condo_id_extraido)
+            regras_preenchimento = list(models.RegrasPreenchimento.select().where(models.RegrasPreenchimento.condominio_id == condo_id_extraido).order_by(models.RegrasPreenchimento.id).dicts())
             lista_contas_db = [c.conta for c in models.Contas.select().where(models.Contas.condominio_id == condo_id_extraido)]
             membros_salvos = list(models.MembrosGestao.select().where(models.MembrosGestao.condominio_id == condo_id_extraido))
             if membros_salvos:
@@ -1692,39 +1854,29 @@ def extract_winker(username, password, wl, start_date_obj, end_date_obj, headles
 
                         try:
                             # 4. Salva no banco de dados e move anexos temporários (incluindo prestação de contas)
-                            mes_id, anexos_para_mover = save_extraction_data_to_db(
-                                chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root,
-                                condominio_id=condo_id_extraido, prestacao_contas_info=prestacao_contas_info, contas_list=lista_contas_db
-                            )
-                            if anexos_para_mover:
-                                total_downloads_anexos += len(anexos_para_mover)
-                            
-                            mes_dir = os.path.join(project_root, "anexos", str(condo_id_extraido), chave_unica)
-                            if os.path.exists(mes_dir):
-                                shutil.rmtree(mes_dir, ignore_errors=True)
-                                
-                            if anexos_para_mover:
-                                os.makedirs(mes_dir, exist_ok=True)
-                                for mov in anexos_para_mover:
-                                    t_path = mov["temp_path"]
-                                    f_path = mov["caminho_final"]
-                                    if os.path.exists(t_path):
-                                        try:
-                                            os.rename(t_path, f_path)
-                                        except Exception as err_move:
-                                            logger.error(f"  Erro ao mover anexo {t_path} para {f_path}: {err_move}")
-                            
+                            anexos_preservados = []
+                            with models.db.atomic():
+                                mes_id, anexos_para_mover = save_extraction_data_to_db(
+                                    chave_unica, nome_mes_abbr, ano_item, rec_total_mes, des_total_mes, detalhes_mes, project_root,
+                                    condominio_id=condo_id_extraido, prestacao_contas_info=prestacao_contas_info, contas_list=lista_contas_db,
+                                    regras_preenchimento=regras_preenchimento, anexos_preservados=anexos_preservados
+                                )
+                                mes_dir = os.path.join(project_root, "anexos", str(condo_id_extraido), chave_unica)
+                                _atualizar_arquivos_mes(project_root, mes_dir, anexos_preservados, anexos_para_mover)
+                            total_downloads_anexos += len(anexos_para_mover)
+
                             update_current_audit()
-                        except Exception as e:
-                            # A exceção foi tratada internamente em save_extraction_data_to_db
-                            pass
+                        except Exception:
+                            logger.exception("Falha ao salvar mês e documentos")
+                            raise
                             
                         close_last_modal(iframe)
             
             # Salvar dados de auditoria
-            update_current_audit()
+            update_current_audit(status='concluida')
         except Exception as e:
             logger.error(f"Erro inesperado durante a extração: {e}", exc_info=True)
+            update_current_audit(status='falha', erro=str(e))
         finally:
             update_current_audit()
             browser.close()

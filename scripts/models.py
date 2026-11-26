@@ -48,6 +48,15 @@ class Contas(BaseModel):
     class Meta:
         table_name = 'contas'
 
+class RegrasPreenchimento(BaseModel):
+    condominio_id = ForeignKeyField(Condominio, on_delete='CASCADE', db_column='condominio_id')
+    descricao_contem = CharField()
+    campo = CharField(constraints=[Check("campo IN ('fornecedor', 'conta')")])
+    valor = CharField()
+
+    class Meta:
+        table_name = 'regras_preenchimento'
+
 class Meses(BaseModel):
     condominio_id = ForeignKeyField(Condominio, backref='meses', on_delete='CASCADE', db_column='condominio_id')
     exibicao = CharField(null=True)
@@ -148,6 +157,8 @@ class Auditoria(BaseModel):
     capturou_condominio = IntegerField(null=True, default=0)
     capturou_inadimplencia = IntegerField(null=True, default=0)
     capturou_membros = IntegerField(null=True, default=0)
+    status = CharField(null=True)
+    erro = TextField(null=True)
 
     class Meta:
         table_name = 'auditoria'
@@ -202,6 +213,6 @@ def init_models(db_path):
     db.init(db_path, pragmas={'foreign_keys': 1})
     db.connect(reuse_if_open=True)
     db.create_tables([
-        Condominio, MembrosGestao, Contas, Meses, Categorias, Subcategorias, 
+        Condominio, MembrosGestao, Contas, RegrasPreenchimento, Meses, Categorias, Subcategorias,
         Transacoes, Anexos, PrestacoesContas, Auditoria, PreferenciasUsuario, Renegociacao, Taxas
     ], safe=True)
