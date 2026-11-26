@@ -56,6 +56,7 @@ export class ConfiguracoesComponent implements OnInit {
     isSaving = false;
     maxDate = new Date();
     regraArrastadaIndex: number | null = null;
+    destinoArrasteRegra: number | null = null;
     displayRegraDialog = false;
     regraForm: FormGroup;
     editandoRegraIndex: number | null = null;
@@ -277,18 +278,63 @@ export class ConfiguracoesComponent implements OnInit {
 
     iniciarArrasteRegra(index: number, event: DragEvent) {
         this.regraArrastadaIndex = index;
-        event.dataTransfer?.setData('text/plain', String(index));
-        if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+        this.destinoArrasteRegra = index;
+        const chip = (event.currentTarget as HTMLElement | null)?.closest('p-chip');
+        if (event.dataTransfer) {
+            event.dataTransfer.setData('text/plain', String(index));
+            event.dataTransfer.effectAllowed = 'move';
+            if (chip instanceof HTMLElement) {
+                const bounds = chip.getBoundingClientRect();
+                event.dataTransfer.setDragImage(chip, event.clientX - bounds.left, event.clientY - bounds.top);
+            }
+        }
+    }
+
+    sobreRegra(index: number, event: DragEvent) {
+        if (this.regraArrastadaIndex === null) return;
+        event.preventDefault();
+        if (index === this.regraArrastadaIndex || index === this.destinoArrasteRegra) return;
+        const container = (event.currentTarget as HTMLElement | null)?.parentElement;
+        const chips = Array.from(container?.querySelectorAll<HTMLElement>(':scope > p-chip') ?? []);
+        const posicoes = chips.map(chip => chip.getBoundingClientRect());
+        this.destinoArrasteRegra = index;
+        this.cdr.detectChanges();
+        chips.forEach((chip, i) => {
+            const atual = chip.getBoundingClientRect();
+            const x = posicoes[i].left - atual.left;
+            const y = posicoes[i].top - atual.top;
+            if (x || y) chip.animate([
+                { transform: `translate(${x}px, ${y}px)` },
+                { transform: 'translate(0, 0)' }
+            ], { duration: 160, easing: 'ease-out' });
+        });
+    }
+
+    posicaoVisualRegra(index: number): number {
+        const origem = this.regraArrastadaIndex;
+        const destino = this.destinoArrasteRegra;
+        if (origem === null || destino === null) return index;
+        if (index === origem) return destino;
+        if (origem < destino && index > origem && index <= destino) return index - 1;
+        if (origem > destino && index >= destino && index < origem) return index + 1;
+        return index;
+    }
+
+    finalizarArrasteRegra() {
+        this.regraArrastadaIndex = null;
+        this.destinoArrasteRegra = null;
     }
 
     soltarRegra(index: number, event: DragEvent) {
+        if (this.regraArrastadaIndex === null) return;
         event.preventDefault();
         const origem = this.regraArrastadaIndex;
-        this.regraArrastadaIndex = null;
-        if (origem === null || origem === index) return;
+        const destino = index === origem ? this.destinoArrasteRegra : index;
+        this.finalizarArrasteRegra();
+        if (destino === null || origem === destino) return;
         const regra = this.regras.at(origem);
         this.regras.removeAt(origem);
-        this.regras.insert(index, regra);
+        this.regras.insert(destino, regra);
         this.configForm.markAsDirty();
     }
 

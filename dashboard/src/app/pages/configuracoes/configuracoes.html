@@ -192,15 +192,16 @@
                         <label class="font-medium">Regras de preenchimento</label>
                         <div class="flex items-center justify-start flex-wrap gap-3 mt-1">
                             <p-chip *ngFor="let regra of regras.controls; let i = index; trackBy: trackRegra"
-                                    (dragover)="$event.preventDefault()"
-                                    (drop)="soltarRegra(i, $event)" (dragend)="regraArrastadaIndex = null"
+                                    [style.order]="posicaoVisualRegra(i)" [class.opacity-40]="regraArrastadaIndex === i"
+                                    (dragover)="sobreRegra(i, $event)"
+                                    (drop)="soltarRegra(i, $event)" (dragend)="finalizarArrasteRegra()"
                                     [label]="'Se descrição contém ' + regra.value.descricao_contem + ' então ' + regra.value.campo + ' é ' + regra.value.valor"
                                     [removable]="true" (onRemove)="removerRegra(i, $event)" (click)="editarRegra(i, $event)"
                                     styleClass="bg-primary text-primary-contrast cursor-pointer transition-all duration-200" class="text-sm font-medium">
                                 <span class="pi pi-ellipsis-v regra-arraste" draggable="true" aria-label="Arrastar para reordenar" (click)="$event.stopPropagation()" (dragstart)="iniciarArrasteRegra(i, $event)"></span>
                             </p-chip>
                             <p-chip *ngIf="regras.controls.length === 0" label="Nenhuma regra de preenchimento cadastrada" styleClass="bg-transparent border-transparent text-surface-500 italic"></p-chip>
-                            <p-button icon="pi pi-plus" [rounded]="true" size="small" pTooltip="Adicionar regra" tooltipPosition="right" (onClick)="showRegraDialog()"></p-button>
+                            <p-button [style.order]="regras.length" icon="pi pi-plus" [rounded]="true" size="small" pTooltip="Adicionar regra" tooltipPosition="right" (onClick)="showRegraDialog()"></p-button>
                         </div>
                     </div>
                 </p-tabpanel>
@@ -317,9 +318,9 @@
 <p-dialog [header]="editandoRegraIndex !== null ? 'Editar Regra' : 'Adicionar Regra'" [modal]="true" [(visible)]="displayRegraDialog" [style]="{ width: '25rem' }">
     <form [formGroup]="regraForm" (ngSubmit)="salvarRegra()" (keydown.enter)="$event.preventDefault()">
         <div class="flex flex-col gap-4">
-            <div class="flex flex-col gap-2"><label for="regra_descricao" class="font-semibold text-sm">Descrição contém</label><input pInputText id="regra_descricao" formControlName="descricao_contem" autocomplete="off" /></div>
-            <div class="flex flex-col gap-2"><span class="font-semibold text-sm">Campo</span><div class="flex gap-4"><label class="flex items-center gap-2"><p-radiobutton inputId="regra_fornecedor" formControlName="campo" value="fornecedor"></p-radiobutton>Fornecedor</label><label class="flex items-center gap-2"><p-radiobutton inputId="regra_conta" formControlName="campo" value="conta"></p-radiobutton>Conta</label></div></div>
-            <div class="flex flex-col gap-2"><label for="regra_valor" class="font-semibold text-sm">Resultado</label><input pInputText id="regra_valor" formControlName="valor" autocomplete="off" /></div>
+            <div class="flex flex-col gap-2"><label for="regra_descricao" class="font-semibold text-sm">Se descrição contém</label><input pInputText id="regra_descricao" formControlName="descricao_contem" autocomplete="off" /></div>
+            <div class="flex flex-col gap-2"><span class="font-semibold text-sm">Então o campo</span><div class="flex gap-4"><label class="flex items-center gap-2"><p-radiobutton inputId="regra_fornecedor" formControlName="campo" value="fornecedor"></p-radiobutton>Fornecedor</label><label class="flex items-center gap-2"><p-radiobutton inputId="regra_conta" formControlName="campo" value="conta"></p-radiobutton>Conta</label></div></div>
+            <div class="flex flex-col gap-2"><label for="regra_valor" class="font-semibold text-sm">Deve ser</label><input pInputText id="regra_valor" formControlName="valor" autocomplete="off" /></div>
             <div class="flex justify-end gap-2 mt-4"><p-button label="Cancelar" severity="secondary" (onClick)="displayRegraDialog = false" [text]="true"></p-button><p-button [label]="editandoRegraIndex !== null ? 'Salvar' : 'Adicionar'" type="submit" [disabled]="regraForm.invalid"></p-button></div>
         </div>
     </form>

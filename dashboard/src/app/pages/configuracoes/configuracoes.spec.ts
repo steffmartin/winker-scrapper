@@ -47,7 +47,10 @@ describe('Configurações financeiras', () => {
         component.regraForm.patchValue({ valor: 'Outro banco' });
         component.salvarRegra();
         component.iniciarArrasteRegra(0, new DragEvent('dragstart'));
-        component.soltarRegra(1, new DragEvent('drop'));
+        component.sobreRegra(1, new DragEvent('dragover'));
+        expect([component.posicaoVisualRegra(0), component.posicaoVisualRegra(1)]).toEqual([1, 0]);
+        expect(component.regras.value.map((r: any) => r.campo)).toEqual(['fornecedor', 'conta']);
+        component.soltarRegra(0, new DragEvent('drop'));
         expect(component.regras.value.map((r: any) => r.campo)).toEqual(['conta', 'fornecedor']);
         expect(component.regras.at(1).value.descricao_contem).toBe(' tarifa ');
         expect(component.configForm.dirty).toBeTrue();
