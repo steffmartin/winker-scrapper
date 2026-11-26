@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Dashboard } from './dashboard';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
+import { Subject } from 'rxjs';
 
 describe('Dashboard', () => {
     let component: Dashboard;
@@ -477,5 +478,173 @@ describe('Dashboard', () => {
         expect(component.loadingTreeTable).toBeFalse();
         expect(component.chartData.labels.length).toBe(2);
         expect(component.chartData.datasets.length).toBe(2);
+    });
+
+    it('assina configUpdate$ quando presente e tolera plugin sem área ou labels', () => {
+        const api = {
+            get_dashboard_kpis: () => Promise.resolve({ status: 'success', data: {} }),
+            get_transacoes: () => Promise.resolve({ status: 'success', data: { tree: [] } })
+        };
+        (window as any).pywebview = { api };
+        (component.layoutService as any).configUpdate$ = new Subject<void>();
+        component.ngOnInit();
+        (component.layoutService as any).configUpdate$.next();
+        expect(component.chartOptions).toBeDefined();
+        delete (window as any).pywebview;
+
+        component.chartPlugins[0].afterDraw({});
+        component.chartPlugins[0].afterDraw({ data: { labels: ['SEM ANO', 'X/2024'] },
+            chartArea: { top: 0, bottom: 10 }, scales: { x: { getPixelForValue: () => 0 } }, ctx: {} });
+    });
+
+    it('usa a API que chega durante a espera ou cai no modo simulação', async () => {
+        jasmine.clock().install();
+        try {
+            delete (window as any).pywebview;
+            component.loadingKpis = true;
+            component.detectEnvironmentAndLoad();
+            const api = {
+                get_dashboard_kpis: jasmine.createSpy().and.resolveTo({ status: 'success', data: {} }),
+                get_transacoes: jasmine.createSpy().and.resolveTo({ status: 'success', data: { tree: [] } })
+            };
+            (window as any).pywebview = { api };
+            jasmine.clock().tick(1000);
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(api.get_dashboard_kpis).toHaveBeenCalled();
+            expect(api.get_transacoes).toHaveBeenCalled();
+
+            component.isMockMode = false;
+            component.loadingKpis = true;
+            component.loadingTreeTable = true;
+            delete (window as any).pywebview;
+            component.detectEnvironmentAndLoad();
+            (window as any).pywebview = {};
+            jasmine.clock().tick(1000);
+            expect(component.isMockMode).toBeTrue();
+        } finally {
+            jasmine.clock().uninstall();
+            delete (window as any).pywebview;
+        }
+    });
+
+    it('expande níveis aninhados e usa nós filtrados no expandAll', () => {
+        const folha = { data: { tipo_node: 'transacao', valor: 1 }, expanded: false };
+        component.nodes = [
+            { data: { tipo_node: 'mes' }, expanded: true, children: [
+                { data: { tipo_node: 'tipo' }, expanded: false, children: [folha] }
+            ] },
+            { data: { tipo_node: 'mes' }, expanded: false, children: [] }
+        ];
+        component.expandAll();
+        expect(component.nodes[0].children![0].expanded).toBeTrue();
+        expect(component.nodes[1].expanded).toBeFalse();
+
+        (component as any).nodesFiltrados = [...component.nodes];
+        component.expandAll();
+        expect((component as any).nodesFiltrados[0].children![0].expanded).toBeTrue();
+        (component as any).nodesFiltrados = null;
+    });
+
+    it('limpa filtro vazio e cobre fallbacks do filtro global', () => {
+        const tabela = { reset: jasmine.createSpy(), filterGlobal: jasmine.createSpy() };
+        component.nodes = component.processNodes([{ data: { tipo_node: 'mes', descricao: 'JAN/2024', valor_total: 0 }, children: [
+            { data: { tipo_node: 'tipo', descricao: 'Despesas', valor_total: 0 }, children: [
+                { data: { tipo_node: 'categoria', descricao: 'Geral', valor_total: 0 }, children: [
+                    { data: { tipo_node: 'subcategoria', descricao: 'S' }, children: [
+                        { data: { tipo_node: 'transacao', descricao: 'Alvo', apartamento: null, valor: 0 } },
+                        { data: { tipo_node: 'transacao', descricao: 'Outro', apartamento: '101', valor: null } }
+                    ] }
+                ] }
+            ] },
+            { data: { tipo_node: 'sem_filhos', descricao: 'Vazio' } }
+        ] }]);
+        component.globalFilterValue = '';
+        component.applyGlobalFilter(tabela);
+        expect((component as any).nodesFiltrados).toBeNull();
+
+        component.globalFilterValue = '101';
+        component.applyGlobalFilter(tabela);
+        const sub = component.nodesExibidos[0].children![0].children![0].children![0];
+        expect(sub.data.porcentagem).toBe(0);
+        expect(component.nodesExibidos[0].children!.some(c => c.data.descricao === 'Vazio')).toBeFalse();
+    });
+
+    it('monta gráfico mensal com nós e valores ausentes', () => {
+        component.updateChart(null as any);
+        expect(component.isSingleMonth).toBeTrue();
+        expect(component.chartData.datasets).toEqual([]);
+
+        component.updateChart([{ data: { tipo_node: 'mes', descricao: 'JAN/2024' } }] as any);
+        expect(component.chartData.datasets).toEqual([]);
+
+        component.updateChart([
+            { data: { tipo_node: 'mes', descricao: 'JAN/2024' }, children: [
+                { data: { tipo_node: 'tipo', descricao: 'Receitas' }, children: [
+                    { data: { tipo_node: 'categoria', descricao: 'R' }, children: [] }
+                ] },
+                { data: { tipo_node: 'tipo', descricao: 'Despesas', valor_total: 30 }, children: [
+                    { data: { tipo_node: 'categoria', descricao: 'D', valor_total: 30 }, children: [] }
+                ] },
+                { data: { tipo_node: 'tipo', descricao: 'Outros' } }
+            ] }
+        ] as any);
+        expect(component.isSingleMonth).toBeTrue();
+        expect(component.chartData.datasets.length).toBe(2);
+        expect(component.chartData.datasets[0].data).toEqual([0, 0]);
+        expect(component.chartData.datasets[1].data).toEqual([0, 30]);
+
+        component.updateChart([
+            { data: { tipo_node: 'mes', descricao: 'MAR/2024' } },
+            { data: { tipo_node: 'mes', descricao: 'ABR/2024' }, children: [
+                { data: { tipo_node: 'tipo', descricao: 'Receitas' } }
+            ] }
+        ] as any);
+        expect(component.isSingleMonth).toBeFalse();
+        expect(component.chartData.datasets[0].data[0]).toBeNaN();
+        expect(component.chartData.datasets[1].data[0]).toBeNaN();
+    });
+
+    it('cobra callbacks do tooltip e ticks sem dados de gráfico', () => {
+        component.initChartOptions();
+        const opcoes = component.chartOptions;
+        expect(opcoes.plugins.tooltip.callbacks.label({ dataset: { label: '' }, parsed: { y: 10 } })).toContain('10');
+        expect(opcoes.plugins.tooltip.callbacks.label({ dataset: { label: 'Receitas' }, parsed: { y: null } })).toBe('Receitas: ');
+        component.isSingleMonth = false;
+        component.chartData = null;
+        expect(opcoes.scales.x.ticks.color({ index: 0 })).toBeTruthy();
+        expect(opcoes.scales.x.ticks.font({ index: 0 }).weight).toBe(500);
+    });
+
+    it('trata anexos sem dados, rejeições e membro sem cargo', async () => {
+        const erro = spyOn(console, 'error');
+        const evento = new MouseEvent('click');
+        (window as any).pywebview = { api: {
+            get_anexos_transacao: jasmine.createSpy().and.callFake(() => Promise.resolve({ status: 'success' })),
+            get_prestacoes_contas_mes: jasmine.createSpy().and.callFake(() => Promise.reject(new Error('rede'))),
+            abrir_arquivo_local: () => Promise.resolve({ status: 'success' })
+        } };
+        component.isMockMode = false;
+        component.abrirAnexos({ tipo_node: 'transacao', id: 1 }, evento);
+        await Promise.resolve();
+        expect(component.anexosAtuais).toEqual([]);
+        component.abrirAnexos({ tipo_node: 'mes', competencia: '2025-01' }, evento);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(erro).toHaveBeenCalled();
+
+        const rejeitar = jasmine.createSpy().and.callFake(() => Promise.reject(new Error('rede')));
+        (window as any).pywebview.api.get_anexos_transacao = rejeitar;
+        component.abrirAnexos({ tipo_node: 'transacao', id: 2 }, evento);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(erro).toHaveBeenCalled();
+
+        component.fetchKpis({ get_dashboard_kpis: () => Promise.resolve({ status: 'success', data: {
+            gestao: { membros: [{ nome: 'Síndico Um', cargo: 'Síndico' }, { nome: 'Sem Cargo' }] }
+        } }) });
+        await Promise.resolve();
+        expect(component.demaisMembrosList[0].cargo).toBe('Membro');
+        delete (window as any).pywebview;
     });
 });

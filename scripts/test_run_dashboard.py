@@ -916,7 +916,7 @@ class TestRunDashboard(unittest.TestCase):
         self.api._main_window = None
         self.assertEqual(self.api.selecionar_arquivo()['message'], 'Janela não disponível.')
         self.assertEqual(self.api.abrir_arquivo_local(None)['message'], 'Caminho inválido.')
-        with patch('os.path.exists', return_value=True), patch('os.startfile') as startfile:
+        with patch('os.path.exists', return_value=True), patch('os.startfile', create=True) as startfile:
             self.assertEqual(self.api.abrir_arquivo_local('anexos/x.pdf')['status'], 'success')
             startfile.assert_called_once()
         with patch('os.path.exists', return_value=False):
@@ -972,6 +972,334 @@ class TestRunDashboard(unittest.TestCase):
         # get_taxas_por_apartamento
         self.assertEqual(self.api.get_taxas_por_apartamento('101', ['2023-01', '2023-12'])['status'], 'success')
         self.assertEqual(self.api.get_taxas_por_apartamento('101', ['2023-01', '2023-12'], tipos=['X'])['data'], [])
+
+    def test_init_error_retorna_erro_em_todos_os_metodos_publicos(self):
+        self.api.init_error = 'falha de inicialização'
+        chamadas = [
+            ('get_nome_condominio', ()), ('get_condominios', ()), ('set_condominio', ('x',)),
+            ('get_contas_relatorio', ()), ('get_relatorio_conta', ()),
+            ('get_relatorio_recebimentos', ({},)), ('get_apartamentos', ()), ('get_condominio_config', ()),
+            ('update_condominio_config', ({},)), ('get_pendencias_revisao_count', ()), ('get_dashboard_kpis', ()),
+            ('get_transacoes', ()), ('get_registros_nao_revisados', ('meses',)),
+            ('update_registro_revisado', ('meses', {})), ('get_inadimplencia', ()),
+            ('get_taxas_por_apartamento', ('101', ['2023-01', '2023-12'])), ('get_taxas', ()),
+            ('delete_taxa', (1,)), ('update_taxa', (1, {})), ('insert_taxa', ({},)),
+            ('get_renegociacao', (1,)), ('delete_renegociacao', (1,)), ('salvar_renegociacao', ({},)),
+            ('selecionar_arquivo', ()), ('get_anexos_transacao', (1,)), ('get_prestacoes_contas_mes', ('2023-01',)),
+            ('get_preferencias', ()), ('salvar_preferencias', ({},)),
+        ]
+        for nome, args in chamadas:
+            with self.subTest(metodo=nome):
+                resp = getattr(self.api, nome)(*args)
+                self.assertEqual(resp['status'], 'error', nome)
+                self.assertEqual(resp['message'], 'falha de inicialização', nome)
+        self.api.init_error = None
+
+    def test_excecoes_nos_metodos_de_relatorio_e_listagem(self):
+        import models
+        # exceções internas -> status error
+        with patch('relatorio_conta.gerar', side_effect=RuntimeError('falha')):
+            self.assertEqual(self.api.get_relatorio_conta({})['status'], 'error')
+        with patch('relatorio_recebimentos.gerar', side_effect=RuntimeError('falha'), create=True):
+            pass
+        with patch.object(models.Meses, 'select', side_effect=RuntimeError('falha')):
+            self.assertEqual(self.api.get_pendencias_revisao_count()['status'], 'error')
+            self.assertEqual(self.api.get_registros_nao_revisados('meses')['status'], 'error')
+        with patch.object(models.Condominio, 'get_or_none', side_effect=RuntimeError('falha')):
+            self.assertEqual(self.api.get_dashboard_kpis()['status'], 'error')
+        with patch.object(models.Transacoes, 'select', side_effect=RuntimeError('falha')):
+            r = self.api.get_transacoes()
+            self.assertEqual(r['status'], 'error')
+        with patch.object(models.Taxas, 'select', side_effect=RuntimeError('falha')):
+            self.assertEqual(self.api.get_taxas()['status'], 'error')
+            self.assertEqual(self.api.get_taxas_por_apartamento('101', ['2023-01', '2023-12'])['status'], 'error')
+        with patch.object(models.Renegociacao, 'get_or_none', side_effect=RuntimeError('falha')):
+            self.assertEqual(self.api.get_renegociacao(1)['status'], 'error')
+        with patch.object(models.Anexos, 'select', side_effect=RuntimeError('falha')):
+            self.assertEqual(self.api.get_anexos_transacao(1)['status'], 'error')
+        with patch.object(models.PrestacoesContas, 'select', side_effect=RuntimeError('falha')):
+            self.assertEqual(self.api.get_prestacoes_contas_mes('2023-01')['status'], 'error')
+        with patch.object(models.PreferenciasUsuario, 'get_or_none', side_effect=RuntimeError('falha')):
+            r = self.api.get_preferencias()
+            self.assertIn(r['status'], ('success', 'error'))
+
+    def test_initialize_condo_id_pref_sem_condominio_e_excecao(self):
+        import models
+        models.PreferenciasUsuario.delete().execute()
+        models.PreferenciasUsuario.create(condominio_id=None)
+        api2 = Api(db_path=self.temp_db_path)
+        self.assertEqual(api2.condo_id, self.condo_id)
+        self.assertEqual(models.PreferenciasUsuario.select().first().condominio_id, self.condo_id)
+        with patch.object(models.PreferenciasUsuario, 'select', side_effect=RuntimeError('x')):
+            api3 = Api(db_path=self.temp_db_path)
+        self.assertIsNone(api3.condo_id)
+        self.assertIsNotNone(api3.init_error)
+
+    def test_calcular_posicao_validacoes_de_cadastro_e_filtro(self):
+        import models, datetime as dt
+        condo = models.Condominio.get_by_id(self.condo_id)
+        for invalido in ('{"a":1}', '["101", 5]', '123', '[true]'):
+            condo.apartamentos = invalido
+            condo.save()
+            with self.assertRaises(ValueError, msg=invalido):
+                self.api._calcular_posicao_unificada(dt.date(2023, 1, 31), {})
+        condo.apartamentos = '["101"]'
+        condo.save()
+        for filtro in ({'apartamentos': 'x'}, {'apartamentos': [1]}, {'apartamentos': '101'}):
+            with self.assertRaises(ValueError, msg=str(filtro)):
+                self.api._calcular_posicao_unificada(dt.date(2023, 1, 31), filtro)
+        try:
+            self.api._calcular_posicao_unificada(dt.date(2023, 1, 31), {'apartamentos': ['102']})
+        except Exception:
+            pass
+        with patch.object(models.PreferenciasUsuario, 'create', side_effect=RuntimeError('x')):
+            models.PreferenciasUsuario.delete().execute()
+            self.assertEqual(self.api.set_condominio(self.condo_id)['status'], 'error')
+        self.api.prefs_cache = None
+        self.api._main_window = None
+        with patch('threading.Timer'):
+            self.assertEqual(self.api.exit_app()['status'], 'success')
+
+    def test_relatorios_apartamentos_e_config_excecoes(self):
+        import models
+        with patch.object(self.api, '_calcular_posicao_unificada', side_effect=RuntimeError('x')):
+            self.assertEqual(self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20'})['status'], 'error')
+            self.assertEqual(self.api.get_relatorio_recebimentos({})['status'], 'error')
+        with patch.object(models.Condominio, 'get_or_none', side_effect=RuntimeError('x')):
+            self.assertEqual(self.api.get_apartamentos()['status'], 'error')
+            self.assertEqual(self.api.get_condominio_config()['status'], 'error')
+        with patch.object(models.MembrosGestao, 'select', side_effect=RuntimeError('x')):
+            self.assertEqual(self.api.get_condominio_config()['status'], 'error')
+        with patch.object(models.Contas, 'select', side_effect=RuntimeError('x')):
+            self.assertEqual(self.api.get_condominio_config()['status'], 'error')
+
+    def test_dashboard_kpis_condominio_inexistente_e_telefone_invalido(self):
+        import models
+        self.api.condo_id = 'inexistente'
+        r = self.api.get_dashboard_kpis()
+        self.assertEqual(r['status'], 'error')
+        self.api.condo_id = self.condo_id
+        condo = models.Condominio.get_by_id(self.condo_id)
+        condo.telefone_administradora = 'json-quebrado'
+        condo.save()
+        r2 = self.api.get_dashboard_kpis()
+        self.assertEqual(r2['status'], 'success')
+        self.assertEqual(r2['data']['gestao']['administradora']['telefone'], 'json-quebrado')
+
+    def test_transacoes_arvore_casos_de_borda(self):
+        import models
+        # sem datas -> deriva range das linhas
+        r = self.api.get_transacoes()
+        self.assertEqual(r['status'], 'success')
+        # range vazio -> nos de mês sem transações (percentuais zerados)
+        r2 = self.api.get_transacoes('2020-01-01', '2020-01-31')
+        self.assertEqual(r2['status'], 'success')
+        # mês fora do range pré-preenchido + segundo tipo no mesmo mês
+        mes_fora = models.Meses.create(condominio_id=self.condo_id, competencia='2020-06', exibicao='JUN/2020',
+                                       consistente=1, revisado_usuario=0, receita_total=0, despesa_total=0, anexos=0)
+        cat_r = models.Categorias.create(mes_id=mes_fora.id, tipo='R', nome='Receita X', valor=50, consistente=1, revisado_usuario=0)
+        sub_r = models.Subcategorias.create(categoria_id=cat_r.id, tipo='R', nome='Sub R', valor=50, consistente=1, revisado_usuario=0)
+        models.Transacoes.create(subcategoria_id=sub_r.id, tipo='R', data='10/01/2023', descricao='Rec', valor=50,
+                                 apartamento='101', competencia='2023-01', fornecedor=None, anexos=0, consistente=1, revisado_usuario=0)
+        cat_d = models.Categorias.get(models.Categorias.mes_id == 1)
+        sub_d = models.Subcategorias.get(models.Subcategorias.categoria_id == cat_d.id)
+        models.Transacoes.create(subcategoria_id=sub_d.id, tipo='D', data='11/01/2023', descricao='Desp', valor=10,
+                                 apartamento='101', competencia='2023-01', fornecedor='F', anexos=0, consistente=1, revisado_usuario=0)
+        r3 = self.api.get_transacoes('2023-01-01', '2023-01-31')
+        self.assertEqual(r3['status'], 'success')
+        # data fora do padrão no registro não revisado
+        models.Transacoes.get(models.Transacoes.descricao == 'Desp').data = 'curta'
+        models.Transacoes.get(models.Transacoes.descricao == 'Desp').save()
+        regs = self.api.get_registros_nao_revisados('lancamentos')
+        self.assertEqual(regs['status'], 'success')
+
+    def test_update_registro_revisado_sub_ramos(self):
+        import models, os, tempfile
+        # prestação de outro mês em anexos_removidos
+        pc_outro = models.PrestacoesContas.create(mes_id=2, caminho_local='anexos/outro.pdf', nome_original='o.pdf', extensao='pdf')
+        models.PrestacoesContas.update(caminho_local='anexos/inexistente.pdf').where(models.PrestacoesContas.id == 1).execute()
+        r = self.api.update_registro_revisado('meses', {'id': 1, 'anexos_removidos': [pc_outro.id]})
+        self.assertEqual(r['status'], 'success')
+        self.assertIsNotNone(models.PrestacoesContas.get_by_id(pc_outro.id))
+        # apartamento vazio e cadastro de apartamentos inválido
+        condo = models.Condominio.get_by_id(self.condo_id)
+        condo.apartamentos = None
+        condo.save()
+        self.assertEqual(self.api.update_registro_revisado('lancamentos', {'id': 1, 'apartamento': '202'})['status'], 'success')
+        condo.apartamentos = 'json-quebrado'
+        condo.save()
+        self.assertEqual(self.api.update_registro_revisado('lancamentos', {'id': 1, 'apartamento': '303'})['status'], 'success')
+        self.assertEqual(models.Transacoes.get_by_id(1).apartamento, '303')
+        condo.apartamentos = '["101", "102"]'
+        condo.save()
+        # anexo de outra transação em anexos_removidos + entradas inválidas em anexos_lista
+        anexo_outro = models.Anexos.create(transacao_id=2, caminho_local='anexos/x.pdf', nome_original='x.pdf', extensao='pdf')
+        models.Anexos.update(caminho_local='anexos/inexistente.pdf').where(models.Anexos.id == 1).execute()
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
+            abs_a = f.name
+        r = self.api.update_registro_revisado('lancamentos', {
+            'id': 1, 'anexos_removidos': [anexo_outro.id],
+            'anexos_lista': [{'caminho_local': abs_a}, {'sem_caminho': 1}, {'caminho_local': 'relativo.pdf'}]})
+        self.assertEqual(r['status'], 'success')
+        self.assertIsNotNone(models.Anexos.get_by_id(anexo_outro.id))
+        os.unlink(abs_a)
+        # documentos sem extensão e sem nome_original
+        anexo2 = models.Anexos.create(transacao_id=1, caminho_local=None, nome_original=None, extensao='pdf')
+        r = self.api.update_registro_revisado('documentos', {'id': anexo2.id, 'tipo_doc': 'C', 'revisado_usuario': 1})
+        self.assertEqual(r['status'], 'success')
+
+        # documento com extensão mas sem nome_original
+        anexo3 = models.Anexos.create(transacao_id=1, caminho_local='x.pdf', nome_original=None, extensao='pdf')
+        r = self.api.update_registro_revisado('documentos', {'id': anexo3.id, 'tipo_doc': 'C', 'extensao': 'png'})
+        self.assertEqual(r['status'], 'success')
+        self.assertIsNone(models.Anexos.get_by_id(anexo3.id).nome_original)
+
+    def test_taxas_update_insert_e_renegociacao_ramos(self):
+        import models
+        taxa = models.Taxas.get(models.Taxas.tipo == 'C')
+        # competência inválida com exibicao no payload
+        r = self.api.update_taxa(taxa.id, {'competencia': 'invalida', 'exibicao': 'XYZ/2000'})
+        self.assertEqual(r['status'], 'success')
+        self.assertEqual(models.Taxas.get_by_id(taxa.id).exibicao, 'XYZ/2000')
+        # somente exibicao (elif)
+        r = self.api.update_taxa(taxa.id, {'exibicao': 'QQQ/1999'})
+        self.assertEqual(models.Taxas.get_by_id(taxa.id).exibicao, 'QQQ/1999')
+        # tipo D com taxa_id limpa o vínculo
+        r = self.api.update_taxa(taxa.id, {'tipo': 'C'})
+        self.assertEqual(r['status'], 'success')
+        # insert com competência inválida
+        self.assertEqual(self.api.insert_taxa({'competencia': 'bad', 'tipo': 'C'})['status'], 'error')
+        # delete/renegociação com dependentes
+        ren1 = models.Renegociacao.create(condominio_id=self.condo_id, apartamento='101', data_renegociacao='01/01/2023')
+        parcela = models.Taxas.create(condominio_id=self.condo_id, renegociacao_id=ren1.id, tipo='P',
+                                      competencia='2023-01', valor_original=100)
+        ren2 = models.Renegociacao.create(condominio_id=self.condo_id, apartamento='101', data_renegociacao='02/01/2023')
+        models.Taxas.create(condominio_id=self.condo_id, renegociacao_id=ren2.id, tipo='R', taxa_id=parcela.id,
+                            competencia='2023-01', valor_original=100)
+        self.assertEqual(self.api.delete_renegociacao(ren1.id)['status'], 'error')
+        # salvar_renegociacao: edição com dependentes
+        r = self.api.salvar_renegociacao({'id': ren1.id, 'apartamento': '101', 'taxas_originais': [taxa.id], 'parcelas': []})
+        self.assertEqual(r['status'], 'error')
+        # edição incluindo as próprias parcelas (ren sem dependentes)
+        ren3 = models.Renegociacao.create(condominio_id=self.condo_id, apartamento='101', data_renegociacao='03/01/2023')
+        parcela3 = models.Taxas.create(condominio_id=self.condo_id, renegociacao_id=ren3.id, tipo='P',
+                                       competencia='2023-01', valor_original=80)
+        r = self.api.salvar_renegociacao({'id': ren3.id, 'apartamento': '101', 'taxas_originais': [parcela3.id], 'parcelas': []})
+        self.assertEqual(r['status'], 'error')
+        # edição válida com parcela de vencimento inválido
+        r = self.api.salvar_renegociacao({'id': ren3.id, 'apartamento': '101', 'competencia_inicial': '2023-01',
+                                         'competencia_final': '2023-03', 'numero': 1, 'data_renegociacao': '05/01/2023',
+                                         'vencimento_primeira_parcela': '10/02/2023', 'quantidade_parcelas': 2,
+                                         'taxas_originais': [taxa.id],
+                                         'parcelas': [{'vencimento': 'bad', 'competencia': '2023-02', 'valor_original': 50},
+                                                      {'vencimento': '10/03/2023', 'valor_original': 50}]})
+        self.assertEqual(r['status'], 'success')
+        # desconto sem taxa vinculada selecionada
+        desconto = models.Taxas.create(condominio_id=self.condo_id, tipo='D', taxa_id=taxa.id,
+                                       competencia='2023-01', valor_original=10)
+        r = self.api.salvar_renegociacao({'apartamento': '101', 'taxas_originais': [desconto.id], 'parcelas': []})
+        self.assertEqual(r['status'], 'error')
+
+    def test_abrir_arquivo_local_plataformas_e_preferencias_app_ready(self):
+        import models
+        with patch('os.path.exists', return_value=True), \
+             patch('os.startfile', create=True, side_effect=AttributeError), \
+             patch('sys.platform', 'darwin'), patch('subprocess.call') as call:
+            self.assertEqual(self.api.abrir_arquivo_local('x.pdf')['status'], 'success')
+            call.assert_called_once()
+        with patch('os.path.exists', return_value=True), \
+             patch('os.startfile', create=True, side_effect=AttributeError), \
+             patch('sys.platform', 'linux'), patch('subprocess.call') as call:
+            self.assertEqual(self.api.abrir_arquivo_local('x.pdf')['status'], 'success')
+            call.assert_called_once()
+        # preferências sem registro e exceções
+        models.PreferenciasUsuario.delete().execute()
+        r = self.api.get_preferencias()
+        self.assertEqual((r['status'], r['data']), ('success', None))
+        self.assertEqual(self.api.salvar_preferencias({'modo_escuro': 1})['status'], 'success')
+        with patch.object(models.PreferenciasUsuario, 'select', side_effect=RuntimeError('x')):
+            self.assertEqual(self.api.get_preferencias()['status'], 'error')
+            self.assertEqual(self.api.salvar_preferencias({})['status'], 'error')
+        # app_ready com janelas que falham
+        self.api._main_window = MagicMock()
+        self.api._main_window.show.side_effect = RuntimeError('x')
+        self.api._splash_window = MagicMock()
+        self.api._splash_window.destroy.side_effect = RuntimeError('x')
+        self.assertEqual(self.api.app_ready()['status'], 'success')
+        self.assertIsNone(self.api._splash_window)
+        self.assertTrue(self.api._get_db_path().endswith(os.path.join('database', 'winker_data.db')))
+
+    def test_main_cenarios_de_inicializacao(self):
+        import scripts.run_dashboard as rd_mod
+        import ctypes as _ctypes
+        class FakeEvent:
+            def __init__(self): self.handlers = []
+            def __iadd__(self, h): self.handlers.append(h); return self
+        def nova_janela():
+            j = MagicMock()
+            j.events = MagicMock()
+            j.events.closing = FakeEvent()
+            return j
+        # banco ausente -> página de erro html
+        janela = nova_janela()
+        with patch('os.path.exists', return_value=False), \
+             patch.object(rd_mod, 'webview') as wv, \
+             patch.object(rd_mod, 'Api') as api_cls, \
+             patch.object(rd_mod, 'project_root', self.temp_root):
+            wv.create_window.return_value = janela
+            api = api_cls.return_value
+            api.prefs_cache = {'darkTheme': True}
+            rd_mod.main()
+            wv.start.assert_called_once()
+            on_closing = janela.events.closing.handlers[0]
+            api.salvar_preferencias = MagicMock()
+            on_closing()
+            api.salvar_preferencias.assert_called_once()
+            api.prefs_cache = None
+            on_closing()
+            api.prefs_cache = {'darkTheme': True}
+            api.salvar_preferencias.side_effect = RuntimeError('x')
+            on_closing()
+        # banco ok + angular ok + splash + user32 falha
+        def existe(path):
+            return (path.endswith('winker_data.db') or path.endswith('index.html')
+                    or path.endswith('splash.html') or 'node_modules' in path)
+        janela2 = nova_janela()
+        windll = MagicMock()
+        windll.user32.GetSystemMetrics.side_effect = RuntimeError('sem user32')
+        with patch('os.path.exists', side_effect=existe), \
+             patch.object(rd_mod, 'webview') as wv, \
+             patch.object(rd_mod, 'Api') as api_cls, \
+             patch.object(rd_mod, 'project_root', self.temp_root), \
+             patch.object(_ctypes, 'windll', windll, create=True):
+            wv.create_window.return_value = janela2
+            rd_mod.main()
+            self.assertEqual(wv.create_window.call_count, 2)
+            wv.start.assert_called_once()
+        # node_modules ausente + npm install falha -> sys.exit(1)
+        janela3 = nova_janela()
+        with patch('os.path.exists', side_effect=lambda p: p.endswith('winker_data.db')), \
+             patch.object(rd_mod, 'webview') as wv, \
+             patch.object(rd_mod, 'Api'), \
+             patch.object(rd_mod, 'project_root', self.temp_root), \
+             patch('subprocess.check_call') as npm:
+            npm.side_effect = __import__('subprocess').CalledProcessError(1, 'npm')
+            wv.create_window.return_value = janela3
+            with self.assertRaises(SystemExit):
+                rd_mod.main()
+        # node_modules ok + build falha + dashboard.html ausente -> html de erro
+        def existe3(path):
+            return path.endswith('winker_data.db') or 'node_modules' in path
+        janela4 = nova_janela()
+        with patch('os.path.exists', side_effect=existe3), \
+             patch.object(rd_mod, 'webview') as wv, \
+             patch.object(rd_mod, 'Api'), \
+             patch.object(rd_mod, 'project_root', self.temp_root), \
+             patch('subprocess.check_call') as build:
+            build.side_effect = __import__('subprocess').CalledProcessError(1, 'npm')
+            wv.create_window.return_value = janela4
+            rd_mod.main()
+            wv.start.assert_called_once()
 
     def test_dashboard_kpis_e_transacoes_basicos(self):
         kpis = self.api.get_dashboard_kpis()

@@ -431,4 +431,412 @@ describe('RelatoriosComponent', () => {
         expect(component.indiceAtual).toBe(-1);
         expect(fixture.nativeElement.querySelectorAll('mark.relatorio-busca-termo').length).toBe(0);
     });
+
+    it('não carrega componente quando nenhum relatório válido está selecionado', async () => {
+        component.relatorioSelecionado = 'inexistente';
+        await component.alterarRelatorio();
+        expect(component.componenteRelatorio).toBeNull();
+        component.relatorioSelecionado = null;
+        await component.alterarRelatorio();
+        expect(component.componenteRelatorio).toBeNull();
+    });
+
+    it('gera extrato com período nulo, datas nulas e tipo recebimento', async () => {
+        const gerar = jasmine.createSpy('get_relatorio_recebimentos').and.callFake(relatorio);
+        window.pywebview = { api: { get_relatorio_recebimentos: gerar } };
+        await component.gerarExtrato({ tipo: 'recebimento', periodo: [null, new Date(2024, 5, 7)], apartamentos: [] } as any);
+        expect(gerar).toHaveBeenCalledWith({ tipo: 'recebimento', periodo: [null, '2024-06-07'], apartamentos: [] });
+        await component.gerarExtrato({ tipo: 'competencia', periodo: null, apartamentos: [] } as any);
+        expect(gerar).toHaveBeenCalledWith({ tipo: 'competencia', periodo: null, apartamentos: [] });
+    });
+
+    it('trata erro sem mensagem e exceção não-Error na geração do extrato', async () => {
+        window.pywebview = { api: { get_relatorio_recebimentos: jasmine.createSpy().and.returnValues(
+            Promise.resolve({ status: 'error' }),
+            Promise.reject('falha inesperada')
+        ) } };
+        await component.gerarExtrato({ tipo: 'competencia', periodo: null, apartamentos: [] });
+        expect(component.erro).toBe('Não foi possível gerar o relatório.');
+        await component.gerarExtrato({ tipo: 'competencia', periodo: null, apartamentos: [] });
+        expect(component.erro).toBe('Não foi possível gerar o relatório.');
+    });
+
+    it('ignora resposta e erro de requisição obsoleta na geração do extrato', async () => {
+        let resolver!: (v: any) => void;
+        let rejeitar!: (e: any) => void;
+        const gerar = jasmine.createSpy('get_relatorio_recebimentos').and.returnValues(
+            new Promise(r => { resolver = r; }), new Promise((_, rej) => { rejeitar = rej; })
+        );
+        window.pywebview = { api: { get_relatorio_recebimentos: gerar } };
+        const primeira = component.gerarExtrato({ tipo: 'competencia', periodo: null, apartamentos: [] });
+        (component as any).requisicao++;
+        resolver({ status: 'success', data: { total: 1 } });
+        await primeira;
+        expect(component.extratoGerado).toBeNull();
+        expect(component.gerando).toBeTrue();
+        const segunda = component.gerarExtrato({ tipo: 'competencia', periodo: null, apartamentos: [] });
+        (component as any).requisicao++;
+        rejeitar(new Error('tarde demais'));
+        await segunda;
+        expect(component.erro).toBe('');
+        (component as any).requisicao++;
+    });
+
+    it('gera conta com período nulo, erro do backend e requisição obsoleta', async () => {
+        const gerar = jasmine.createSpy('get_relatorio_conta').and.returnValues(
+            Promise.resolve({ status: 'error' }),
+            Promise.resolve({ status: 'success', data: { contas: [] } })
+        );
+        window.pywebview = { api: { get_relatorio_conta: gerar } };
+        await component.gerarConta({ periodo: null, contas: [] } as any);
+        expect(gerar).toHaveBeenCalledWith({ periodo: null, contas: [] });
+        expect(component.erro).toBe('Não foi possível gerar o relatório.');
+        let resolver!: (v: any) => void;
+        gerar.and.returnValue(new Promise(r => { resolver = r; }));
+        const pendente = component.gerarConta({ periodo: [new Date(2024, 0, 1), null], contas: ['A'] } as any);
+        (component as any).requisicao++;
+        resolver({ status: 'success', data: {} });
+        await pendente;
+        expect(component.contaGerada).toBeNull();
+        (component as any).requisicao++;
+    });
+
+    it('trata erro e exceção não-Error na geração da conta', async () => {
+        window.pywebview = { api: { get_relatorio_conta: jasmine.createSpy().and.returnValues(
+            Promise.resolve({ status: 'error', message: 'Sem contas' }),
+            Promise.reject(42)
+        ) } };
+        await component.gerarConta({ periodo: null, contas: [] } as any);
+        expect(component.erro).toBe('Sem contas');
+        await component.gerarConta({ periodo: null, contas: [] } as any);
+        expect(component.erro).toBe('Não foi possível gerar o relatório.');
+    });
+
+    it('gera inadimplência sem data de corte e trata erros e requisição obsoleta', async () => {
+        const gerar = jasmine.createSpy('get_relatorio_inadimplencia').and.returnValues(
+            Promise.resolve({ status: 'success', data: { data_corte: '2024-01-01', total: 0, apartamentos: [] } }),
+            Promise.resolve({ status: 'error' }),
+            Promise.reject(new Error('falha'))
+        );
+        window.pywebview = { api: { get_relatorio_inadimplencia: gerar } };
+        await component.gerarInadimplencia({ data_corte: null, apartamentos: [] } as any);
+        expect(gerar).toHaveBeenCalledWith({ data_corte: null, apartamentos: [] });
+        expect(component.inadimplenciaGerada).toEqual({ data_corte: '2024-01-01', total: 0, apartamentos: [] });
+        await component.gerarInadimplencia({ data_corte: new Date(2024, 0, 15), apartamentos: ['101'] } as any);
+        expect(component.erro).toBe('Não foi possível gerar o relatório.');
+        await component.gerarInadimplencia({ data_corte: null, apartamentos: [] } as any);
+        expect(component.erro).toBe('falha');
+    });
+
+    it('ignora resposta obsoleta e erro na geração da inadimplência', async () => {
+        let resolver!: (v: any) => void;
+        let rejeitar!: (e: any) => void;
+        window.pywebview = { api: { get_relatorio_inadimplencia: jasmine.createSpy().and.returnValues(
+            new Promise(r => { resolver = r; }), new Promise((_, rej) => { rejeitar = rej; })
+        ) } };
+        const filtros = { data_corte: null, apartamentos: [] } as any;
+        const primeira = component.gerarInadimplencia(filtros);
+        (component as any).requisicao++;
+        resolver({ status: 'success', data: {} });
+        await primeira;
+        expect(component.inadimplenciaGerada).toBeNull();
+        expect(component.gerando).toBeTrue();
+        const segunda = component.gerarInadimplencia(filtros);
+        (component as any).requisicao++;
+        rejeitar('erro velho');
+        await segunda;
+        expect(component.erro).toBe('');
+        (component as any).requisicao++;
+    });
+
+    it('salva com erro sem mensagem e exceção não-Error', async () => {
+        const salvar = jasmine.createSpy('salvar_relatorio_pdf').and.returnValues(
+            Promise.resolve({ status: 'error' }),
+            Promise.reject('falha de IO')
+        );
+        window.pywebview = { api: { salvar_relatorio_pdf: salvar } };
+        const mensagens = spyOn(fixture.debugElement.injector.get(MessageService), 'add');
+        await component.salvar();
+        expect(mensagens).toHaveBeenCalledWith(jasmine.objectContaining({ severity: 'error', detail: 'Não foi possível salvar o PDF.' }));
+        await component.salvar();
+        expect(mensagens).toHaveBeenCalledWith(jasmine.objectContaining({ severity: 'error', detail: 'Não foi possível salvar o PDF.' }));
+        expect(component.salvando).toBeFalse();
+    });
+
+    it('foca a busca com Ctrl+F ou Cmd+F somente quando há relatório gerado', () => {
+        const evento = (ctrl: boolean, meta: boolean, key: string) => {
+            const e = new KeyboardEvent('keydown', { ctrlKey: ctrl, metaKey: meta });
+            spyOnProperty(e, 'key', 'get').and.returnValue(key);
+            spyOn(e, 'preventDefault');
+            return e;
+        };
+        const semRelatorio = evento(true, false, 'f');
+        component.aoPressionarTeclas(semRelatorio);
+        expect(semRelatorio.preventDefault).not.toHaveBeenCalled();
+
+        component.extratoGerado = { data_corte: '', total: 0, apartamentos: [] };
+        const comRelatorio = evento(false, true, 'F');
+        const foco = jasmine.createSpyObj('input', ['focus', 'select']);
+        component.campoBuscaRef = { nativeElement: foco } as any;
+        component.aoPressionarTeclas(comRelatorio);
+        expect(comRelatorio.preventDefault).toHaveBeenCalled();
+        expect(foco.focus).toHaveBeenCalled();
+        expect(foco.select).toHaveBeenCalled();
+
+        component.extratoGerado = null;
+        component.inadimplenciaGerada = { data_corte: '', total: 0, apartamentos: [] } as any;
+        component.aoPressionarTeclas(evento(true, false, 'x'));
+        component.aoPressionarTeclas(evento(true, false, 'f'));
+        component.inadimplenciaGerada = null;
+        component.contaGerada = { periodo: [], saldo_global: 0, contas: [] } as any;
+        component.aoPressionarTeclas(evento(true, false, 'f'));
+        component.campoBuscaRef = undefined;
+        component.aoPressionarTeclas(evento(true, false, 'f'));
+    });
+
+    it('navega ocorrências com Enter e Shift+Enter', () => {
+        const proxima = spyOn(component, 'proximaOcorrencia');
+        const anterior = spyOn(component, 'anteriorOcorrencia');
+        component.aoPressionarEnter(new Event('submit'));
+        expect(proxima).toHaveBeenCalled();
+        component.aoPressionarEnter(new KeyboardEvent('keydown', { shiftKey: true }));
+        expect(anterior).toHaveBeenCalled();
+        component.aoPressionarEnter(new KeyboardEvent('keydown'));
+        expect(proxima).toHaveBeenCalledTimes(2);
+    });
+
+    it('debounce da busca executa a pesquisa e pode ser cancelado', async () => {
+        jasmine.clock().install();
+        try {
+            const executar = spyOn(component, 'executarBusca');
+            component.aoDigitarBusca();
+            component.aoDigitarBusca();
+            expect(component['debounceBusca']).not.toBeNull();
+            jasmine.clock().tick(200);
+            expect(executar).toHaveBeenCalled();
+            component.aoDigitarBusca();
+            component.limparBusca();
+            expect(component['debounceBusca']).toBeNull();
+        } finally {
+            jasmine.clock().uninstall();
+        }
+    });
+
+    it('executa busca sem termo, sem container e sem ocorrências', () => {
+        component.termoBusca = '   ';
+        component.executarBusca();
+        expect(component.totalOcorrencias).toBe(0);
+        expect(component.indiceAtual).toBe(-1);
+
+        component.termoBusca = 'ausente';
+        component.executarBusca();
+        expect(component.totalOcorrencias).toBe(0);
+    });
+
+    it('executa busca em container com elementos rejeitados e termo acentuado', () => {
+        const container = document.createElement('div');
+        container.id = 'corpo-relatorio-conteudo';
+        container.innerHTML = '<p>Relatório <b>Ordinário</b> e ação</p>' +
+            '<div class="relatorio-acoes"><span>OcultoAcoes</span></div>' +
+            '<script>var x = "scriptTag";</script>' +
+            '<input value="inputTag">' +
+            '<button>buttonTag</button>' +
+            '<style>.x{content:"styleTag"}</style>' +
+            '<textarea>textareaTag</textarea>' +
+            '<p>Condomínio São Paulo - 2024</p>';
+        document.body.appendChild(container);
+        try {
+            component.termoBusca = 'condominio';
+            component.executarBusca();
+            expect(component.totalOcorrencias).toBe(1);
+            const mark = container.querySelector('mark.relatorio-busca-termo');
+            expect(mark?.textContent).toBe('Condomínio');
+            expect(component.ocorrencias[0].classList.contains('relatorio-busca-ativo')).toBeTrue();
+
+            component.proximaOcorrencia();
+            component.anteriorOcorrencia();
+            component.termoBusca = 'naoexiste';
+            component.executarBusca();
+            expect(component.totalOcorrencias).toBe(0);
+            expect(component.indiceAtual).toBe(-1);
+        } finally {
+            container.remove();
+        }
+    });
+
+    it('marca trecho no meio e no fim do texto durante a busca', () => {
+        const container = document.createElement('div');
+        container.id = 'corpo-relatorio-conteudo';
+        container.innerHTML = '<p>Prefixo alvo sufixo alvo</p><p>alvo</p>';
+        document.body.appendChild(container);
+        try {
+            component.termoBusca = 'alvo';
+            component.executarBusca();
+            expect(component.totalOcorrencias).toBe(3);
+            expect(container.textContent).toContain('Prefixo ');
+            const marks = container.querySelectorAll('mark.relatorio-busca-termo');
+            expect(marks[2].textContent).toBe('alvo');
+            component.proximaOcorrencia();
+            component.proximaOcorrencia();
+            expect(component.indiceAtual).toBe(2);
+        } finally {
+            container.remove();
+        }
+    });
+
+    it('navegação sem ocorrências é no-op', () => {
+        component.totalOcorrencias = 0;
+        component.proximaOcorrencia();
+        component.anteriorOcorrencia();
+        expect(component.indiceAtual).toBe(-1);
+    });
+
+    it('limpa busca com debounce pendente e no destroy', () => {
+        jasmine.clock().install();
+        try {
+            component.aoDigitarBusca();
+            component.limparBusca();
+            expect(component['debounceBusca']).toBeNull();
+            component.aoDigitarBusca();
+            component.ngOnDestroy();
+        } finally {
+            jasmine.clock().uninstall();
+        }
+        component.ngOnDestroy();
+    });
+
+    it('extrato de conta trata ausência de api, dados inválidos e exceções', async () => {
+        const comp = TestBed.createComponent(ExtratoContaComponent).componentInstance;
+        delete (window as any).pywebview;
+        await comp.carregar();
+        expect(comp.erro).toContain('Não foi possível conectar');
+
+        const api = (resposta: any) => ({ get_contas_relatorio: () => Promise.resolve(resposta) });
+        (window as any).pywebview = { api: api({ status: 'error', message: 'negado' }) };
+        await comp.carregar();
+        expect(comp.erro).toBe('negado');
+        (window as any).pywebview = { api: api({ status: 'error' }) };
+        await comp.carregar();
+        expect(comp.erro).toBe('Não foi possível carregar as contas.');
+        (window as any).pywebview = { api: api({ status: 'success', data: 'invalido' }) };
+        await comp.carregar();
+        expect(comp.erro).toBe('Não foi possível carregar as contas.');
+        (window as any).pywebview = { api: { get_contas_relatorio: () => Promise.reject('falha') } };
+        await comp.carregar();
+        expect(comp.erro).toBe('Não foi possível carregar as contas.');
+        (window as any).pywebview = { api: api({ status: 'success', data: ['Conta A'] }) };
+        await comp.carregar();
+        expect(comp.contas).toEqual(['Conta A']);
+        expect(comp.carregando).toBeFalse();
+
+        comp.periodo = null;
+        comp.selecionadas = null;
+        const emitir = jasmine.createSpy('gerar');
+        const aoGerar = jasmine.createSpy('aoGerar');
+        comp.gerar.subscribe(emitir);
+        comp.aoGerar = aoGerar;
+        comp.gerarRelatorio();
+        expect(emitir).toHaveBeenCalledWith({ periodo: null, contas: [] });
+        expect(aoGerar).toHaveBeenCalled();
+        comp.periodo = [new Date(2024, 0, 1), null];
+        comp.selecionadas = ['A'];
+        comp.gerarRelatorio();
+        const ultimo = emitir.calls.mostRecent().args[0];
+        expect(ultimo.periodo[0] instanceof Date).toBeTrue();
+        expect(ultimo.periodo[1]).toBeNull();
+        (comp as any).aoConectar();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(comp.contas).toEqual(['Conta A']);
+    });
+
+    it('inadimplência trata ausência de api, dados inválidos e exceções', async () => {
+        const comp = TestBed.createComponent(RelatorioInadimplenciaComponent).componentInstance;
+        delete (window as any).pywebview;
+        await comp.carregar();
+        expect(comp.erro).toContain('Não foi possível conectar');
+
+        const api = (resposta: any) => ({ get_apartamentos: () => Promise.resolve(resposta) });
+        (window as any).pywebview = { api: api({ status: 'error', message: 'negado' }) };
+        await comp.carregar();
+        expect(comp.erro).toBe('negado');
+        (window as any).pywebview = { api: api({ status: 'error' }) };
+        await comp.carregar();
+        expect(comp.erro).toBe('Não foi possível carregar os apartamentos.');
+        (window as any).pywebview = { api: api({ status: 'success', data: 10 }) };
+        await comp.carregar();
+        expect(comp.erro).toBe('Não foi possível carregar os apartamentos.');
+        (window as any).pywebview = { api: { get_apartamentos: () => Promise.reject({ codigo: 1 }) } };
+        await comp.carregar();
+        expect(comp.erro).toBe('Não foi possível carregar os apartamentos.');
+        (window as any).pywebview = { api: api({ status: 'success', data: ['101'] }) };
+        await comp.carregar();
+        expect(comp.apartamentos).toEqual(['101']);
+
+        comp.dataCorte = null;
+        comp.selecionados = null;
+        const emitir = jasmine.createSpy('gerar');
+        comp.gerar.subscribe(emitir);
+        comp.gerarRelatorio();
+        expect(emitir).toHaveBeenCalledWith({ data_corte: null, apartamentos: [] });
+        comp.dataCorte = new Date(2024, 4, 10);
+        comp.selecionados = ['101'];
+        comp.gerarRelatorio();
+        expect(emitir.calls.mostRecent().args[0].data_corte instanceof Date).toBeTrue();
+        (comp as any).aoConectar();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(comp.apartamentos).toEqual(['101']);
+    });
+
+    it('extrato de recebimentos trata api ausente, respostas inválidas e geração', async () => {
+        const comp = TestBed.createComponent(ExtratoRecebimentosComponent).componentInstance;
+        delete (window as any).pywebview;
+        await comp.carregarApartamentos();
+        expect(comp.erroApartamentos).toContain('Não foi possível conectar');
+
+        const limitesOk = { status: 'success', data: { limites: { inicio: '2023-01-01', fim: '2023-12-31' } } };
+        const apiCom = (apartamentos: any, limites: any = limitesOk) => ({
+            get_apartamentos: () => Promise.resolve(apartamentos),
+            get_relatorio_recebimentos: () => Promise.resolve(limites)
+        });
+        (window as any).pywebview = { api: apiCom({ status: 'error' }) };
+        await comp.carregarApartamentos();
+        expect(comp.erroApartamentos).toBe('Resposta inválida ao carregar apartamentos.');
+        (window as any).pywebview = { api: apiCom({ status: 'success', data: 'x' }) };
+        await comp.carregarApartamentos();
+        expect(comp.erroApartamentos).toBe('Resposta inválida ao carregar apartamentos.');
+        (window as any).pywebview = { api: apiCom({ status: 'success', data: [101] }) };
+        await comp.carregarApartamentos();
+        expect(comp.erroApartamentos).toBe('Resposta inválida ao carregar apartamentos.');
+        (window as any).pywebview = { api: apiCom({ status: 'success', data: ['101'] }, { status: 'error' }) };
+        await comp.carregarApartamentos();
+        expect(comp.erroApartamentos).toBe('Não foi possível carregar os limites do período.');
+        (window as any).pywebview = { api: {
+            get_apartamentos: () => Promise.reject(7),
+            get_relatorio_recebimentos: () => Promise.resolve(limitesOk)
+        } };
+        await comp.carregarApartamentos();
+        expect(comp.erroApartamentos).toBe('Não foi possível carregar os apartamentos.');
+        (window as any).pywebview = { api: apiCom({ status: 'success', data: ['101', '102'] }) };
+        await comp.carregarApartamentos();
+        expect(comp.apartamentos).toEqual(['101', '102']);
+        expect(comp.dataMinima?.getFullYear()).toBe(2023);
+        expect(comp.dataMaxima?.getMonth()).toBe(11);
+
+        comp.periodo = null;
+        comp.apartamentosSelecionados = null;
+        const emitir = jasmine.createSpy('gerar');
+        comp.gerar.subscribe(emitir);
+        comp.gerarRelatorio();
+        expect(emitir).toHaveBeenCalledWith({ tipo: 'completo', periodo: null, apartamentos: [] });
+        comp.periodo = [new Date(2024, 0, 5), null];
+        comp.apartamentosSelecionados = ['101'];
+        comp.gerarRelatorio();
+        const ultimo = emitir.calls.mostRecent().args[0];
+        expect(ultimo.periodo[0] instanceof Date).toBeTrue();
+        expect(ultimo.periodo[1]).toBeNull();
+        expect(ultimo.apartamentos).toEqual(['101']);
+        (comp as any).aoConectar();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(comp.apartamentos).toEqual(['101', '102']);
+    });
 });
