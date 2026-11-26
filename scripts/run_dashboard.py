@@ -245,7 +245,8 @@ class Api:
                         pass
                 membros = list(models.MembrosGestao.select().where(models.MembrosGestao.condominio_id == self.condo_id).dicts())
                 contas = list(models.Contas.select().where(models.Contas.condominio_id == self.condo_id).dicts())
-                return {"status": "success", "data": {"condominio": condo_data, "membros": membros, "contas": contas}}
+                regras = list(models.RegrasPreenchimento.select().where(models.RegrasPreenchimento.condominio_id == self.condo_id).order_by(models.RegrasPreenchimento.id).dicts())
+                return {"status": "success", "data": {"condominio": condo_data, "membros": membros, "contas": contas, "regras_preenchimento": regras}}
             else:
                 return {"status": "error", "message": "Condomínio não encontrado."}
         except Exception as e:
@@ -291,6 +292,47 @@ class Api:
                         cargo=m.get('cargo')
                     )
                 
+                if "regras_preenchimento" in payload:
+                    regras = payload["regras_preenchimento"]
+                    if not isinstance(regras, list):
+                        raise ValueError("Lista de regras inválida.")
+                    existentes = {r.id: r for r in models.RegrasPreenchimento.select().where(
+                        models.RegrasPreenchimento.condominio_id == self.condo_id)}
+                    ids = set()
+                    for regra in regras:
+                        if (not isinstance(regra, dict) or regra.get("campo") not in ("fornecedor", "conta")
+                                or not isinstance(regra.get("descricao_contem"), str) or not regra["descricao_contem"].strip()
+                                or not isinstance(regra.get("valor"), str) or not regra["valor"].strip()):
+                            raise ValueError("Regra de preenchimento inválida.")
+                        regra_id = regra.get("id")
+                        if regra_id is not None:
+                            if type(regra_id) is not int or regra_id not in existentes or regra_id in ids:
+                                raise ValueError("Identificador de regra inválido.")
+                            ids.add(regra_id)
+                    ordem_atual = [regra.get("id") for regra in regras]
+                    ids_na_ordem = [regra_id for regra_id in ordem_atual if regra_id is not None]
+                    reordenou = ids_na_ordem != sorted(ids_na_ordem) or (
+                        None in ordem_atual and any(regra_id is not None for regra_id in ordem_atual[ordem_atual.index(None):]))
+                    if reordenou:
+                        # O extrator usa id crescente como prioridade; recriar mantém a ordem escolhida.
+                        models.RegrasPreenchimento.delete().where(models.RegrasPreenchimento.condominio_id == self.condo_id).execute()
+                        for regra in regras:
+                            models.RegrasPreenchimento.create(condominio_id=self.condo_id, **{
+                                chave: regra[chave] for chave in ("descricao_contem", "campo", "valor")})
+                    else:
+                        for regra_id, regra_existente in existentes.items():
+                            if regra_id not in ids:
+                                regra_existente.delete_instance()
+                        for regra in regras:
+                            valores = {chave: regra[chave] for chave in ("descricao_contem", "campo", "valor")}
+                            if regra.get("id") is None:
+                                models.RegrasPreenchimento.create(condominio_id=self.condo_id, **valores)
+                            else:
+                                existente = existentes[regra["id"]]
+                                for chave, valor in valores.items():
+                                    setattr(existente, chave, valor)
+                                existente.save()
+
                 contas_data = payload.get("contas", [])
                 models.Contas.delete().where(models.Contas.condominio_id == self.condo_id).execute()
                 for c in contas_data:
@@ -300,7 +342,11 @@ class Api:
                         saldo_inicial=c.get('saldo_inicial', 0.0)
                     )
                     
-            return {"status": "success", "message": "Configurações atualizadas com sucesso."}
+            resposta = {"status": "success", "message": "Configurações atualizadas com sucesso."}
+            if "regras_preenchimento" in payload:
+                resposta["regras_preenchimento"] = list(models.RegrasPreenchimento.select().where(
+                    models.RegrasPreenchimento.condominio_id == self.condo_id).order_by(models.RegrasPreenchimento.id).dicts())
+            return resposta
         except Exception as e:
             return {"status": "error", "message": str(e)}
 

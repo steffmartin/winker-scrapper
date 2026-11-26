@@ -15,6 +15,37 @@ from scripts.run_dashboard import Api
 
 class TestRunDashboard(unittest.TestCase):
 
+    def test_regras_importacao_persistencia_e_validacao(self):
+        import models
+        models.Condominio.create(id='outro')
+        outra = models.RegrasPreenchimento.create(condominio_id='outro', descricao_contem='outra', campo='conta', valor='Conta')
+        regras = [{'descricao_contem': ' tarifa ', 'campo': 'fornecedor', 'valor': ' Banco '}, {'descricao_contem': 'tarifa', 'campo': 'conta', 'valor': 'Corrente'}]
+        resposta = self.api.update_condominio_config({'regras_preenchimento': regras})
+        self.assertEqual(resposta['status'], 'success')
+        salvas = resposta['regras_preenchimento']
+        self.assertEqual([(r['descricao_contem'], r['campo'], r['valor']) for r in salvas], [(' tarifa ', 'fornecedor', ' Banco '), ('tarifa', 'conta', 'Corrente')])
+        ids = [r['id'] for r in salvas]
+        salvas[0]['valor'] = 'Alterado'
+        atualizadas = self.api.update_condominio_config({'regras_preenchimento': salvas})['regras_preenchimento']
+        self.assertEqual([r['id'] for r in atualizadas], ids)
+        reordenadas = self.api.update_condominio_config({'regras_preenchimento': atualizadas[::-1]})['regras_preenchimento']
+        self.assertEqual([r['campo'] for r in reordenadas], ['conta', 'fornecedor'])
+        self.assertEqual([r['id'] for r in reordenadas], sorted(r['id'] for r in reordenadas))
+        self.assertEqual([r['campo'] for r in self.api.get_condominio_config()['data']['regras_preenchimento']], ['conta', 'fornecedor'])
+        nova = {'descricao_contem': 'tarifa', 'campo': 'conta', 'valor': 'Primeira'}
+        reordenadas = self.api.update_condominio_config({'regras_preenchimento': [nova, *reordenadas]})['regras_preenchimento']
+        self.assertEqual([r['valor'] for r in reordenadas], ['Primeira', 'Corrente', 'Alterado'])
+        from extract_winker import evaluate_entity_consistency
+        resultado = evaluate_entity_consistency('transacao', tipo_flag='D', desc_completa='tarifa', desc_f='tarifa', regras_preenchimento=reordenadas)
+        self.assertEqual(resultado[-1], 'Primeira')
+        for invalida in ({'descricao_contem': ' ', 'campo': 'conta', 'valor': 'X'}, {'descricao_contem': 'a', 'campo': 'x', 'valor': 'X'}, {'id': outra.id, 'descricao_contem': 'a', 'campo': 'conta', 'valor': 'X'}):
+            self.assertEqual(self.api.update_condominio_config({'condominio': {'nome': 'Alterado'}, 'regras_preenchimento': [invalida]})['status'], 'error')
+        self.assertEqual(models.Condominio.get_by_id(self.condo_id).nome, 'Condominio Teste')
+        self.assertEqual(len(self.api.get_condominio_config()['data']['regras_preenchimento']), 3)
+        self.assertEqual(self.api.update_condominio_config({'regras_preenchimento': []})['status'], 'success')
+        self.assertEqual(self.api.get_condominio_config()['data']['regras_preenchimento'], [])
+        self.assertEqual(models.RegrasPreenchimento.select().where(models.RegrasPreenchimento.condominio_id == 'outro').count(), 1)
+
     def test_posicao_unificada_pode_ser_calculada_em_conexao_somente_leitura(self):
         import models
         from apresentacao_conciliacao import inadimplencia

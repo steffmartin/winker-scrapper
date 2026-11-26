@@ -28,6 +28,8 @@ import { RadioButtonModule } from 'primeng/radiobutton';
     providers: [MessageService, ConfirmationService],
     templateUrl: './configuracoes.html',
     styles: [`
+        .regra-arraste { cursor: grab; }
+        .regra-arraste:active { cursor: grabbing; }
         :host ::ng-deep .primary-datepicker-btn button.p-datepicker-dropdown {
             background-color: var(--p-primary-color, var(--primary-color)) !important;
             border-color: var(--p-primary-color, var(--primary-color)) !important;
@@ -53,6 +55,10 @@ export class ConfiguracoesComponent implements OnInit {
     loading = false;
     isSaving = false;
     maxDate = new Date();
+    regraArrastadaIndex: number | null = null;
+    displayRegraDialog = false;
+    regraForm: FormGroup;
+    editandoRegraIndex: number | null = null;
     displayMembroDialog = false;
     novoMembroForm: FormGroup;
     editandoMembroIndex: number | null = null;
@@ -94,8 +100,15 @@ export class ConfiguracoesComponent implements OnInit {
                 tipo_juros_multa: ['N'],
                 taxa_renegociacao: [0, Validators.min(0)]
             }),
+            regras_preenchimento: this.fb.array([]),
             membros: this.fb.array([]),
             contas: this.fb.array([])
+        });
+
+        this.regraForm = this.fb.group({
+            descricao_contem: ['', [Validators.required, Validators.pattern(/.*\S.*/)]],
+            campo: ['fornecedor', Validators.required],
+            valor: ['', [Validators.required, Validators.pattern(/.*\S.*/)] ]
         });
 
         this.novoMembroForm = this.fb.group({
@@ -115,6 +128,10 @@ export class ConfiguracoesComponent implements OnInit {
             conta: ['', Validators.required],
             saldo_inicial: [0, Validators.required]
         });
+    }
+
+    get regras() {
+        return this.configForm.get('regras_preenchimento') as FormArray;
     }
 
     get membros() {
@@ -202,6 +219,11 @@ export class ConfiguracoesComponent implements OnInit {
                         });
                     }
 
+                    this.regras.clear();
+                    (res.data.regras_preenchimento || []).forEach((regra: any) => {
+                        this.regras.push(this.fb.group({ id: [regra.id], descricao_contem: [regra.descricao_contem, Validators.required], campo: [regra.campo, Validators.required], valor: [regra.valor, Validators.required] }));
+                    });
+
                     this.membros.clear();
                     membrosData.forEach((m: any) => {
                         this.membros.push(this.fb.group({
@@ -229,6 +251,53 @@ export class ConfiguracoesComponent implements OnInit {
         } else {
             this.loading = false;
         }
+    }
+
+    showRegraDialog() {
+        this.editandoRegraIndex = null;
+        this.regraForm.reset({ descricao_contem: '', campo: 'fornecedor', valor: '' });
+        this.displayRegraDialog = true;
+    }
+
+    editarRegra(index: number, event: Event) {
+        event.stopPropagation();
+        this.editandoRegraIndex = index;
+        this.regraForm.patchValue(this.regras.at(index).value);
+        this.displayRegraDialog = true;
+    }
+
+    salvarRegra() {
+        if (this.regraForm.invalid) return;
+        const value = this.regraForm.value;
+        if (this.editandoRegraIndex !== null) this.regras.at(this.editandoRegraIndex).patchValue(value);
+        else this.regras.push(this.fb.group({ id: [null], ...value }));
+        this.configForm.markAsDirty();
+        this.displayRegraDialog = false;
+    }
+
+    iniciarArrasteRegra(index: number, event: DragEvent) {
+        this.regraArrastadaIndex = index;
+        event.dataTransfer?.setData('text/plain', String(index));
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+    }
+
+    soltarRegra(index: number, event: DragEvent) {
+        event.preventDefault();
+        const origem = this.regraArrastadaIndex;
+        this.regraArrastadaIndex = null;
+        if (origem === null || origem === index) return;
+        const regra = this.regras.at(origem);
+        this.regras.removeAt(origem);
+        this.regras.insert(index, regra);
+        this.configForm.markAsDirty();
+    }
+
+    trackRegra(_index: number, regra: any) { return regra; }
+
+    removerRegra(index: number, event: Event) {
+        event.stopPropagation();
+        this.regras.removeAt(index);
+        this.configForm.markAsDirty();
     }
 
     showDialog() {
@@ -490,6 +559,9 @@ export class ConfiguracoesComponent implements OnInit {
                 this.loading = false;
                 this.isSaving = false;
                 if (res.status === 'success') {
+                    if (Array.isArray(res.regras_preenchimento)) {
+                        res.regras_preenchimento.forEach((regra: any, index: number) => this.regras.at(index)?.get('id')?.setValue(regra.id));
+                    }
                     this.configForm.markAsPristine();
                     this.messageService.add({ severity: 'success', summary: 'Sucesso', detail: res.message });
                     this.cdr.detectChanges();
