@@ -56,3 +56,35 @@ class TestFallbackApi(unittest.TestCase):
         page.content.side_effect = ['var PORTAL_DATA = {id_portal: 11};', "const TOKEN_API = 'jwt';"]
         self.assertEqual(capturar_sessao_api(page), ('11', 'jwt'))
         page.wait_for_load_state.assert_called_once_with('networkidle')
+
+    def test_rejeita_sessao_invalida_sem_consultar_api(self):
+        for token, portal in [('token', None), ('token', 'nao-numerico'), ('', '11')]:
+            with self.subTest(token=token, portal=portal), self.assertRaises(ValueError):
+                extrair_condominio_api(self.context, token, portal)
+        self.context.request.get.assert_not_called()
+
+    def test_portais_com_resposta_invalida_ou_identidade_ambigua(self):
+        for payload in ({}, [], [self.portals[1], self.portals[1]]):
+            with self.subTest(payload=payload):
+                context = MagicMock()
+                context.request.get.return_value = self.response(payload)
+                with self.assertRaises(ValueError):
+                    extrair_condominio_api(context, 'token', '11')
+                context.request.post.assert_not_called()
+
+    def test_rejeita_url_insegura_e_falhas_na_busca(self):
+        for url in ('http://app.winker.com.br/alvo', 'https://outro.test/alvo',
+                    'https://app.winker.com.br/alvo/outro'):
+            with self.subTest(url=url):
+                context = MagicMock()
+                context.request.get.return_value = self.response([{'id_portal': 11, 'url': url}])
+                with self.assertRaises(ValueError):
+                    extrair_condominio_api(context, 'token', '11')
+                context.request.post.assert_not_called()
+        for resultado in ({'id_condominio': '11'}, {'id_condominio': '11', 'codigo_seguranca': '  '}):
+            with self.subTest(resultado=resultado):
+                context = MagicMock()
+                context.request.get.return_value = self.response(self.portals)
+                context.request.post.return_value = self.response(resultado)
+                with self.assertRaises(ValueError):
+                    extrair_condominio_api(context, 'token', '11')

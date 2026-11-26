@@ -26,6 +26,24 @@ class TestIssuesNovembro(unittest.TestCase):
         result = e.evaluate_entity_consistency('transacao', tipo_flag='D', desc_completa='Tarifa BANCO', desc_f='Tarifa', contas_list=['BANCO'], regras_preenchimento=regras)
         self.assertEqual(result[-1], 'BANCO')
 
+    def test_reprocessamento_preserva_totais_revisados_em_cada_nivel(self):
+        detalhes = {'receitas': [], 'despesas': [{'nome': 'Serviços', 'valor': '90,00', 'subcategorias': [
+            {'nome': 'Limpeza', 'valor': '80,00', 'itens': [
+                {'nome': 'Serviço (01/11/2026)', 'valor': '70,00', 'anexos': []}]}]}]}
+        args = ('202611', 'NOV', 2026, 0, 100, detalhes, self.tmp.name)
+        e.save_extraction_data_to_db(*args, condominio_id='teste')
+        mes, categoria, subcategoria = models.Meses.get(), models.Categorias.get(), models.Subcategorias.get()
+        self.assertEqual((mes.consistente, categoria.consistente, subcategoria.consistente), (0, 0, 0))
+        mes.despesa_total, mes.revisado_usuario = 101, 1
+        categoria.valor, categoria.revisado_usuario = 91, 1
+        subcategoria.valor, subcategoria.revisado_usuario = 81, 1
+        for registro in (mes, categoria, subcategoria):
+            registro.save()
+        e.save_extraction_data_to_db(*args, condominio_id='teste')
+        mes, categoria, subcategoria = models.Meses.get(), models.Categorias.get(), models.Subcategorias.get()
+        self.assertEqual((mes.despesa_total, categoria.valor, subcategoria.valor), (101, 91, 81))
+        self.assertEqual((mes.revisado_usuario, categoria.revisado_usuario, subcategoria.revisado_usuario), (1, 1, 1))
+
     def test_reprocessamento_preserva_revisao_e_documento(self):
         detalhes = {'receitas': [], 'despesas': [{'nome': 'C', 'valor': '10,00', 'subcategorias': [{'nome': 'S', 'valor': '10,00', 'itens': [{'nome': 'Teste (01/11/2026)', 'valor': '10,00', 'anexos': []}]}]}]}
         args = ('202611', 'NOV', 2026, 0, 10, detalhes, self.tmp.name)

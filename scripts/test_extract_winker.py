@@ -410,6 +410,7 @@ class TestExtractWinker(unittest.TestCase):
     def test_extract_winker_portal_index(self, mock_extract_condominio, mock_auditoria, mock_init, mock_sp, mock_input):
         from extract_winker import extract_winker
         from datetime import datetime
+        import tempfile
         
         mock_extract_condominio.side_effect = Exception("Stop Execution")
         
@@ -426,10 +427,11 @@ class TestExtractWinker(unittest.TestCase):
         mock_p.chromium.launch.return_value = mock_browser
         mock_sp.return_value.__enter__.return_value = mock_p
         
-        try:
+        mock_auditoria.return_value = None
+        with tempfile.TemporaryDirectory() as pasta, \
+             patch('extract_winker.project_root', pasta), \
+             patch('extract_winker.selecionar_condominio_fallback', return_value=(None, None)):
             extract_winker("user", "pass", "123", datetime.now(), datetime.now(), True, portal_index=2)
-        except Exception as e:
-            self.assertEqual(str(e), "Stop Execution")
             
         mock_page.locator.assert_any_call("#content hgroup > div > table tbody tr")
 

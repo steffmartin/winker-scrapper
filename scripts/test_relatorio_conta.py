@@ -60,6 +60,27 @@ class TestRelatorioConta(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'primeiro mês cadastrado'):
             gerar('a', {'periodo': ['2023-12-01', '2024-01-31']})
 
+    def test_data_invalida_no_periodo_e_condominio_sem_meses(self):
+        with self.assertRaisesRegex(ValueError, 'Data de transação inválida'):
+            gerar('a', {'periodo': ['data-invalida', '2024-01-31']})
+        with self.assertRaisesRegex(ValueError, 'meses cadastrados'):
+            gerar('b', {'periodo': ['2024-01-01', '2024-01-31']})
+
+    def test_filtro_contas_invalido_saldo_ausente_e_nome_duplicado(self):
+        with self.assertRaisesRegex(ValueError, 'Filtro de contas inválido'):
+            gerar('a', {'periodo': ['2024-01-01', '2024-01-31'], 'contas': 'Conta A'})
+        models.Contas.create(condominio_id='a', conta='Conta C', saldo_inicial=None)
+        with self.assertRaisesRegex(ValueError, 'Saldo inicial não informado'):
+            gerar('a', {'periodo': ['2024-01-01', '2024-01-31'], 'contas': ['Conta C']})
+        models.Contas.create(condominio_id='a', conta='Conta A', saldo_inicial=10)
+        with self.assertRaisesRegex(ValueError, 'nomes duplicados'):
+            gerar('a', {'periodo': ['2024-01-01', '2024-01-31'], 'contas': ['Conta A']})
+
+    def test_transacao_com_tipo_ou_valor_invalido(self):
+        models.Transacoes.create(subcategoria_id=self.sub, conta='Conta A', data='01/01/2024', tipo='X', valor=10)
+        with self.assertRaisesRegex(ValueError, 'tipo ou valor inválido'):
+            gerar('a', {'periodo': ['2024-01-01', '2024-01-31'], 'contas': ['Conta A']})
+
     def test_preserva_sinal_dos_valores_inclusive_estornos(self):
         for data, tipo, valor in [
             ('01/01/2024', 'R', 50), ('02/01/2024', 'R', -10),

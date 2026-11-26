@@ -15,6 +15,236 @@ from scripts.run_dashboard import Api
 
 class TestRunDashboard(unittest.TestCase):
 
+    def test_taxas_repetidas_virada_de_ano_e_operacoes(self):
+        import models
+        resposta = self.api.insert_taxa({'competencia': '2023-12', 'vencimento': '31/12/2023',
+                                         'meses_repeticao': 3, 'tipo': 'I', 'apartamento': '101',
+                                         'descricao': 'Garagem', 'valor_original': 42})
+        self.assertEqual(resposta['status'], 'success')
+        taxas = list(models.Taxas.select().where(models.Taxas.descricao == 'Garagem').order_by(models.Taxas.competencia))
+        self.assertEqual([(t.competencia, t.exibicao, t.vencimento) for t in taxas],
+                         [('2023-12', 'DEZ/2023', '31/12/2023'), ('2024-01', 'JAN/2024', '31/01/2024'),
+                          ('2024-02', 'FEV/2024', '29/02/2024')])
+        selecionadas = self.api.get_taxas_por_apartamento('101', ['2023-12', '2024-02'])['data']
+        self.assertEqual([t['competencia'] for t in selecionadas], ['2024-02', '2024-01', '2023-12'])
+        self.assertEqual(self.api.get_taxas_por_apartamento('102', ['2023-12', '2024-02'])['data'], [])
+        self.assertEqual(self.api.update_taxa(taxas[0].id, {'competencia': '2024-03', 'valor_original': 50})['status'], 'success')
+        atualizada = models.Taxas.get_by_id(taxas[0].id)
+        self.assertEqual((atualizada.exibicao, atualizada.valor_original), ('MAR/2024', 50))
+        self.assertEqual(self.api.delete_taxa(taxas[0].id)['status'], 'success')
+        self.assertFalse(models.Taxas.select().where(models.Taxas.id == taxas[0].id).exists())
+
+    def test_desconto_herda_vencimento_e_taxa_renegociada_nao_e_editada_isoladamente(self):
+        import models
+        original = models.Taxas.select().where(models.Taxas.tipo == 'C').get()
+        self.assertEqual(self.api.insert_taxa({'tipo': 'D', 'taxa_id': original.id, 'competencia': '2023-01',
+                                               'apartamento': '101', 'valor_original': 10})['status'], 'success')
+        desconto = models.Taxas.get(models.Taxas.tipo == 'D')
+        self.assertEqual(desconto.vencimento, original.vencimento)
+        self.assertEqual(desconto.taxa_id_id, original.id)
+        self.assertEqual(self.api.update_taxa(desconto.id, {'competencia': '2023-02', 'descricao': 'desconto'})['status'], 'success')
+        desconto = models.Taxas.get_by_id(desconto.id)
+        self.assertEqual((desconto.exibicao, desconto.descricao), ('FEV/2023', 'desconto'))
+        parcela = models.Taxas.create(condominio_id=self.condo_id, tipo='P', competencia='2023-01', valor_original=50)
+        self.assertEqual(self.api.update_taxa(parcela.id, {'valor_original': 10})['status'], 'error')
+        self.assertEqual(self.api.delete_taxa(parcela.id)['status'], 'error')
+        self.assertEqual(models.Taxas.get_by_id(parcela.id).valor_original, 50)
+
+    def test_preferencias_anexos_e_prestacoes(self):
+        self.assertEqual(self.api.get_preferencias()['data']['condominio_id'], self.condo_id)
+        dados = {'modo_escuro': True, 'cor_primaria': 'emerald', 'modo_menu': 'static'}
+        self.assertEqual(self.api.salvar_preferencias(dados)['status'], 'success')
+        preferencias = self.api.get_preferencias()['data']
+        for chave, valor in dados.items():
+            self.assertEqual(preferencias[chave], valor)
+        self.assertEqual(self.api.sync_preferencias_cache(dados), {'status': 'success'})
+        self.assertEqual(self.api.prefs_cache, dados)
+        self.assertEqual([item['id'] for item in self.api.get_anexos_transacao(1)['data']], [1])
+        self.assertEqual([item['id'] for item in self.api.get_prestacoes_contas_mes('2023-01')['data']], [1])
+        self.assertEqual(self.api.get_prestacoes_contas_mes('1900-01')['status'], 'error')
+
+    def test_selecao_de_arquivo_e_janelas(self):
+        from unittest.mock import MagicMock
+        self.assertEqual(self.api.selecionar_arquivo()['status'], 'error')
+        janela = MagicMock()
+        self.api._main_window = janela
+        janela.create_file_dialog.return_value = []
+        self.assertEqual(self.api.selecionar_arquivo()['status'], 'cancelled')
+        janela.create_file_dialog.return_value = ['arquivo_sem_extensao']
+        self.assertEqual(self.api.selecionar_arquivo()['status'], 'error')
+        janela.create_file_dialog.return_value = ['arquivo.pdf']
+        self.assertEqual(self.api.selecionar_arquivo(), {'status': 'success', 'data': 'arquivo.pdf'})
+        splash = MagicMock()
+        self.api._splash_window = splash
+        self.assertEqual(self.api.app_ready(), {'status': 'success'})
+        janela.show.assert_called_once_with()
+        splash.destroy.assert_called_once_with()
+        self.assertIsNone(self.api._splash_window)
+
+    def test_encerramento_salva_preferencias_e_destroi_janela(self):
+        from unittest.mock import MagicMock
+        self.api._main_window = MagicMock()
+        self.api.prefs_cache = {'darkTheme': True, 'primary': 'blue', 'surface': 'slate',
+                                'preset': 'Aura', 'menuMode': 'overlay'}
+        with patch.object(self.api, 'salvar_preferencias') as salvar, patch('threading.Timer') as timer:
+            self.assertEqual(self.api.exit_app(), {'status': 'success'})
+        salvar.assert_called_once_with({'modo_escuro': 1, 'cor_primaria': 'blue', 'cor_superficie': 'slate',
+                                        'tema_preset': 'Aura', 'modo_menu': 'overlay'})
+        self.api._main_window.destroy.assert_called_once_with()
+        timer.return_value.start.assert_called_once_with()
+
+    def test_abrir_arquivo_local_trata_caminho_ausente_e_falha(self):
+        import tempfile
+        import scripts.run_dashboard as dashboard
+        self.assertEqual(self.api.abrir_arquivo_local('')['status'], 'error')
+        with tempfile.TemporaryDirectory() as pasta, patch.object(dashboard, 'project_root', pasta):
+            self.assertEqual(self.api.abrir_arquivo_local('ausente.pdf')['status'], 'error')
+            with open(os.path.join(pasta, 'nota.pdf'), 'wb') as arquivo:
+                arquivo.write(b'nota ficticia')
+            with patch.object(dashboard.os, 'startfile', create=True) as abrir:
+                self.assertEqual(self.api.abrir_arquivo_local('nota.pdf'), {'status': 'success'})
+                abrir.assert_called_once_with(os.path.join(pasta, 'nota.pdf'))
+                abrir.side_effect = OSError('falha simulada')
+                self.assertEqual(self.api.abrir_arquivo_local('nota.pdf')['status'], 'error')
+
+    def test_revisao_lista_e_atualiza_cada_nivel(self):
+        import models
+        for tipo in ('meses', 'categorias', 'subcategorias', 'lancamentos', 'documentos'):
+            with self.subTest(tipo=tipo):
+                resposta = self.api.get_registros_nao_revisados(tipo)
+                self.assertEqual(resposta['status'], 'success')
+                self.assertTrue(resposta['data'])
+        lancamento = self.api.get_registros_nao_revisados('lancamentos')['data'][0]
+        self.assertEqual(lancamento['anexos_lista'][0]['id'], 1)
+        self.assertEqual({doc['tipo_doc'] for doc in self.api.get_registros_nao_revisados('documentos')['data']}, {'C', 'P'})
+        self.assertEqual(self.api.update_registro_revisado('meses', {'id': 1, 'receita_total': 501, 'revisado_usuario': 1})['status'], 'success')
+        self.assertEqual(self.api.update_registro_revisado('categorias', {'id': 1, 'valor': 101, 'revisado_usuario': 1})['status'], 'success')
+        self.assertEqual(self.api.update_registro_revisado('subcategorias', {'id': 1, 'valor': 102, 'revisado_usuario': 1})['status'], 'success')
+        self.assertEqual(self.api.update_registro_revisado('lancamentos', {'id': 1, 'apartamento': '101', 'conta': 'Corrente', 'revisado_usuario': 1})['status'], 'success')
+        self.assertEqual(self.api.update_registro_revisado('documentos', {'id': 1, 'tipo_doc': 'C', 'revisado_usuario': 1})['status'], 'success')
+        self.assertEqual(models.Meses.get_by_id(1).receita_total, 501)
+        self.assertEqual(models.Categorias.get_by_id(1).valor, 101)
+        self.assertEqual(models.Subcategorias.get_by_id(1).valor, 102)
+        self.assertEqual(models.Transacoes.get_by_id(1).conta, 'Corrente')
+        self.assertEqual(models.Anexos.get_by_id(1).revisado_usuario, 1)
+        for tipo in ('meses', 'categorias', 'subcategorias', 'lancamentos'):
+            self.assertNotIn(1, [r['id'] for r in self.api.get_registros_nao_revisados(tipo)['data']])
+            self.assertIn(1, [r['id'] for r in self.api.get_registros_nao_revisados(tipo, True)['data']])
+
+    def test_revisao_rejeita_apartamento_inexistente_e_id_ausente(self):
+        import models
+        resposta = self.api.update_registro_revisado('lancamentos', {'id': 1, 'apartamento': '999'})
+        self.assertEqual(resposta['status'], 'error')
+        self.assertEqual(models.Transacoes.get_by_id(1).apartamento, '101')
+        self.assertEqual(self.api.update_registro_revisado('categorias', {})['status'], 'error')
+
+    def test_operacoes_propagam_erro_de_inicializacao_sem_acessar_banco(self):
+        self.api.init_error = 'Banco indisponível'
+        operacoes = [
+            ('get_nome_condominio', ()), ('get_condominios', ()), ('set_condominio', ('teste',)),
+            ('get_contas_relatorio', ()), ('get_relatorio_conta', ()),
+            ('get_relatorio_recebimentos', ()), ('get_apartamentos', ()),
+            ('get_condominio_config', ()), ('update_condominio_config', ({},)), ('get_pendencias_revisao_count', ()),
+            ('get_dashboard_kpis', ()), ('get_transacoes', ()), ('get_registros_nao_revisados', ('meses',)),
+            ('update_registro_revisado', ('meses', {})), ('get_inadimplencia', ()),
+            ('get_taxas_por_apartamento', ('101', ['2023-01', '2023-12'])), ('get_taxas', ()),
+            ('delete_taxa', (1,)), ('update_taxa', (1, {})), ('insert_taxa', ({},)),
+            ('get_renegociacao', (1,)), ('delete_renegociacao', (1,)), ('salvar_renegociacao', ({},)),
+            ('selecionar_arquivo', ()), ('get_anexos_transacao', (1,)), ('get_prestacoes_contas_mes', ('2023-01',)),
+            ('get_preferencias', ()), ('salvar_preferencias', ({},)),
+        ]
+        for nome, argumentos in operacoes:
+            with self.subTest(operacao=nome):
+                self.assertEqual(getattr(self.api, nome)(*argumentos),
+                                 {'status': 'error', 'message': 'Banco indisponível'})
+
+    def test_consulta_condominios_e_altera_selecao_persistida(self):
+        import models
+        models.Condominio.create(id='segundo', nome='Segundo')
+        self.assertEqual(self.api.get_nome_condominio()['data']['nome'], 'Condominio Teste')
+        resposta = self.api.get_condominios()
+        self.assertEqual(resposta['current_id'], self.condo_id)
+        self.assertEqual({c['id'] for c in resposta['data']}, {self.condo_id, 'segundo'})
+        self.assertEqual(self.api.set_condominio('segundo')['status'], 'success')
+        self.assertEqual(self.api.get_nome_condominio()['data']['nome'], 'Segundo')
+        self.assertEqual(models.PreferenciasUsuario.select().first().condominio_id, 'segundo')
+
+    def test_relatorios_e_pdf_propagam_erro_sem_alterar_formato_da_resposta(self):
+        with patch('relatorio_conta.gerar', side_effect=RuntimeError('relatório indisponível')):
+            self.assertEqual(self.api.get_relatorio_conta(), {'status': 'error', 'message': 'relatório indisponível'})
+        with patch('exportar_relatorio.salvar_pdf', side_effect=RuntimeError('impressão indisponível')):
+            self.assertEqual(self.api.salvar_relatorio_pdf('relatorio'), {'status': 'error', 'message': 'impressão indisponível'})
+        with patch.object(self.api, '_calcular_posicao_unificada', side_effect=RuntimeError('conciliação indisponível')):
+            resposta = self.api.get_relatorio_inadimplencia({'data_corte': '2025-01-01'})
+            self.assertEqual(resposta, {'status': 'error', 'message': 'conciliação indisponível'})
+            resposta = self.api.get_inadimplencia('2025-01-01')
+            self.assertEqual(resposta, {'status': 'error', 'message': 'conciliação indisponível'})
+
+    def test_configuracao_persiste_campos_membros_e_contas(self):
+        payload = {'condominio': {'nome': 'Novo nome', 'administradora': 'Administradora teste',
+                                  'telefone_administradora': ['1133334444'], 'apartamentos': ['001', '102'],
+                                  'prazo_fechamento': 7, 'inadimplencia_data_corte': '2025-01-31',
+                                  'inadimplencia_unidades': 2, 'inadimplencia_valor': 150,
+                                  'saldo_declarado': 1200, 'tipo_juros_multa': 'N', 'taxa_renegociacao': 5},
+                   'membros': [{'nome': 'Maria', 'cargo': 'Síndica'}],
+                   'contas': [{'conta': 'Corrente', 'saldo_inicial': 100}, {'conta': 'Reserva', 'saldo_inicial': 50}]}
+        self.assertEqual(self.api.update_condominio_config(payload)['status'], 'success')
+        configuracao = self.api.get_condominio_config()['data']
+        for campo, valor in payload['condominio'].items():
+            self.assertEqual(configuracao['condominio'][campo], valor, campo)
+        self.assertEqual([(m['nome'], m['cargo']) for m in configuracao['membros']], [('Maria', 'Síndica')])
+        self.assertEqual(self.api.get_contas_relatorio()['data'], ['Corrente', 'Reserva'])
+        self.assertEqual(self.api.get_apartamentos()['data'], ['001', '102'])
+
+    def test_revisao_remove_e_renomeia_documentos_no_diretorio_isolado(self):
+        import tempfile
+        import models
+        import scripts.run_dashboard as dashboard
+        with tempfile.TemporaryDirectory() as pasta, patch.object(dashboard, 'project_root', pasta):
+            anexo = models.Anexos.get_by_id(1)
+            anexo.caminho_local = 'anexo.dat'
+            anexo.nome_original = 'original.dat'
+            anexo.save()
+            with open(os.path.join(pasta, 'anexo.dat'), 'wb') as arquivo:
+                arquivo.write(b'documento de teste')
+            resposta = self.api.update_registro_revisado('documentos', {'id': 1, 'tipo_doc': 'C', 'extensao': '.pdf'})
+            self.assertEqual(resposta['status'], 'success')
+            self.assertTrue(os.path.exists(os.path.join(pasta, 'anexo.pdf')))
+            self.assertEqual(models.Anexos.get_by_id(1).nome_original, 'original.pdf')
+            resposta = self.api.update_registro_revisado('lancamentos', {'id': 1, 'anexos_removidos': [1, 9999]})
+            self.assertEqual(resposta['status'], 'success')
+            self.assertFalse(os.path.exists(os.path.join(pasta, 'anexo.pdf')))
+            self.assertFalse(models.Anexos.select().where(models.Anexos.id == 1).exists())
+            prestacao = models.PrestacoesContas.get_by_id(1)
+            prestacao.caminho_local = 'prestacao.pdf'
+            prestacao.save()
+            with open(os.path.join(pasta, 'prestacao.pdf'), 'wb') as arquivo:
+                arquivo.write(b'prestacao ficticia')
+            resposta = self.api.update_registro_revisado('meses', {'id': 1, 'anexos_removidos': [1, 9999]})
+            self.assertEqual(resposta['status'], 'success')
+            self.assertFalse(os.path.exists(os.path.join(pasta, 'prestacao.pdf')))
+            self.assertFalse(models.PrestacoesContas.select().where(models.PrestacoesContas.id == 1).exists())
+
+    def test_revisao_adiciona_documentos_a_mes_e_lancamento(self):
+        import tempfile
+        import models
+        import scripts.run_dashboard as dashboard
+        with tempfile.TemporaryDirectory() as pasta, patch.object(dashboard, 'project_root', pasta):
+            origem = os.path.join(pasta, 'entrada.pdf')
+            with open(origem, 'wb') as arquivo:
+                arquivo.write(b'arquivo de teste')
+            mes = self.api.update_registro_revisado('meses', {'id': 1, 'prestacoes_contas': [{'caminho_local': origem}]})
+            lancamento = self.api.update_registro_revisado('lancamentos', {'id': 1, 'anexos_lista': [{'caminho_local': origem}]})
+            self.assertEqual((mes['status'], lancamento['status']), ('success', 'success'))
+            prestacao = models.PrestacoesContas.select().where(models.PrestacoesContas.nome_original == 'entrada.pdf').get()
+            anexo = models.Anexos.select().where(models.Anexos.nome_original == 'entrada.pdf').get()
+            self.assertEqual((prestacao.mes_id.id, anexo.transacao_id.id), (1, 1))
+            for documento in (prestacao, anexo):
+                with open(os.path.join(pasta, *documento.caminho_local.split('/')), 'rb') as arquivo:
+                    self.assertEqual(arquivo.read(), b'arquivo de teste')
+            self.assertEqual(models.Meses.get_by_id(1).anexos, 2)
+            self.assertEqual(models.Transacoes.get_by_id(1).anexos, 2)
+
     def test_regras_importacao_persistencia_e_validacao(self):
         import models
         models.Condominio.create(id='outro')

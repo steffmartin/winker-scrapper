@@ -88,6 +88,36 @@ class TestExportarRelatorio(unittest.TestCase):
                 exportar_relatorio.salvar_pdf(janela, 'Relatório')
         auxiliar.destroy.assert_called_once()
 
+    def test_janela_ausente_e_html_invalido_geram_erro(self):
+        with self.assertRaisesRegex(RuntimeError, 'janela'):
+            exportar_relatorio.salvar_pdf(None, 'Relatório')
+        janela = Mock()
+        janela.create_file_dialog.return_value = 'C:/relatorios/arquivo.pdf'
+        janela.evaluate_js.return_value = None
+        with self.assertRaisesRegex(RuntimeError, 'impressão'):
+            exportar_relatorio.salvar_pdf(janela, 'Relatório')
+
+    def test_gerar_pdf_exige_webview2_e_resultado_verdadeiro(self):
+        class Func:
+            def __class_getitem__(cls, tipo):
+                return lambda funcao: funcao
+
+        sistema = types.ModuleType('System')
+        sistema.Func, sistema.Object = Func, object
+        webview2 = types.ModuleType('Microsoft.Web.WebView2.Core')
+        webview2.CoreWebView2PrintOrientation = types.SimpleNamespace(Landscape='paisagem')
+        janela = Mock()
+        controle = janela.native.webview
+        controle.Invoke.side_effect = lambda funcao: funcao()
+        controle.CoreWebView2 = None
+        with patch.dict(sys.modules, {'System': sistema, 'Microsoft.Web.WebView2.Core': webview2}):
+            with self.assertRaisesRegex(RuntimeError, 'WebView2'):
+                exportar_relatorio._gerar_pdf(janela, 'C:/relatorios/extrato.pdf')
+            controle.CoreWebView2 = Mock()
+            controle.CoreWebView2.PrintToPdfAsync.return_value.GetAwaiter.return_value.GetResult.return_value = False
+            with self.assertRaisesRegex(RuntimeError, 'Não foi possível'):
+                exportar_relatorio._gerar_pdf(janela, 'C:/relatorios/extrato.pdf')
+
     def test_falha_ao_carregar_fecha_janela_auxiliar(self):
         janela = Mock()
         janela.create_file_dialog.return_value = ('C:/relatorios/arquivo.pdf',)
