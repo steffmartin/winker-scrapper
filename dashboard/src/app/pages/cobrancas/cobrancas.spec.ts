@@ -1,5 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CobrancasComponent } from './cobrancas';
+import { By } from '@angular/platform-browser';
+import { DatePicker } from 'primeng/datepicker';
+import { DeferBlockState } from '@angular/core/testing';
 
 describe('Renegociação de cobranças', () => {
     let fixture: ComponentFixture<CobrancasComponent>;
@@ -17,6 +20,43 @@ describe('Renegociação de cobranças', () => {
 
     afterEach(() => {
         delete (window as any).pywebview;
+    });
+
+    it('mantém o calendário de competência aberto ao redimensionar durante a seleção', async () => {
+        component.displayDialogRenegociacao = true;
+        fixture.detectChanges();
+        for (const bloco of await fixture.getDeferBlocks()) await bloco.render(DeferBlockState.Complete);
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        const seletor = fixture.debugElement.query(By.css('#ren-competencia')).injector.get(DatePicker);
+        seletor.showOverlay();
+        fixture.detectChanges(false);
+        await fixture.whenStable();
+        expect(seletor.overlayVisible).toBeTrue();
+        seletor.onWindowResize();
+        expect(seletor.overlayVisible).toBeTrue();
+    });
+
+    it('seleciona um intervalo e reabre com as competências existentes', async () => {
+        component.displayDialogRenegociacao = true;
+        fixture.detectChanges();
+        for (const bloco of await fixture.getDeferBlocks()) await bloco.render(DeferBlockState.Complete);
+        fixture.detectChanges(false);
+        await fixture.whenStable();
+        fixture.detectChanges(false);
+        const seletor = fixture.debugElement.query(By.css('#ren-competencia')).injector.get(DatePicker);
+        seletor.showOverlay();
+        seletor.currentYear = 2026;
+        seletor.onMonthSelect(new MouseEvent('click'), 0);
+        expect(seletor.overlayVisible).toBeTrue();
+        seletor.onMonthSelect(new MouseEvent('click'), 1);
+        expect(component.competenciaRenegociacaoRange.map(d => d.getMonth())).toEqual([0, 1]);
+        await new Promise(resolve => setTimeout(resolve, 180));
+        seletor.showOverlay();
+        expect(seletor.overlayVisible).toBeTrue();
+        expect(seletor.isMonthSelected(0)).toBeTrue();
+        expect(seletor.isMonthSelected(1)).toBeTrue();
     });
 
     it('preenche o vencimento do desconto ao selecionar a taxa somente se estiver vazio', () => {

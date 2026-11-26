@@ -87,6 +87,8 @@ export class Dashboard implements OnInit {
     // TreeTable State
     @ViewChild('tt') treeTable: any;
     nodes: TreeNode[] = [];
+    private nodesFiltrados: TreeNode[] | null = null;
+    get nodesExibidos(): TreeNode[] { return this.nodesFiltrados ?? this.nodes; }
     loadingTreeTable = true;
     globalFilterValue = '';
     currentYear = new Date().getFullYear().toString();
@@ -347,6 +349,7 @@ export class Dashboard implements OnInit {
     onDateRangeChange() {
         if (this.dateRange && this.dateRange.length === 2 && this.dateRange[1]) {
             this.loadingTreeTable = true;
+            this.nodesFiltrados = null;
 
             // Limpa qualquer filtro global ativo antes de buscar novos dados
             if (this.globalFilterValue && this.treeTable) {
@@ -467,7 +470,7 @@ export class Dashboard implements OnInit {
 
     // ViewChildren para acessar todos os inputs de mês;
     expandAll() {
-        let currentLevel = this.nodes;
+        let currentLevel = this.nodesExibidos;
         while (currentLevel.length > 0) {
             const hasCollapsed = currentLevel.some(n => n.children && n.children.length > 0 && !n.expanded);
             if (hasCollapsed) {
@@ -486,7 +489,8 @@ export class Dashboard implements OnInit {
             });
             currentLevel = nextLevel;
         }
-        this.nodes = [...this.nodes];
+        if (this.nodesFiltrados) this.nodesFiltrados = [...this.nodesFiltrados];
+        else this.nodes = [...this.nodes];
     }
 
     expandLevels(levelsToExpand: number) {
@@ -504,29 +508,47 @@ export class Dashboard implements OnInit {
     }
 
     applyGlobalFilter(tt: any) {
-        const val = this.globalFilterValue;
-        if (val && val.trim().length > 0) {
-            this.nodes.forEach(node => {
-                this.expandRecursive(node, true);
-            });
-            this.nodes = [...this.nodes];
-            tt.filterGlobal(val, 'contains');
-            setTimeout(() => this.updateChart(tt.filteredNodes || this.nodes));
-        } else {
-            tt.filterGlobal('', 'contains');
-            setTimeout(() => this.updateChart(this.nodes));
+        const termo = this.globalFilterValue.trim();
+        tt.reset();
+        if (!termo) {
+            this.nodesFiltrados = null;
+            this.updateChart(this.nodes);
+            return;
         }
+        const apartamentoNumerico = /^\d+$/.test(termo);
+        const normalizarNumero = (valor: unknown) => String(valor ?? '').trim().replace(/^0+(?=\d)/, '');
+        const normalizarTexto = (valor: unknown) => String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+        const busca = normalizarTexto(termo);
+        const filtrar = (node: TreeNode, grupoCorrespondente = false): TreeNode | null => {
+            const dados = node.data;
+            if (dados.tipo_node === 'transacao') {
+                const corresponde = apartamentoNumerico
+                    ? normalizarNumero(dados.apartamento) === normalizarNumero(termo)
+                    : grupoCorrespondente || [dados.descricao, dados.data, dados.apartamento, dados.valor].some(v => normalizarTexto(v).includes(busca));
+                return corresponde ? { ...node, data: { ...dados } } : null;
+            }
+            const grupo = grupoCorrespondente || (!apartamentoNumerico && normalizarTexto(dados.descricao).includes(busca));
+            const children = (node.children ?? []).map(filho => filtrar(filho, grupo)).filter((n): n is TreeNode => n !== null);
+            if (!children.length) return null;
+            const valor = (n: TreeNode) => Number((n.data.tipo_node === 'transacao' ? n.data.valor : n.data.valor_total) ?? 0);
+            const total = children.reduce((soma, n) => soma + valor(n), 0);
+            children.forEach(n => { n.data.porcentagem = total ? 100 * valor(n) / total : 0; });
+            return { ...node, expanded: true, data: { ...dados, valor_total: total }, children };
+        };
+        this.nodesFiltrados = this.nodes.map(node => filtrar(node)).filter((n): n is TreeNode => n !== null);
+        this.updateChart(this.nodesFiltrados);
     }
 
     clearFilter(tt: any) {
         this.globalFilterValue = '';
+        this.nodesFiltrados = null;
         tt.reset();
-        this.onDateRangeChange();
+        this.updateChart(this.nodes);
     }
 
     collapseAll() {
-        let levels: TreeNode[][] = [this.nodes];
-        let currentLevel = this.nodes;
+        let levels: TreeNode[][] = [this.nodesExibidos];
+        let currentLevel = this.nodesExibidos;
 
         while (currentLevel.length > 0) {
             let nextLevel: TreeNode[] = [];
@@ -547,7 +569,8 @@ export class Dashboard implements OnInit {
                 n.expanded = false;
             });
         }
-        this.nodes = [...this.nodes];
+        if (this.nodesFiltrados) this.nodesFiltrados = [...this.nodesFiltrados];
+        else this.nodes = [...this.nodes];
     }
 
     private expandRecursive(node: TreeNode, isExpand: boolean) {
@@ -712,93 +735,41 @@ export class Dashboard implements OnInit {
     }
 
     updateChart(nodes: TreeNode[]) {
-        let allLeaves: any[] = [];
-
-        const traverse = (node: TreeNode, context: any) => {
-            const newContext = { ...context };
-            if (node.data.tipo_node === 'mes') newContext.mes = node.data.descricao;
-            if (node.data.tipo_node === 'categoria') newContext.categoria = node.data.descricao;
-            if (node.data.grupo) newContext.grupo = node.data.grupo;
-
-            if (node.data.tipo_node === 'transacao') {
-                allLeaves.push({
-                    leaf: node.data,
-                    mes: newContext.mes,
-                    categoria: newContext.categoria,
-                    grupo: newContext.grupo
-                });
-            }
-            if (node.children) {
-                node.children.forEach(child => traverse(child, newContext));
-            }
-        };
-        (nodes || []).forEach(n => traverse(n, {}));
-
-        const mesesSet = new Set<string>();
-        (this.nodes || []).forEach(node => {
-            if (node.data && node.data.tipo_node === 'mes') {
-                mesesSet.add(node.data.descricao);
-            }
-        });
-
-        // A ordem dos meses já vem corretamente ordenada (crescente) do backend
-        const mesesArr = Array.from(mesesSet);
-
+        const meses = (nodes || []).filter(node => node.data?.tipo_node === 'mes');
+        const mesesArr = meses.map(node => node.data.descricao);
         this.isSingleMonth = mesesArr.length <= 1;
 
         if (this.isSingleMonth) {
-            // Stacked Bar Chart by Categoria
-            const categoriasSet = new Set<string>();
-            const catGrupoMap = new Map<string, string>();
-
-            allLeaves.forEach(item => {
-                categoriasSet.add(item.categoria);
-                catGrupoMap.set(item.categoria, item.grupo);
-            });
-            const categoriasArr = Array.from(categoriasSet);
-
-            const datasets = categoriasArr.map((cat, index) => {
-                const grupo = catGrupoMap.get(cat);
-                const color = this.getCategoryColor(index, grupo || 'Receitas');
-                let receitaSum = 0;
-                let despesaSum = 0;
-
-                allLeaves.filter(i => i.categoria === cat).forEach(item => {
-                    if (item.grupo === 'Receitas') receitaSum += (item.leaf.valor || 0);
-                    if (item.grupo === 'Despesas') despesaSum += (item.leaf.valor || 0);
-                });
-
-                return {
-                    label: cat,
-                    data: [receitaSum, despesaSum],
-                    backgroundColor: color,
-                };
-            });
-
+            // Os valores vêm dos nós de categoria da mesma árvore exibida.
+            const categorias = new Map<string, { grupo: string; receita: number; despesa: number }>();
+            for (const mes of meses) {
+                for (const tipo of mes.children ?? []) {
+                    const grupo = tipo.data.descricao;
+                    for (const categoria of tipo.children ?? []) {
+                        const nome = categoria.data.descricao;
+                        const entrada = categorias.get(nome) ?? { grupo, receita: 0, despesa: 0 };
+                        if (grupo === 'Receitas') entrada.receita += Number(categoria.data.valor_total ?? 0);
+                        if (grupo === 'Despesas') entrada.despesa += Number(categoria.data.valor_total ?? 0);
+                        categorias.set(nome, entrada);
+                    }
+                }
+            }
             this.chartData = {
                 labels: ['Receitas', 'Despesas'],
-                datasets: datasets
+                datasets: Array.from(categorias, ([nome, valores], index) => ({
+                    label: nome,
+                    data: [valores.receita, valores.despesa],
+                    backgroundColor: this.getCategoryColor(index, valores.grupo)
+                }))
             };
         } else {
-            // Line chart for multiple months
-            const receitasData = mesesArr.map(mes => {
-                let sum = 0;
-                let hasData = false;
-                allLeaves.filter(i => i.mes === mes && i.grupo === 'Receitas').forEach(i => {
-                    sum += (i.leaf.valor || 0);
-                    hasData = true;
-                });
-                return hasData ? sum : NaN;
+            // Meses vazios continuam como lacunas, não como valores nulos.
+            const valoresPorTipo = (nome: string) => meses.map(mes => {
+                const tipo = (mes.children ?? []).find(no => no.data.descricao === nome && (no.children?.length ?? 0) > 0);
+                return tipo ? Number(tipo.data.valor_total ?? 0) : NaN;
             });
-            const despesasData = mesesArr.map(mes => {
-                let sum = 0;
-                let hasData = false;
-                allLeaves.filter(i => i.mes === mes && i.grupo === 'Despesas').forEach(i => {
-                    sum += (i.leaf.valor || 0);
-                    hasData = true;
-                });
-                return hasData ? sum : NaN;
-            });
+            const receitasData = valoresPorTipo('Receitas');
+            const despesasData = valoresPorTipo('Despesas');
 
             const documentStyle = getComputedStyle(document.documentElement);
             this.chartData = {

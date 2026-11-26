@@ -172,7 +172,7 @@
                                 (keydown.enter)="applyGlobalFilter(tt)"
                                 placeholder="Filtrar..." />
                             <i class="pi pi-times absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-surface-500 hover:text-surface-900 dark:hover:text-surface-0 transition-colors z-10"
-                               [style.visibility]="tt.hasFilter() ? 'visible' : 'hidden'"
+                               [style.visibility]="globalFilterValue ? 'visible' : 'hidden'"
                                (click)="clearFilter(tt)"></i>
                         </div>
                         <button type="button" pButton icon="pi pi-reply rotate-180" class="!rounded-l-none" style="border-left: 0;" (click)="applyGlobalFilter(tt)"></button>
@@ -190,9 +190,8 @@
             <div class="xl:col-span-3">
                 <p-treeTable
             #tt
-            [value]="loadingTreeTable ? skeletonNodes : nodes"
+            [value]="loadingTreeTable ? skeletonNodes : nodesExibidos"
             [columns]="[]"
-            [globalFilterFields]="['data', 'descricao', 'valor', 'valor_total']"
             [scrollable]="true"
             scrollHeight="400px"
             styleClass="p-treetable-sm">

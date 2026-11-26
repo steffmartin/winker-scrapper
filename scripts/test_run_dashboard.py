@@ -370,6 +370,7 @@ class TestRunDashboard(unittest.TestCase):
         self.assertIsNotNone(trans_teste)
         self.assertEqual(trans_teste["data"]["tipo_node"], "transacao")
         self.assertEqual(trans_teste["data"]["valor"], 100)
+        self.assertEqual(trans_teste["data"]["apartamento"], '101')
 
     def test_get_inadimplencia(self):
         result = self.api.get_inadimplencia(data_corte="2023-01-20")

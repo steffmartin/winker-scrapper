@@ -1,7 +1,19 @@
 """Exportação da página de relatório pela mesma mídia de impressão do WebView2."""
 import os
+import tempfile
+from pathlib import Path
 
 import webview
+
+
+_CAPTURAR_RELATORIO = '''(() => {
+    const copia = document.documentElement.cloneNode(true);
+    copia.querySelectorAll('script').forEach(script => script.remove());
+    let base = copia.querySelector('base');
+    if (!base) { base = document.createElement('base'); copia.querySelector('head').prepend(base); }
+    base.setAttribute('href', document.baseURI);
+    return '<!DOCTYPE html>' + copia.outerHTML;
+})()'''
 
 
 def _gerar_pdf(janela, caminho):
@@ -35,5 +47,20 @@ def salvar_pdf(janela, nome):
     caminho = escolha if isinstance(escolha, str) else escolha[0]
     if not caminho.lower().endswith('.pdf'):
         caminho += '.pdf'
-    _gerar_pdf(janela, caminho)
+    html = janela.evaluate_js(_CAPTURAR_RELATORIO)
+    if not isinstance(html, str) or not html:
+        raise RuntimeError('Não foi possível preparar o relatório para impressão.')
+    # NavigateToString do WebView2 tem limite de tamanho; um arquivo temporário
+    # também permite exportar relatórios com muitos lançamentos.
+    with tempfile.TemporaryDirectory(prefix='winker-relatorio-') as pasta:
+        arquivo = os.path.join(pasta, 'relatorio.html')
+        with open(arquivo, 'w', encoding='utf-8') as destino:
+            destino.write(html)
+        auxiliar = webview.create_window('Impressão de relatório', url=Path(arquivo).as_uri(), hidden=True)
+        try:
+            if not auxiliar.events.loaded.wait(60):
+                raise RuntimeError('Não foi possível carregar o relatório para impressão.')
+            _gerar_pdf(auxiliar, caminho)
+        finally:
+            auxiliar.destroy()
     return {'status': 'success', 'path': caminho}

@@ -6,8 +6,8 @@
     <p-toast position="bottom-right"></p-toast>
     <p-confirmDialog [style]="{width: '450px'}"></p-confirmDialog>
 
-    <p-tabs [value]="activeTab" (valueChange)="onTabChange($event)">
-        <p-tablist>
+    <p-tabs [scrollable]="true" [value]="activeTab" (valueChange)="onTabChange($event)">
+        <p-tablist appRodaAbas>
             <p-tab value="comuns">
                 <div class="flex items-center gap-2">
                     <i class="pi pi-users"></i>
@@ -254,7 +254,7 @@
                 </div>
                 <div class="flex flex-col gap-2">
                     <label for="ren-competencia" class="font-semibold text-sm">Competência</label>
-                    <p-datepicker id="ren-competencia" [(ngModel)]="competenciaRenegociacaoRange" selectionMode="range" view="month" dateFormat="mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn" class="w-full" [maxDate]="dataRenegociacaoDate" (ngModelChange)="onRenegociacaoFormChange()"></p-datepicker>
+                    <p-datepicker id="ren-competencia" appCalendarioEstavel [(ngModel)]="competenciaRenegociacaoRange" selectionMode="range" view="month" dateFormat="mm/yy" [showIcon]="true" appendTo="body" styleClass="w-full primary-datepicker-btn" class="w-full" [maxDate]="dataRenegociacaoDate" (ngModelChange)="onRenegociacaoFormChange()"></p-datepicker>
                 </div>
             </div>
 

@@ -21,8 +21,8 @@
         </p>
     </div>
 
-    <p-tabs [value]="activeTab" [lazy]="true" (valueChange)="onTabChange($event)" *ngIf="!loadingCounts && hasPendencias()">
-        <p-tablist>
+    <p-tabs [scrollable]="true" [value]="activeTab" [lazy]="true" (valueChange)="onTabChange($event)" *ngIf="!loadingCounts && hasPendencias()">
+        <p-tablist appRodaAbas>
             <p-tab value="3" [disabled]="pendenciasCounts.meses === 0">
                 <div class="flex items-center gap-2">
                     <i class="pi pi-calendar"></i>

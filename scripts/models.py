@@ -164,6 +164,7 @@ class PreferenciasUsuario(BaseModel):
         table_name = 'preferencias_usuario'
 
 class Renegociacao(BaseModel):
+    id = AutoField(constraints=[SQL('AUTOINCREMENT')])
     condominio_id = ForeignKeyField(Condominio, backref='renegociacoes', on_delete='CASCADE', db_column='condominio_id')
     apartamento = CharField(null=True)
     competencia_inicial = CharField(null=True)
@@ -179,6 +180,7 @@ class Renegociacao(BaseModel):
         table_name = 'renegociacao'
 
 class Taxas(BaseModel):
+    id = AutoField(constraints=[SQL('AUTOINCREMENT')])
     condominio_id = ForeignKeyField(Condominio, backref='taxas', on_delete='CASCADE', db_column='condominio_id')
     taxa_id = ForeignKeyField('self', backref='taxas_vinculadas', on_delete='CASCADE', db_column='taxa_id', null=True)
     renegociacao_id = ForeignKeyField(Renegociacao, backref='taxas_relacionadas', on_delete='CASCADE', db_column='renegociacao_id', null=True)

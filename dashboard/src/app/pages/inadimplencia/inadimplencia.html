@@ -40,8 +40,8 @@
         </p>
     </div>
 
-    <p-tabs *ngIf="!loading && inadimplencias && inadimplencias.length > 0" [value]="activeTab">
-        <p-tablist>
+    <p-tabs [scrollable]="true" *ngIf="!loading && inadimplencias && inadimplencias.length > 0" [value]="activeTab">
+        <p-tablist appRodaAbas>
             <p-tab *ngFor="let unidade of inadimplencias" [value]="unidade.unidade">
                 <div class="flex items-center gap-2">
                     <span class="font-bold">{{ unidade.unidade }}</span>

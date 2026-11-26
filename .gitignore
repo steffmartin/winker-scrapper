@@ -5,7 +5,7 @@
 database/*.db
 database/*.db.bak*
 # Arquivos auxiliares SQLite podem conter os mesmos dados privados do banco.
-database/*.db-*
+database/*.db*
 
 # Caches e arquivos compilados do Python (em qualquer subdiretório)
 **/__pycache__/

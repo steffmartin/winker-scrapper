@@ -281,6 +281,24 @@ describe('RelatoriosComponent', () => {
         expect(mensagens).toHaveBeenCalledWith(jasmine.objectContaining({ severity: 'error', detail: 'Falha ao salvar' }));
     });
 
+    it('desabilita o botão durante o salvamento e impede chamadas duplicadas', async () => {
+        let concluir!: (valor: any) => void;
+        const salvar = jasmine.createSpy('salvar_relatorio_pdf').and.returnValue(new Promise(resolve => { concluir = resolve; }));
+        window.pywebview = { api: { salvar_relatorio_pdf: salvar } };
+        component.extratoGerado = { data_corte: '2023-01-01', total: 0, apartamentos: [] };
+        const pendente = component.salvar();
+        fixture.changeDetectorRef.markForCheck();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('[aria-label="Salvar relatório"]').disabled).toBeTrue();
+        await component.salvar();
+        expect(salvar).toHaveBeenCalledTimes(1);
+        concluir({ status: 'cancelled' });
+        await pendente;
+        expect(component.salvando).toBeFalse();
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('[aria-label="Salvar relatório"]').disabled).toBeFalse();
+    });
+
     it('gera novamente para todos os apartamentos após limpar a seleção', async () => {
         const consulta = jasmine.createSpy('get_relatorio_recebimentos').and.callFake(relatorio);
         window.pywebview = { api: { get_apartamentos: () => Promise.resolve({ status: 'success', data: ['101', '102'] }), get_relatorio_recebimentos: consulta } };

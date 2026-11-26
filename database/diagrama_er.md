@@ -7,6 +7,8 @@
 
 ## Diagrama ER (Entidade-Relacionamento)
 
+Os IDs de `taxas` e `renegociacao` usam `INTEGER PRIMARY KEY AUTOINCREMENT` no SQLite.
+
 ```mermaid
 erDiagram
     renegociacao {

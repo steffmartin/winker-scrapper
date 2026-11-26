@@ -1,3 +1,4 @@
+import { RodaAbasDirective } from '../../shared/roda-abas.directive';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CardModule } from 'primeng/card';
@@ -25,7 +26,7 @@ declare global {
     selector: 'app-inadimplencia',
     standalone: true,
     imports: [
-        CommonModule, CardModule, TabsModule, TableModule, ButtonModule,
+        CommonModule, CardModule, TabsModule, RodaAbasDirective, TableModule, ButtonModule,
         InputTextModule, InputNumberModule, DatePickerModule, AvatarModule, 
         FormsModule, ToastModule, BadgeModule, TooltipModule, SkeletonModule
     ],
