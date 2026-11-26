@@ -903,5 +903,97 @@ class TestPosicao(unittest.TestCase):
         self.assertEqual((resultado['total'], resultado['saldo_original']), (-5, 0))
 
 
+class TestValidacoes(unittest.TestCase):
+    def test_data_e_centavos_rejeitam_entradas_invalidas(self):
+        from conciliacao_unificada import _data, _centavos
+        from datetime import datetime
+        self.assertEqual(_data(datetime(2023, 1, 2, 3, 4)), date(2023, 1, 2))
+        with self.assertRaises(ValueError):
+            _data('31/02/2023')
+        with self.assertRaisesRegex(ValueError, 'não finito'):
+            _centavos('nan')
+        with self.assertRaisesRegex(ValueError, 'não finito'):
+            _centavos(float('inf'))
+
+    def test_encargos_rejeitam_percentual_nao_finito_ou_negativo(self):
+        with self.assertRaisesRegex(ValueError, 'Percentual de encargos'):
+            calcular_encargos(10000, 'nan', 1, 10, 'N')
+        with self.assertRaisesRegex(ValueError, 'Percentual de encargos'):
+            calcular_encargos(10000, 1, -5, 10, 'N')
+        with self.assertRaisesRegex(ValueError, 'Parâmetros de encargos'):
+            calcular_encargos(-1, 1, 1, 10, 'N')
+
+    def test_normalizar_rejeita_registros_incompletos_e_filtra(self):
+        base = {'condominio_id': 'a', 'tipo': 'I', 'apartamento': '101', 'competencia': '2023-01',
+                'vencimento': '10/01/2023', 'valor_original': 100}
+        with self.assertRaisesRegex(ValueError, 'sem data de renegociação'):
+            normalizar('a', date(2023, 1, 20), ['101'],
+                       [dict(base, id=1, tipo='P')], [])
+        with self.assertRaisesRegex(ValueError, 'sem competência ou vencimento'):
+            normalizar('a', date(2023, 1, 20), ['101'],
+                       [dict(base, id=1, competencia=None)], [])
+        dados = normalizar('a', date(2023, 1, 20), ['101', '102'],
+                           [dict(base, id=1, tipo='X')],
+                           [dict(id=1, condominio_id='a', tipo='R', apartamento='999', competencia='2023-01',
+                                 data='10/01/2023', valor=10)],
+                           apartamentos_filtro=['101'])
+        self.assertEqual(dados['taxas'], [])
+        self.assertEqual(dados['recebimentos'], [])
+
+    def test_conciliar_exatos_rejeita_grupo_acima_do_limite(self):
+        taxas = [dict(id=i, apartamento='101', competencia='2023-01', vencimento=date(2023, 1, 10),
+                      valor_centavos=100) for i in range(19)]
+        with self.assertRaises(ConciliacaoInconclusiva):
+            conciliar_exatos(taxas, [], 'N')
+
+
+class TestApresentacaoErros(unittest.TestCase):
+    def test_data_corte_e_extrato_validam_tipo_periodo_e_filtros(self):
+        with self.assertRaisesRegex(ValueError, 'tipo de extrato'):
+            data_corte_extrato({'tipo': 'invalido'})
+        with self.assertRaisesRegex(ValueError, 'início e o fim'):
+            data_corte_extrato({'tipo': 'recebimento', 'periodo': ['2023-01-01']})
+        with self.assertRaisesRegex(ValueError, 'Competência inválida'):
+            data_corte_extrato({'tipo': 'competencia', 'periodo': ['2023-13', '2023-01']})
+        posicao = {'data_corte': date(2023, 2, 1), 'grupos': []}
+        with self.assertRaisesRegex(ValueError, 'tipo de extrato'):
+            extrato(posicao, {'tipo': 'invalido'}, {})
+        with self.assertRaisesRegex(ValueError, 'Filtro de apartamentos'):
+            extrato(posicao, {'tipo': 'completo', 'apartamentos': '101'}, {})
+        with self.assertRaisesRegex(ValueError, 'início e o fim'):
+            extrato(posicao, {'tipo': 'recebimento', 'periodo': []}, {})
+        with self.assertRaisesRegex(ValueError, 'Competência inválida'):
+            extrato(posicao, {'tipo': 'competencia', 'periodo': ['2023-13', '2023-01']}, {})
+        with self.assertRaisesRegex(ValueError, 'anterior ou igual'):
+            extrato(posicao, {'tipo': 'recebimento', 'periodo': ['2023-02-01', '2023-01-01']}, {})
+
+    def _posicao_minima(self):
+        taxa = {'id': 1, 'tipo': 'I', 'vencimento': date(2023, 1, 10), 'descricao': 'Taxa',
+                'valor_original': 100, 'origem': {'valor_original': 100}}
+        grupo = {
+            'apartamento': '101', 'competencia': '2023-01',
+            'saldos': [{'taxa': {'id': 1, 'competencia': '2023-01', 'vencimento': date(2023, 1, 10), 'descricao': 'Taxa'},
+                        'principal_centavos': 10000, 'juros_centavos': 0, 'multa_centavos': 0,
+                        'total_centavos': 10000, 'desconto_concedido_centavos': 500,
+                        'desconto_data': date(2023, 1, 5)}],
+            'taxas_origem': [taxa],
+            'ajustes_origem': [{'id': 8, 'tipo': 'D', 'taxa_id': 999, 'valor_original': 5, 'descricao': 'Desc sem vínculo'},
+                               {'id': 9, 'tipo': 'R', 'taxa_id': 1}],
+            'recebimentos_origem': [], 'pagamentos_parciais': [], 'quitacoes_exatas': [],
+        }
+        return {'data_corte': date(2023, 2, 1), 'grupos': [grupo]}
+
+    def test_extrato_filtra_apartamento_e_competencia_fora_do_periodo(self):
+        posicao = self._posicao_minima()
+        filtrado = extrato(posicao, {'tipo': 'completo', 'apartamentos': ['999']}, {})
+        self.assertEqual([a['apartamento'] for a in filtrado['apartamentos']], ['999'])
+        self.assertEqual(filtrado['apartamentos'][0]['competencias'], [])
+        fora = extrato(posicao, {'tipo': 'competencia', 'periodo': ['2023-02', '2023-02']}, {})
+        self.assertEqual(fora['apartamentos'], [])
+        dentro = extrato(posicao, {'tipo': 'competencia', 'periodo': ['2023-01', '2023-01']}, {})
+        lancamentos = dentro['apartamentos'][0]['competencias'][0]['lancamentos']
+        self.assertIn('Desconto à vista', [l['tipo'] for l in lancamentos])
+
+
 if __name__ == '__main__':
     unittest.main()

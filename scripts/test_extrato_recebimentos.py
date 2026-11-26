@@ -39,3 +39,8 @@ class TestLimitesExtratoRecebimentos(unittest.TestCase):
         models.Meses.create(condominio_id='a', competencia='invalida')
         with self.assertRaisesRegex(ValueError, 'Competência inválida'):
             obter_limites('a')
+
+    def test_ignora_mes_sem_competencia(self):
+        models.Meses.create(condominio_id='a', competencia=None)
+        models.Meses.create(condominio_id='a', competencia='2024-03')
+        self.assertEqual(obter_limites('a'), {'inicio': '2024-03-01', 'fim': '2024-03-31'})

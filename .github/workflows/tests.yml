@@ -37,10 +37,11 @@ jobs:
 
       - name: Executar Testes de Unidade (Python)
         run: |
-          # Executa todos os testes na pasta 'scripts' com medição de cobertura
-          python -m coverage run --source=scripts --omit='*/test_*.py' -m unittest discover -s scripts -p "test_*.py"
-          # Falha se a cobertura de instruções ficar abaixo de 90%
-          python -m coverage report --fail-under=90 --omit='*/test_*.py'
+          # Executa todos os testes na pasta 'scripts' com medição de cobertura (statements + branches)
+          python -m coverage run --branch --source=scripts --omit='*/test_*.py' -m unittest discover -s scripts -p "test_*.py"
+          python -m coverage json -o coverage.json --omit='*/test_*.py'
+          # Falha se statements ou branches ficarem abaixo de 90%
+          python -c "import json,sys; t=json.load(open('coverage.json'))['totals']; print('Statements:', round(t['percent_statements_covered'],2), '% | Branches:', round(t['percent_branches_covered'],2), '%'); ok = t['percent_statements_covered'] >= 90 and t['percent_branches_covered'] >= 90; sys.exit(0 if ok else 'Cobertura abaixo de 90% em statements ou branches')"
 
           # Se novas pastas com scripts e testes Python forem adicionadas,
           # novos comandos de descoberta podem ser inseridos abaixo, por exemplo:
@@ -74,4 +75,4 @@ jobs:
 
       - name: Verificar Cobertura Mínima do Frontend (90%)
         run: |
-          node -e "const s=require('./dashboard/coverage/sakai-ng/coverage-summary.json').total; console.log('Lines:', s.lines.pct + '%', '| Statements:', s.statements.pct + '%', '| Branches:', s.branches.pct + '%', '| Functions:', s.functions.pct + '%'); const ok = s.lines.pct >= 90 && s.statements.pct >= 90; if (!ok) { console.error('Cobertura abaixo de 90% em linhas ou statements'); process.exit(1); }"
+          node -e "const s=require('./dashboard/coverage/sakai-ng/coverage-summary.json').total; console.log('Lines:', s.lines.pct + '%', '| Statements:', s.statements.pct + '%', '| Branches:', s.branches.pct + '%', '| Functions:', s.functions.pct + '%'); const ok = s.lines.pct >= 90 && s.statements.pct >= 90 && s.branches.pct >= 90 && s.functions.pct >= 90; if (!ok) { console.error('Cobertura abaixo de 90% em uma ou mais métricas'); process.exit(1); }"

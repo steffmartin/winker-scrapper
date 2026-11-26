@@ -81,6 +81,20 @@ class TestRelatorioConta(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'tipo ou valor inválido'):
             gerar('a', {'periodo': ['2024-01-01', '2024-01-31'], 'contas': ['Conta A']})
 
+    def test_competencia_invalida_nos_meses(self):
+        models.Meses.create(condominio_id='a', competencia='invalida')
+        with self.assertRaisesRegex(ValueError, 'competência inválida'):
+            gerar('a', {'periodo': ['2024-01-01', '2024-01-31'], 'contas': ['Conta A']})
+
+    def test_lancamento_sem_conta_apos_o_fim_e_condominio_sem_contas(self):
+        models.Transacoes.create(subcategoria_id=self.sub, conta=None, data='05/03/2024', tipo='R', valor=10)
+        dados = gerar('a', {'periodo': ['2024-01-01', '2024-02-29'], 'contas': []})
+        self.assertNotIn('CONTA NÃO IDENTIFICADA', [c['conta'] for c in dados['contas']])
+        models.Condominio.create(id='c')
+        models.Meses.create(condominio_id='c', competencia='2024-01')
+        with self.assertRaisesRegex(ValueError, 'Não há contas cadastradas'):
+            gerar('c', {'periodo': ['2024-01-01', '2024-01-31'], 'contas': []})
+
     def test_preserva_sinal_dos_valores_inclusive_estornos(self):
         for data, tipo, valor in [
             ('01/01/2024', 'R', 50), ('02/01/2024', 'R', -10),

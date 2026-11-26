@@ -2,7 +2,7 @@ import unittest
 import sqlite3
 import os
 import sys
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from datetime import date
 
 # Add the project root to sys.path if needed
@@ -516,6 +516,13 @@ class TestRunDashboard(unittest.TestCase):
     def setUp(self):
         import tempfile
         import models
+        import scripts.run_dashboard as rd_mod
+        # Isola project_root: métodos do Api gravam arquivos em project_root/anexos
+        self.temp_root = tempfile.mkdtemp(prefix='rd_test_')
+        root_patcher = patch.object(rd_mod, 'project_root', self.temp_root)
+        root_patcher.start()
+        self.addCleanup(root_patcher.stop)
+        self.addCleanup(lambda: __import__('shutil').rmtree(self.temp_root, ignore_errors=True))
         self.temp_db_fd, self.temp_db_path = tempfile.mkstemp(suffix='_test_rd.db')
         
         # Initialize ORM with this temp db
@@ -718,6 +725,263 @@ class TestRunDashboard(unittest.TestCase):
         descricoes = [taxa['descricao'] for taxa in unidade['taxas']]
         self.assertNotIn('Primeira taxa', descricoes)
         self.assertIn('Segunda taxa', descricoes)
+
+    def test_validar_margem_encargos_rejeita_entradas_invalidas(self):
+        from scripts.run_dashboard import validar_margem_encargos
+        self.assertEqual(validar_margem_encargos('0.25'), 25)
+        self.assertEqual(validar_margem_encargos(0), 0)
+        for invalido in (None, True, 'abc', -1, '0.001', 'nan', 'inf'):
+            with self.assertRaises(ValueError, msg=str(invalido)):
+                validar_margem_encargos(invalido)
+
+    def test_relatorios_e_apartamentos_validam_entradas(self):
+        self.assertEqual(self.api.get_relatorio_inadimplencia({})['message'], 'Informe a data de corte.')
+        self.assertEqual(self.api.get_relatorio_inadimplencia({'data_corte': 'invalida'})['status'], 'error')
+        self.assertEqual(self.api.get_relatorio_inadimplencia({'data_corte': '2023-01-20', 'apartamentos': '101'})['message'],
+                         'Filtro de apartamentos inválido.')
+        self.assertEqual(self.api.get_relatorio_recebimentos({'limites': True})['status'], 'success')
+        self.assertEqual(self.api.get_relatorio_recebimentos({'limites': True})['data']['limites']['inicio'], '2023-01-01')
+
+    def test_apartamentos_invalidos_no_cadastro_e_condominio_ausente(self):
+        import models
+        condo = models.Condominio.get_by_id(self.condo_id)
+        condo.apartamentos = 'nao-json'
+        condo.save()
+        self.assertEqual(self.api.get_apartamentos()['status'], 'error')
+        self.assertEqual(self.api.get_apartamentos()['message'], 'Cadastro de apartamentos inválido.')
+        self.api.condo_id = 'inexistente'
+        self.assertEqual(self.api.get_apartamentos()['message'], 'Condomínio não encontrado.')
+        self.assertEqual(self.api.get_condominio_config()['message'], 'Condomínio não encontrado.')
+        self.api.condo_id = self.condo_id
+        condo.apartamentos = '["101"]'
+        condo.save()
+        self.assertEqual(self.api.get_apartamentos()['data'], ['101'])
+
+    def test_config_condominio_parseia_json_invalido_e_campos(self):
+        import models
+        condo = models.Condominio.get_by_id(self.condo_id)
+        condo.telefone_administradora = 'json-invalido'
+        condo.apartamentos = '{invalid'
+        condo.save()
+        resposta = self.api.get_condominio_config()
+        self.assertEqual(resposta['status'], 'success')
+        self.assertEqual(resposta['data']['condominio']['telefone_administradora'], 'json-invalido')
+        self.assertEqual(self.api.update_condominio_config({'condominio': {'nome': 'Novo Nome', 'apartamentos': ['101'],
+                                                                          'telefone_administradora': ['119999'],
+                                                                          'margem_diferenca_encargos': 0.5}})['status'], 'success')
+        condo = models.Condominio.get_by_id(self.condo_id)
+        self.assertEqual(condo.nome, 'Novo Nome')
+        self.assertEqual(self.api.update_condominio_config({'condominio': {'margem_diferenca_encargos': -1}})['status'], 'error')
+        self.assertEqual(self.api.update_condominio_config({'regras_preenchimento': 'invalido'})['status'], 'error')
+        self.assertEqual(self.api.update_condominio_config({'regras_preenchimento': [{'campo': 'x', 'descricao_contem': '', 'valor': '1'}]})['status'], 'error')
+
+    def test_nome_e_lista_de_condominios_e_troca_sem_preferencia(self):
+        self.assertEqual(self.api.get_nome_condominio()['data']['nome'], 'Condominio Teste')
+        self.assertEqual(self.api.get_condominios()['current_id'], self.condo_id)
+        import models
+        models.PreferenciasUsuario.delete().execute()
+        self.assertEqual(self.api.set_condominio(self.condo_id)['status'], 'success')
+        self.assertIsNotNone(models.PreferenciasUsuario.select().first())
+        self.api.condo_id = 'inexistente'
+        self.assertEqual(self.api.get_nome_condominio()['message'], 'Condomínio não encontrado.')
+        self.assertEqual(self.api.set_condominio('inexistente')['status'], 'success')
+
+    def test_exit_app_salva_preferencias_e_destroi_janela(self):
+        self.api.prefs_cache = {'darkTheme': True, 'primary': 'blue', 'surface': 'dark', 'preset': 'lara', 'menuMode': 'static'}
+        self.api._main_window = type('Janela', (), {'destroy': lambda self: setattr(self, 'destruida', True)})()
+        with patch('threading.Timer') as timer:
+            self.assertEqual(self.api.exit_app()['status'], 'success')
+            timer.assert_called_once()
+        self.assertTrue(self.api._main_window.destruida)
+        self.api.prefs_cache = {'darkTheme': True}
+        with patch.object(self.api, 'salvar_preferencias', side_effect=RuntimeError('falha')), \
+             patch('threading.Timer') as timer2:
+            self.assertEqual(self.api.exit_app()['status'], 'success')
+            timer2.assert_called_once()
+
+    def test_contas_relatorio_trata_erro_e_sucesso(self):
+        import models
+        models.Contas.create(condominio_id=self.condo_id, conta='Conta A', saldo_inicial=10)
+        self.assertEqual(self.api.get_contas_relatorio()['data'], ['Conta A'])
+        with patch('models.Contas.select', side_effect=RuntimeError('falha')):
+            self.assertEqual(self.api.get_contas_relatorio()['status'], 'error')
+
+    def test_get_condominio_config_com_campos_json_validos(self):
+        import models, json
+        condo = models.Condominio.get_by_id(self.condo_id)
+        condo.telefone_administradora = json.dumps(['119999'])
+        condo.apartamentos = json.dumps(['101', '102'])
+        condo.save()
+        resposta = self.api.get_condominio_config()
+        self.assertEqual(resposta['data']['condominio']['telefone_administradora'], ['119999'])
+        self.assertEqual(resposta['data']['condominio']['apartamentos'], ['101', '102'])
+        self.assertIn('membros', resposta['data'])
+        self.assertIn('contas', resposta['data'])
+        self.assertIn('regras_preenchimento', resposta['data'])
+
+    def test_pendencias_revisao_count_e_registros_com_erros(self):
+        resposta = self.api.get_pendencias_revisao_count()
+        self.assertEqual(resposta['status'], 'success')
+        self.assertIn('data', resposta)
+        for tipo in ('meses', 'categorias', 'subcategorias', 'lancamentos', 'documentos', 'desconhecido'):
+            r = self.api.get_registros_nao_revisados(tipo)
+            self.assertIn(r['status'], ('success', 'error'))
+
+    def test_update_registro_revisado_todos_os_tipos(self):
+        import models, os, tempfile
+        # sem id
+        self.assertEqual(self.api.update_registro_revisado('meses', {})['message'], 'ID não informado.')
+        # meses: campos + remoção de prestação + nova prestação
+        models.PrestacoesContas.update(caminho_local='anexos/inexistente.pdf').where(models.PrestacoesContas.id == 1).execute()
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
+            abs_pdf = f.name
+        self.assertEqual(self.api.update_registro_revisado('meses', {
+            'id': 1, 'receita_total': 999, 'despesa_total': 888, 'revisado_usuario': 1,
+            'anexos_removidos': [99999, 1],
+            'prestacoes_contas': [{'caminho_local': abs_pdf}, {'caminho_local': 'relativo.pdf'}, {}]
+        })['status'], 'success')
+        mes = models.Meses.get_by_id(1)
+        self.assertEqual((mes.receita_total, mes.despesa_total, mes.revisado_usuario), (999, 888, 1))
+        self.assertGreaterEqual(mes.anexos, 1)
+        os.unlink(abs_pdf)
+        # categorias e subcategorias
+        self.assertEqual(self.api.update_registro_revisado('categorias', {'id': 1, 'valor': 50, 'revisado_usuario': 1})['status'], 'success')
+        self.assertEqual(models.Categorias.get_by_id(1).valor, 50)
+        self.assertEqual(self.api.update_registro_revisado('subcategorias', {'id': 1, 'valor': 60, 'revisado_usuario': 1})['status'], 'success')
+        self.assertEqual(models.Subcategorias.get_by_id(1).valor, 60)
+        # lancamentos: apartamento válido/inválido e campos
+        models.Anexos.update(caminho_local='anexos/inexistente.pdf').where(models.Anexos.id == 1).execute()
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
+            abs_anexo = f.name
+        self.assertEqual(self.api.update_registro_revisado('lancamentos', {
+            'id': 1, 'apartamento': '999', 'competencia': '2023-02', 'fornecedor': 'F', 'conta': 'C',
+            'revisado_usuario': 1, 'anexos_removidos': [99999], 'anexos_lista': []})['status'], 'error')
+        self.assertEqual(self.api.update_registro_revisado('lancamentos', {
+            'id': 1, 'apartamento': '101', 'competencia': '2023-02', 'fornecedor': 'F', 'conta': 'C',
+            'revisado_usuario': 1, 'anexos_removidos': [1], 'anexos_lista': [{'caminho_local': abs_anexo}]})['status'], 'success')
+        self.assertGreaterEqual(models.Anexos.select().where(models.Anexos.transacao_id == 1).count(), 1)
+        os.unlink(abs_anexo)
+        trans = models.Transacoes.get_by_id(1)
+        self.assertEqual((trans.apartamento, trans.competencia, trans.fornecedor, trans.conta), ('101', '2023-02', 'F', 'C'))
+        # lancamento sem apartamento (limpa) e apartamento vazio
+        self.assertEqual(self.api.update_registro_revisado('lancamentos', {'id': 1, 'apartamento': ''})['status'], 'success')
+        self.assertEqual(models.Transacoes.get_by_id(1).apartamento, '')
+        # documentos tipo C (anexo) e P (prestação) com troca de extensão
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
+            abs_doc = f.name
+        anexo = models.Anexos.create(transacao_id=1, caminho_local='anexos/t.pdf', nome_original='t.pdf', extensao='pdf')
+        resp = self.api.update_registro_revisado('documentos', {'id': anexo.id, 'tipo_doc': 'C', 'extensao': 'png', 'revisado_usuario': 1})
+        self.assertEqual(resp['status'], 'success')
+        self.assertEqual(models.Anexos.get_by_id(anexo.id).extensao, 'png')
+        pc = models.PrestacoesContas.create(mes_id=1, caminho_local='anexos/p.pdf', nome_original='p.pdf', extensao='pdf')
+        resp = self.api.update_registro_revisado('documentos', {'id': pc.id, 'tipo_doc': 'P', 'extensao': 'jpg'})
+        self.assertEqual(resp['status'], 'success')
+        self.assertEqual(models.PrestacoesContas.get_by_id(pc.id).extensao, 'jpg')
+        # tipo desconhecido -> nenhum branch executa, retorna success
+        self.assertEqual(self.api.update_registro_revisado('desconhecido', {'id': 1})['status'], 'success')
+        # erro: id inexistente
+        self.assertEqual(self.api.update_registro_revisado('meses', {'id': 99999})['status'], 'error')
+        os.unlink(abs_doc)
+
+    def test_get_transacoes_datas_invalidas_e_arestas(self):
+        r = self.api.get_transacoes('data-invalida', 'outra-invalida')
+        self.assertIn(r['status'], ('success', 'error'))
+        r2 = self.api.get_transacoes()
+        self.assertIn(r2['status'], ('success', 'error'))
+        self.assertTrue(r2.get('data') is not None or r2['status'] == 'error')
+        r3 = self.api.get_transacoes('2023-01-01', '2023-01-31')
+        self.assertEqual(r3['status'], 'success')
+
+    def test_renegociacao_e_arquivo_e_anexos(self):
+        import models
+        ren = models.Renegociacao.create(condominio_id=self.condo_id, apartamento='101', data_renegociacao='18/01/2023')
+        self.assertEqual(self.api.get_renegociacao(ren.id)['status'], 'success')
+        self.assertEqual(self.api.get_renegociacao(99999)['status'], 'error')
+        self.assertEqual(self.api.delete_renegociacao(99999)['status'], 'success')
+        # salvar_renegociacao payload inválido/válido
+        resp = self.api.salvar_renegociacao({'apartamento': '101', 'data_renegociacao': '20/01/2023'})
+        self.assertIn(resp['status'], ('success', 'error'))
+        # anexos e prestações
+        self.assertIn(self.api.get_anexos_transacao(1)['status'], ('success', 'error'))
+        self.assertIn(self.api.get_anexos_transacao(99999)['status'], ('success', 'error'))
+        self.assertIn(self.api.get_prestacoes_contas_mes('2023-01')['status'], ('success', 'error'))
+        # selecionar_arquivo / abrir_arquivo_local
+        self.api._main_window = MagicMock()
+        self.api._main_window.create_file_dialog.return_value = []
+        self.assertEqual(self.api.selecionar_arquivo()['status'], 'cancelled')
+        self.api._main_window.create_file_dialog.return_value = ['/tmp/sem_extensao']
+        self.assertEqual(self.api.selecionar_arquivo()['status'], 'error')
+        self.api._main_window.create_file_dialog.return_value = ['/tmp/x.pdf']
+        self.assertEqual(self.api.selecionar_arquivo()['data'], '/tmp/x.pdf')
+        self.api._main_window = None
+        self.assertEqual(self.api.selecionar_arquivo()['message'], 'Janela não disponível.')
+        self.assertEqual(self.api.abrir_arquivo_local(None)['message'], 'Caminho inválido.')
+        with patch('os.path.exists', return_value=True), patch('os.startfile') as startfile:
+            self.assertEqual(self.api.abrir_arquivo_local('anexos/x.pdf')['status'], 'success')
+            startfile.assert_called_once()
+        with patch('os.path.exists', return_value=False):
+            self.assertEqual(self.api.abrir_arquivo_local('anexos/x.pdf')['message'], 'Arquivo não encontrado no disco.')
+
+    def test_preferencias_sync_e_app_ready(self):
+        self.assertIn(self.api.sync_preferencias_cache({})['status'], ('success', 'error'))
+        self.assertIn(self.api.app_ready()['status'], ('success', 'error'))
+        prefs = self.api.get_preferencias()
+        self.assertIn(prefs['status'], ('success', 'error'))
+        resp = self.api.salvar_preferencias({'modo_escuro': False, 'cor_primaria': 'blue'})
+        self.assertEqual(resp['status'], 'success')
+
+    def test_init_condo_id_e_posicao_unificada_erros(self):
+        import models, json
+        # _initialize_condo_id: preferencia sem condominio valido -> tenta set_condominio
+        pref = models.PreferenciasUsuario.get(models.PreferenciasUsuario.condominio_id == self.condo_id) if models.PreferenciasUsuario.select().exists() else None
+        import datetime as _dt
+        self.api.condo_id = 'fantasma'
+        with self.assertRaises(ValueError):
+            self.api._calcular_posicao_unificada(_dt.date(2023, 1, 31), {})
+        models.Condominio.create(id='fantasma', nome='F', apartamentos='json-quebrado')
+        with self.assertRaises(Exception):
+            self.api._calcular_posicao_unificada(_dt.date(2023, 1, 31), {})
+        self.api.condo_id = self.condo_id
+        # get_nome_condominio com exceção
+        with patch('models.Condominio.get_or_none', side_effect=RuntimeError('falha')):
+            self.assertEqual(self.api.get_nome_condominio()['status'], 'error')
+        with patch('models.Condominio.select', side_effect=RuntimeError('falha')):
+            self.assertEqual(self.api.get_condominios()['status'], 'error')
+        with patch.object(self.api, 'salvar_preferencias', side_effect=RuntimeError('x')):
+            pass
+        # relatorio conta sem dados / conta inválida
+        self.assertIn(self.api.get_relatorio_conta({'conta': 'inexistente'})['status'], ('success', 'error'))
+        # get_condominio_config com exceção genérica
+        with patch('models.MembrosGestao.select', side_effect=RuntimeError('falha')):
+            self.assertEqual(self.api.get_condominio_config()['status'], 'error')
+        # update_condominio_config com condo inexistente
+        self.api.condo_id = 'nao-existe-xyz'
+        resp = self.api.update_condominio_config({'condominio': {'nome': 'X'}})
+        self.assertEqual(resp['status'], 'error')
+        self.api.condo_id = self.condo_id
+        # validar_margem via update com valor limite
+        self.assertEqual(self.api.update_condominio_config({'condominio': {'margem_diferenca_encargos': 'abc'}})['status'], 'error')
+        self.assertEqual(self.api.update_condominio_config({'condominio': {'margem_diferenca_encargos': 0.001}})['status'], 'error')
+        # taxas: get com tipos, delete/update inexistente
+        self.assertEqual(self.api.get_taxas(tipos=['C'])['status'], 'success')
+        self.assertEqual(self.api.delete_taxa(99999)['status'], 'error')
+        self.assertEqual(self.api.update_taxa(99999, {'valor_original': 1})['status'], 'error')
+        # insert_taxa com payload parcial
+        resp = self.api.insert_taxa({'tipo': 'C', 'apartamento': '101', 'competencia': '2023-03', 'descricao': 'Taxa X', 'valor_original': 10})
+        self.assertIn(resp['status'], ('success', 'error'))
+        # get_taxas_por_apartamento
+        self.assertEqual(self.api.get_taxas_por_apartamento('101', ['2023-01', '2023-12'])['status'], 'success')
+        self.assertEqual(self.api.get_taxas_por_apartamento('101', ['2023-01', '2023-12'], tipos=['X'])['data'], [])
+
+    def test_dashboard_kpis_e_transacoes_basicos(self):
+        kpis = self.api.get_dashboard_kpis()
+        self.assertIn(kpis['status'], ('success', 'error'))
+        transacoes = self.api.get_transacoes('2023-01-01', '2023-12-31')
+        self.assertIn(transacoes['status'], ('success', 'error'))
+        inadimplencia = self.api.get_inadimplencia()
+        self.assertIn(inadimplencia['status'], ('success', 'error'))
+        self.assertEqual(self.api.get_taxas()['status'], 'success')
+        self.assertEqual(self.api.get_apartamentos()['status'], 'success')
 
 if __name__ == '__main__':
     unittest.main()

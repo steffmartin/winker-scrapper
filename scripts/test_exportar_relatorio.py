@@ -118,6 +118,16 @@ class TestExportarRelatorio(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'Não foi possível'):
                 exportar_relatorio._gerar_pdf(janela, 'C:/relatorios/extrato.pdf')
 
+    def test_nome_ja_com_extensao_nao_e_repetido(self):
+        janela = Mock()
+        janela.create_file_dialog.return_value = 'C:/relatorios/arquivo.pdf'
+        janela.evaluate_js.return_value = '<html></html>'
+        auxiliar = Mock()
+        auxiliar.events.loaded.wait.return_value = True
+        with patch.object(exportar_relatorio, '_gerar_pdf'), patch.object(exportar_relatorio.webview, 'create_window', return_value=auxiliar):
+            exportar_relatorio.salvar_pdf(janela, 'Relatório.PDF')
+        self.assertEqual(janela.create_file_dialog.call_args.kwargs['save_filename'], 'Relatório.PDF')
+
     def test_falha_ao_carregar_fecha_janela_auxiliar(self):
         janela = Mock()
         janela.create_file_dialog.return_value = ('C:/relatorios/arquivo.pdf',)
