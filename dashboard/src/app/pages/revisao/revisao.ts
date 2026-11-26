@@ -1,3 +1,4 @@
+import { DicaOrdenacaoComponent } from '../../shared/dica-ordenacao.component';
 import { RodaAbasDirective } from '../../shared/roda-abas.directive';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -21,7 +22,7 @@ import { LayoutService } from '@/app/layout/service/layout.service';
     selector: 'app-revisao',
     standalone: true,
     imports: [
-        CommonModule, CardModule, TabsModule, RodaAbasDirective, TableModule, ButtonModule,
+        CommonModule, DicaOrdenacaoComponent, CardModule, TabsModule, RodaAbasDirective, TableModule, ButtonModule,
         BadgeModule, ChipModule, AvatarModule, ToastModule, ConfirmDialogModule,
         ToggleSwitchModule, FormsModule
     ],

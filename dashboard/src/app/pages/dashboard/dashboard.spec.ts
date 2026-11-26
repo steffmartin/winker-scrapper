@@ -28,6 +28,20 @@ describe('Dashboard', () => {
         expect(component).toBeTruthy();
     });
 
+    it('marca todas as viradas de ano mesmo sem janeiro e no último ponto', () => {
+        component.initChartPlugins();
+        const ctx = { save: jasmine.createSpy(), beginPath: jasmine.createSpy(), setLineDash: jasmine.createSpy(),
+            moveTo: jasmine.createSpy(), lineTo: jasmine.createSpy(), stroke: jasmine.createSpy(),
+            fillText: jasmine.createSpy(), restore: jasmine.createSpy() };
+        const labels = ['ABR/2022', 'DEZ/2022', 'FEV/2023', 'DEZ/2023', 'JAN/2024', 'JAN/2025', 'JAN/2026'];
+        const chart = { ctx, chartArea: { top: 0, bottom: 100 }, data: { labels },
+            scales: { x: { getPixelForValue: (i: number) => i * 10 } },
+            getDatasetMeta: () => ({ data: labels.map((_, i) => ({ x: i * 10 })) }) };
+        component.chartPlugins[0].afterDraw(chart);
+        expect(ctx.fillText.calls.allArgs().map(args => args[0])).toEqual(['2023', '2024', '2025', '2026']);
+        expect(ctx.moveTo.calls.allArgs().map(args => args[0])).toEqual([15, 40, 50, 60]);
+    });
+
     it('restringe toda a árvore por apartamento, inclusive números com zeros à esquerda', () => {
         const folha = (apartamento: any, valor: number) => ({ data: { tipo_node: 'transacao', apartamento, valor } });
         const mes = (descricao: string, folhas: any[]) => ({ data: { tipo_node: 'mes', descricao }, children: [

@@ -1,3 +1,4 @@
+<app-dica-ordenacao [hidden]="displayDialogRenegociacao"></app-dica-ordenacao>
 <div class="card shadow-sm border rounded-xl w-full relative">
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
         <h4 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-0">Cobranças</h4>
@@ -231,6 +232,7 @@
 
     @defer (when displayDialogRenegociacao) {
     <p-dialog [(visible)]="displayDialogRenegociacao" [modal]="true" [style]="{width: '65vw'}" [breakpoints]="{'1199px': '75vw', '960px': '90vw', '640px': '95vw'}" [draggable]="false" [resizable]="false" [dismissableMask]="true" [closable]="true">
+        <app-dica-ordenacao *ngIf="displayDialogRenegociacao"></app-dica-ordenacao>
         <ng-template pTemplate="header">
             <div class="flex items-center gap-2">
                 <span class="font-bold text-lg">{{ isEdit ? 'Editar Renegociação' : 'Nova Renegociação' }}</span>

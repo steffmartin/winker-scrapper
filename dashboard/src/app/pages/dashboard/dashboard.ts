@@ -137,20 +137,17 @@ export class Dashboard implements OnInit {
                     if (!chart.chartArea || !chart.data || !chart.data.labels) return;
                     const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
 
+                    let previousYear: string | null = null;
                     chart.data.labels.forEach((label: string, index: number) => {
-                        if (index > 0 && index < chart.data.labels.length - 1 && label && label.toString().toUpperCase().startsWith('JAN/')) {
-                            // Using getPixelForValue or meta data to avoid autoSkip issues from getPixelForTick
-                            const meta = chart.getDatasetMeta(0);
-                            let xPos = 0;
-                            if (meta && meta.data && meta.data[index]) {
-                                xPos = meta.data[index].x;
-                            } else {
-                                // Fallback for Category scale
-                                xPos = x.getPixelForValue(index);
-                            }
-
-                            const yearMatch = label.match(/\d{4}/);
-                            const year = yearMatch ? yearMatch[0] : '';
+                        const year = label?.toString().match(/\/(\d{4})$/)?.[1];
+                        if (!year) return;
+                        const yearChanged = previousYear !== null && year !== previousYear;
+                        previousYear = year;
+                        if (yearChanged) {
+                            // A escala mantém a posição mesmo quando o conjunto de receitas não tem ponto no mês.
+                            const atual = x.getPixelForValue(index);
+                            const janeiroVisivel = label.toString().toUpperCase().startsWith('JAN/');
+                            const xPos = janeiroVisivel ? atual : (x.getPixelForValue(index - 1) + atual) / 2;
 
                             ctx.save();
                             ctx.beginPath();
@@ -164,7 +161,7 @@ export class Dashboard implements OnInit {
 
                             ctx.fillStyle = primaryColor;
                             ctx.font = 'bold 12px sans-serif';
-                            ctx.textAlign = 'center';
+                            ctx.textAlign = janeiroVisivel && index === chart.data.labels.length - 1 ? 'right' : 'center';
                             // Desenha o ano um pouco acima do topo da área do chart, ou no topo do chart se preferir
                             ctx.fillText(year, xPos, top + 15);
                             ctx.restore();

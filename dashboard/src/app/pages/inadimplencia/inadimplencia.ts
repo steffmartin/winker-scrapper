@@ -1,3 +1,4 @@
+import { DicaOrdenacaoComponent } from '../../shared/dica-ordenacao.component';
 import { RodaAbasDirective } from '../../shared/roda-abas.directive';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -26,7 +27,7 @@ declare global {
     selector: 'app-inadimplencia',
     standalone: true,
     imports: [
-        CommonModule, CardModule, TabsModule, RodaAbasDirective, TableModule, ButtonModule,
+        CommonModule, DicaOrdenacaoComponent, CardModule, TabsModule, RodaAbasDirective, TableModule, ButtonModule,
         InputTextModule, InputNumberModule, DatePickerModule, AvatarModule, 
         FormsModule, ToastModule, BadgeModule, TooltipModule, SkeletonModule
     ],

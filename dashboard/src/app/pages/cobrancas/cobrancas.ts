@@ -1,3 +1,4 @@
+import { DicaOrdenacaoComponent } from '../../shared/dica-ordenacao.component';
 import { RodaAbasDirective } from '../../shared/roda-abas.directive';
 import { CalendarioEstavelDirective } from '../../shared/calendario-estavel.directive';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
@@ -28,7 +29,7 @@ import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
     selector: 'app-cobrancas',
     standalone: true,
     imports: [
-        CommonModule, CardModule, TabsModule, RodaAbasDirective, CalendarioEstavelDirective, TableModule, ButtonModule,
+        CommonModule, DicaOrdenacaoComponent, CardModule, TabsModule, RodaAbasDirective, CalendarioEstavelDirective, TableModule, ButtonModule,
         InputTextModule, InputNumberModule, DatePickerModule, InputMaskModule,
         DialogModule, ConfirmDialogModule, ToastModule, AvatarModule, SpeedDialModule, SelectModule, MultiSelectModule, TooltipModule, FormsModule, InputGroupModule, InputGroupAddonModule
     ],
