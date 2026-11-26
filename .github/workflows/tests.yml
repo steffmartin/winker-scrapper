@@ -29,7 +29,7 @@ jobs:
       - name: Instalar Dependências Python
         run: |
           python -m pip install --upgrade pip
-          pip install playwright python-dotenv pypdf pywebview
+          pip install playwright python-dotenv pypdf pywebview coverage
 
       - name: Instalar Navegador Chromium (Playwright)
         run: |
@@ -37,12 +37,14 @@ jobs:
 
       - name: Executar Testes de Unidade (Python)
         run: |
-          # Executa todos os testes na pasta 'scripts'
-          python -m unittest discover -s scripts -p "test_*.py"
-          
+          # Executa todos os testes na pasta 'scripts' com medição de cobertura
+          python -m coverage run --source=scripts --omit='*/test_*.py' -m unittest discover -s scripts -p "test_*.py"
+          # Falha se a cobertura de instruções ficar abaixo de 90%
+          python -m coverage report --fail-under=90 --omit='*/test_*.py'
+
           # Se novas pastas com scripts e testes Python forem adicionadas,
           # novos comandos de descoberta podem ser inseridos abaixo, por exemplo:
-          # python -m unittest discover -s nova_pasta/ -p "test_*.py"
+          # python -m coverage run --source=scripts --omit='*/test_*.py' -m unittest discover -s nova_pasta/ -p "test_*.py"
 
   frontend-tests:
     name: Testes Unitários - Frontend (Angular)
@@ -67,5 +69,9 @@ jobs:
       - name: Executar Testes de Unidade (Angular)
         run: |
           cd dashboard
-          # Executa os testes no modo headless para CI
-          npm test -- --watch=false --browsers=ChromeHeadless
+          # Executa os testes no modo headless para CI, com cobertura
+          npm test -- --watch=false --browsers=ChromeHeadless --code-coverage
+
+      - name: Verificar Cobertura Mínima do Frontend (90%)
+        run: |
+          node -e "const s=require('./dashboard/coverage/sakai-ng/coverage-summary.json').total; console.log('Lines:', s.lines.pct + '%', '| Statements:', s.statements.pct + '%', '| Branches:', s.branches.pct + '%', '| Functions:', s.functions.pct + '%'); const ok = s.lines.pct >= 90 && s.statements.pct >= 90; if (!ok) { console.error('Cobertura abaixo de 90% em linhas ou statements'); process.exit(1); }"
