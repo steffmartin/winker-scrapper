@@ -73,7 +73,7 @@ mark.relatorio-busca-termo {
     body:has(.relatorio-impressao) {
         background: white !important;
 
-        app-topbar, app-sidebar, app-footer, p-toast, .layout-mask, .relatorios-controles, .relatorio-acoes {
+        app-topbar, app-sidebar, p-toast, .layout-mask, .relatorios-controles, .relatorio-acoes {
             display: none !important;
         }
 

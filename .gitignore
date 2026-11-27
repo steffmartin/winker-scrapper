@@ -5,6 +5,7 @@
 *.env.*
 *.config
 /compartilhado/config/*
+/compartilhado/config/importacoes.json
 !/compartilhado/config/example.config
 *.credentials
 *.credentials.*

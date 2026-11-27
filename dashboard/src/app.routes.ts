@@ -9,6 +9,7 @@ export const appRoutes: Routes = [
         component: AppLayout,
         children: [
             { path: '', component: Dashboard },
+            { path: 'importacao', loadComponent: () => import('./app/pages/importacao/importacao').then(m => m.ImportacaoComponent) },
             { 
                 path: 'revisao', 
                 loadComponent: () => import('./app/pages/revisao/revisao').then(m => m.RevisaoComponent)

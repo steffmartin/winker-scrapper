@@ -2,6 +2,7 @@
 import re
 import socket
 import subprocess
+import sys
 import threading
 import urllib.request
 from datetime import datetime
@@ -64,7 +65,8 @@ def get_mac_address():
         
         if local_ip:
             cmd = ["powershell", "-Command", f"(Get-NetIPAddress -IPAddress {local_ip} | Get-NetAdapter).MacAddress"]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=2)
+            creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=2, creationflags=creationflags)
             mac = result.stdout.strip()
             if mac:
                 mac_clean = mac.replace("-", ":").lower()

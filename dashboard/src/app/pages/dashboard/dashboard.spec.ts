@@ -164,7 +164,7 @@ describe('Dashboard', () => {
 
     it('carrega indicadores e apresenta o síndico e os demais membros', async () => {
         const api = { get_dashboard_kpis: jasmine.createSpy().and.resolveTo({ status: 'success', data: {
-            gestao: { membros: [{ nome: 'Ana Souza', cargo: 'Síndica' }, { nome: 'Bruno Silva', cargo: 'Conselheiro' },
+            gestao: { membros: [{ nome: 'Ana Souza - Síndica', cargo: 'Síndica' }, { nome: 'Bruno Silva', cargo: 'Conselheiro' },
                 { nome: 'Carla Lima', cargo: 'Conselheira' }, { nome: 'Daniel Costa', cargo: 'Subsíndico' },
                 { nome: 'Eva Alves', cargo: 'Conselheira' }] }
         } }) };

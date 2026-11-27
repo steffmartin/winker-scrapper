@@ -91,6 +91,33 @@ describe('AppTopbar', () => {
         expect(sair).toHaveBeenCalledOnceWith();
     });
 
+    it('atualiza a contagem ao terminar cada importação, inclusive em falha', async () => {
+        let estado: any = { id: 1, is_running: true, resultado: null, log: '', cursor: 0 };
+        const contagem = jasmine.createSpy().and.resolveTo({ status: 'success', data: { count: 7 } });
+        (window as any).pywebview = { api: {
+            obter_estado_importacao: () => Promise.resolve({ status: 'success', data: estado }),
+            get_nome_condominio: () => Promise.resolve({ status: 'success', data: { nome: 'Teste' } }),
+            get_pendencias_revisao_count: contagem
+        } };
+        component.ngOnInit();
+        await component.importacao.atualizar();
+        expect(contagem).toHaveBeenCalledTimes(1);
+        estado = { ...estado, is_running: false, resultado: 'sucesso' };
+        await component.importacao.atualizar();
+        await Promise.resolve();
+        expect(contagem).toHaveBeenCalledTimes(2);
+        expect(component.pendenciasCount).toBe(7);
+        await component.importacao.atualizar();
+        expect(contagem).toHaveBeenCalledTimes(2);
+        estado = { ...estado, id: 2, resultado: 'falha' };
+        await component.importacao.atualizar();
+        expect(contagem).toHaveBeenCalledTimes(3);
+        component.ngOnDestroy();
+        estado = { ...estado, id: 3 };
+        await component.importacao.atualizar();
+        expect(contagem).toHaveBeenCalledTimes(3);
+    });
+
     it('apresenta menu sem condomínios quando a consulta falha', async () => {
         const consulta = jasmine.createSpy().and.rejectWith(new Error('falha simulada'));
         (window as any).pywebview = { api: { get_condominios: consulta } };

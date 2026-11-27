@@ -34,7 +34,9 @@ class CliExtracaoTest(unittest.TestCase):
                  patch.object(models, 'init_models') as iniciar_banco, \
                  patch.object(models.Auditoria, 'create', return_value=MagicMock(id=None)), \
                  patch('socket.socket', side_effect=OSError('rede desativada')):
-                runpy.run_path(str(copia), run_name='__main__')
+                with self.assertRaises(SystemExit) as saida:
+                    runpy.run_path(str(copia), run_name='__main__')
+                self.assertEqual(saida.exception.code, 1)
             carregar.assert_called_once_with('ficticio.json')
             iniciar_banco.assert_called_once_with(os.path.join(pasta, 'compartilhado', 'database', 'winker_data.db'))
             navegador.close.assert_called_once_with()

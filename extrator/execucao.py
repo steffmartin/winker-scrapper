@@ -287,7 +287,8 @@ class WinkerScraper:
                 iframe = page.frame(name="pageIframe") or page.frame(url=lambda u: "financial-summary" in u)
                 if not iframe:
                     logger.error("Erro: Não foi possível carregar o iframe do Balancete na aba principal.")
-                    return
+                    update_current_audit(status='falha', erro='Não foi possível carregar o balancete.')
+                    return False
                 iframe.wait_for_load_state("domcontentloaded")
             
                 # ---> CAPTURA DO SALDO DECLARADO (Antes de aplicar os filtros por mês)
@@ -310,7 +311,8 @@ class WinkerScraper:
                 iframe_pc = page_pc.frame(name="pageIframe") or page_pc.frame(url=lambda u: "financial-summary" in u)
                 if not iframe_pc:
                     logger.error("Erro: Não foi possível carregar o iframe do Balancete na aba secundária.")
-                    return
+                    update_current_audit(status='falha', erro='Não foi possível carregar a prestação de contas.')
+                    return False
                 iframe_pc.wait_for_load_state("domcontentloaded")
             
                 tab_pc = iframe_pc.locator("super-tab-button:has-text('PRESTAÇÃO DE CONTAS')")
@@ -416,9 +418,11 @@ class WinkerScraper:
             
                 # Salvar dados de auditoria
                 update_current_audit(status='concluida')
+                return True
             except Exception as e:
                 logger.error(f"Erro inesperado durante a extração: {e}", exc_info=True)
                 update_current_audit(status='falha', erro=str(e))
+                return False
             finally:
                 update_current_audit()
                 browser.close()

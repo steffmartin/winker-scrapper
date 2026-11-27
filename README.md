@@ -98,6 +98,8 @@ configuração):
    python bff/main.py
    ```
 
+   Na tela **Importação**, selecione o arquivo de configuração do condomínio ativo. O arquivo de exemplo não aparece na lista. Ao iniciar, os parâmetros são salvos e a associação é lembrada para o condomínio; o console permite responder às solicitações do extrator e continua disponível durante a navegação. A opção “Não aguardar ao finalizar” dispensa a confirmação final. O atalho e o comando manual continuam disponíveis.
+
 
 ---
 

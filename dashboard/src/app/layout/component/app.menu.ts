@@ -36,6 +36,7 @@ export class AppMenu {
                 items: [
                     { label: 'Revisão', icon: 'pi pi-fw pi-check-square', routerLink: ['/revisao'] },
                     { label: 'Cobranças', icon: 'pi pi-fw pi-money-bill', routerLink: ['/cobrancas'] },
+                    { label: 'Importação', icon: 'pi pi-fw pi-download', routerLink: ['/importacao'] },
                     { label: 'Configurações', icon: 'pi pi-fw pi-cog', routerLink: ['/configuracoes'] }
                 ]
             }

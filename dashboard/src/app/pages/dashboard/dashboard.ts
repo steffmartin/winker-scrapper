@@ -14,6 +14,8 @@ import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { FormsModule } from '@angular/forms';
 import { TreeNode } from 'primeng/api';
+import { MessageService } from 'primeng/api';
+import { ToastModule } from 'primeng/toast';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
@@ -50,10 +52,11 @@ import { LayoutService } from '@/app/layout/service/layout.service';
         InputGroupModule,
         InputGroupAddonModule,
         ChartModule,
-        PopoverModule
+        PopoverModule,
+        ToastModule
     ],
     providers: [
-        { provide: LOCALE_ID, useValue: 'pt-BR' }
+        { provide: LOCALE_ID, useValue: 'pt-BR' }, MessageService
     ],
     templateUrl: './dashboard.html',
     styles: [`
@@ -69,6 +72,13 @@ import { LayoutService } from '@/app/layout/service/layout.service';
     `]
 })
 export class Dashboard implements OnInit {
+    private mensagens = inject(MessageService);
+    private avisouDesatualizacao = false;
+    get dadosDesatualizados(): boolean {
+        const valor = this.kpis.estatisticas?.ultima_atualizacao;
+        const data = valor ? new Date(valor).getTime() : NaN;
+        return Number.isFinite(data) && Date.now() - data > 7 * 24 * 60 * 60 * 1000;
+    }
     isMockMode = false;
     loadingKpis = true;
     kpis: any = {
@@ -259,6 +269,10 @@ export class Dashboard implements OnInit {
             if (response.status === 'success') {
                 this.kpis = response.data;
                 this.processMembers();
+                if (this.dadosDesatualizados && !this.avisouDesatualizacao) {
+                    this.avisouDesatualizacao = true;
+                    this.mensagens.add({ severity: 'warn', summary: 'Dados desatualizados', detail: 'Execute uma importação para atualizar os dados.' });
+                }
             } else {
                 console.error('Erro ao buscar KPIs', response.message);
             }
@@ -284,7 +298,7 @@ export class Dashboard implements OnInit {
         let centerMember: any = null;
         
         if (sindico) {
-            this.sindicoName = sindico.nome;
+            this.sindicoName = sindico.nome.split(' - ')[0].trim();
             centerMember = sindico;
         } else if (membros.length > 0) {
             this.sindicoName = membros[0].nome;

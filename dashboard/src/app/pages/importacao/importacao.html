@@ -1,0 +1,29 @@
+<div class="card shadow-sm border rounded-xl w-full">
+    <h4 class="text-xl font-bold mb-4">Importação</h4>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div class="flex flex-col gap-2">
+            <label for="arquivo" class="font-medium">Arquivo de configuração</label>
+            <p-select inputId="arquivo" [options]="arquivos" [(ngModel)]="arquivo" (onChange)="carregar()" placeholder="Selecione um arquivo" styleClass="w-full" />
+        </div>
+    </div>
+    <form [formGroup]="form" (ngSubmit)="iniciar()">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="flex flex-col gap-2"><label for="user">Usuário</label><input pInputText id="user" formControlName="user" /></div>
+            <div class="flex flex-col gap-2"><label for="password">Senha</label><input pInputText id="password" type="password" formControlName="password" /></div>
+            <div class="flex flex-col gap-2"><label for="wl">Código da administradora</label><input pInputText id="wl" formControlName="wl" /></div>
+            <div class="flex flex-col gap-2"><label for="portal">Posição do condomínio no portal</label><input pInputText id="portal" type="number" min="1" formControlName="portal_index" /></div>
+            <div class="flex flex-col gap-2"><label for="nivel">Nível de log</label><p-select inputId="nivel" [options]="niveis" formControlName="log_level" styleClass="w-full" /></div>
+            <div class="flex flex-col gap-2"><label for="periodo">Período de competência</label><p-datepicker inputId="periodo" formControlName="periodo" selectionMode="range" view="month" dateFormat="mm/yy" [showIcon]="true" [readonlyInput]="true" [showClear]="true" placeholder="Selecione início e fim" appendTo="body" class="w-full" styleClass="w-full primary-datepicker-btn" inputStyleClass="w-full" /></div>
+            <div class="flex items-center gap-3"><p-toggleswitch inputId="headless" formControlName="headless" /><label for="headless">Navegador oculto</label></div>
+            <div class="flex items-center gap-3"><p-toggleswitch inputId="no_wait" formControlName="no_wait" /><label for="no_wait">Não aguardar ao finalizar</label></div>
+        </div>
+        <p *ngIf="erro" role="alert" class="text-red-600 mt-4">{{ erro }}</p>
+        <div class="flex justify-end mt-6"><p-button label="Iniciar Importação" icon="pi pi-play" type="submit" [loading]="iniciando" [disabled]="!carregado || form.invalid || acompanhamento.estado().is_running" /></div>
+    </form>
+</div>
+<div class="card console-card shadow-sm border rounded-xl w-full">
+    <h4 class="text-xl font-bold mb-4">Console de importação</h4>
+    <pre #console (scroll)="aoRolarConsole()" class="console-log bg-surface-100 dark:bg-surface-800 text-surface-900 dark:text-surface-0 rounded-lg p-4 overflow-auto whitespace-pre-wrap break-words" aria-live="polite">{{ acompanhamento.log() || 'A saída da importação aparecerá aqui.' }}</pre>
+    <p *ngIf="acompanhamento.estado().erro" class="text-red-600">{{ acompanhamento.estado().erro }}</p>
+    <p-inputgroup class="mt-3"><input pInputText [(ngModel)]="entrada" (keydown.enter)="enviar()" [disabled]="!acompanhamento.estado().is_running" aria-label="Entrada do console" placeholder="Digite uma resposta para o extrator" style="border-top-right-radius: 0; border-bottom-right-radius: 0" /><button type="button" pButton icon="pi pi-arrow-up" aria-label="Enviar resposta" (click)="enviar()" [disabled]="!acompanhamento.estado().is_running" style="border-top-left-radius: 0; border-bottom-left-radius: 0; border-top-right-radius: var(--p-button-border-radius); border-bottom-right-radius: var(--p-button-border-radius)"></button></p-inputgroup>
+</div>

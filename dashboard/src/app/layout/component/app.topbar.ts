@@ -10,6 +10,7 @@ import { SkeletonModule } from 'primeng/skeleton';
 import { OverlayBadgeModule } from 'primeng/overlaybadge';
 import { MenuModule } from 'primeng/menu';
 import { TooltipModule } from 'primeng/tooltip';
+import { ImportacaoService } from '@/app/pages/importacao/importacao.service';
 
 @Component({
     selector: 'app-topbar',
@@ -62,6 +63,7 @@ import { TooltipModule } from 'primeng/tooltip';
 
             <div class="layout-topbar-menu hidden lg:block">
                 <div class="layout-topbar-menu-content">
+                    <button *ngIf="importacao.estado().is_running" type="button" class="layout-topbar-action" routerLink="/importacao" pTooltip="Importação em andamento" tooltipPosition="bottom" aria-label="Importação em andamento"><i class="pi pi-sync pi-spin"></i><span>Importação</span></button>
                     <button type="button" class="layout-topbar-action" routerLink="/revisao"
                             [pTooltip]="'Há ' + pendenciasCount + ' registros para revisar'" tooltipPosition="bottom">
                         <p-overlayBadge [value]="pendenciasCount.toString()" badgeSize="small" *ngIf="pendenciasCount > 0">
@@ -83,8 +85,10 @@ import { TooltipModule } from 'primeng/tooltip';
     </div>`
 })
 export class AppTopbar implements OnInit, OnDestroy {
+    importacao = inject(ImportacaoService);
     items!: MenuItem[];
     reviewSub!: Subscription;
+    importacaoSub!: Subscription;
     userMenuItems: MenuItem[] = [];
     condominios: any[] = [];
     currentCondoId: string | null = null;
@@ -102,12 +106,14 @@ export class AppTopbar implements OnInit, OnDestroy {
         this.reviewSub = this.layoutService.onReviewSaved.subscribe(() => {
             this.fetchFromApi();
         });
+        this.importacaoSub = this.importacao.concluida.subscribe(() => this.fetchFromApi());
     }
 
     ngOnDestroy() {
         if (this.reviewSub) {
             this.reviewSub.unsubscribe();
         }
+        this.importacaoSub?.unsubscribe();
     }
 
     loadCondoData() {

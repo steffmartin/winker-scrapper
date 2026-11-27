@@ -1,3 +1,4 @@
+<p-toast position="bottom-right"></p-toast>
 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6 mb-6">
     <!-- Skeletons para Loading Elegante -->
     <ng-container *ngIf="loadingKpis">
@@ -100,9 +101,9 @@
         </div>
 
         <!-- Estatísticas do Sistema -->
-        <div class="mb-0 shadow-sm rounded-xl h-full flex flex-col justify-between p-6 transform transition duration-300 hover:-translate-y-1 hover:shadow-lg border bg-surface-0 dark:bg-surface-900 border-surface-300 dark:border-surface-700">
+        <a routerLink="/importacao" class="mb-0 shadow-sm rounded-xl h-full flex flex-col justify-between p-6 transform transition duration-300 hover:-translate-y-1 hover:shadow-lg border bg-surface-0 dark:bg-surface-900 border-primary-300 dark:border-primary-800 cursor-pointer" aria-label="Abrir importação de dados">
             <div class="flex justify-between items-center">
-                <span class="block font-medium text-xl text-surface-500 dark:text-surface-400">Atualizado em</span>
+                <span class="block font-medium text-xl text-surface-500 dark:text-surface-400">Atualizado em <i *ngIf="dadosDesatualizados" class="pi pi-exclamation-triangle text-orange-500" pTooltip="Dados desatualizados. Execute uma importação." tooltipPosition="bottom"></i></span>
                 <div class="flex items-center justify-center rounded-xl w-14 h-14 bg-surface-100 dark:bg-surface-800">
                     <i class="pi pi-database text-surface-500 dark:text-surface-400" style="font-size: 2rem"></i>
                 </div>
@@ -115,7 +116,7 @@
                 <p-chip [label]="(kpis.estatisticas?.transacoes_total || 0) + ' transações'"></p-chip>
                 <p-chip [label]="(kpis.estatisticas?.anexos_baixados || 0) + ' documentos'"></p-chip>
             </div>
-        </div>
+        </a>
     </ng-container>
 </div>
 

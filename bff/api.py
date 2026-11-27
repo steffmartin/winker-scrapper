@@ -14,11 +14,13 @@ from bff.renegociacoes import Renegociacoes
 from bff.arquivos import Arquivos
 from bff.preferencias import Preferencias
 from bff.validacao import validar_margem_encargos
+from bff.importacao import Importacao
 
 
 class Api:
     def __init__(self, db_path=None, raiz_projeto=None):
         self._raiz_projeto = raiz_projeto or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self._importacao = Importacao(self)
         self._relatorios = Relatorios(self)
         self._tela_configuracoes = Configuracoes(self)
         self._tela_dashboard = Dashboard(self)
@@ -95,6 +97,21 @@ class Api:
                 return {"status": "error", "message": "Condomínio não encontrado."}
         except Exception as e:
             return {"status": "error", "message": str(e)}
+
+    def listar_configs_importacao(self):
+        return self._importacao.arquivos()
+
+    def carregar_config_importacao(self, nome):
+        return self._importacao.carregar(nome)
+
+    def iniciar_importacao(self, nome, dados, condominio_id):
+        return self._importacao.iniciar(nome, dados, condominio_id)
+
+    def obter_estado_importacao(self, cursor=0):
+        return self._importacao.obter_estado(cursor)
+
+    def enviar_entrada_importacao(self, texto):
+        return self._importacao.enviar_entrada(texto)
 
     def get_condominios(self):
         if self.init_error:

@@ -42,7 +42,8 @@ def main():
     e_obj = datetime(e_y, e_m, 1)
     
     try:
-        _extrator.extract_winker(user, password, wl, s_obj, e_obj, config.get("headless", False), config.get("portal_index"))
+        if _extrator.extract_winker(user, password, wl, s_obj, e_obj, config.get("headless", False), config.get("portal_index")) is False:
+            raise SystemExit(1)
     finally:
         if not config.get("no_wait", False):
             input("\nPressione Enter para continuar...")
