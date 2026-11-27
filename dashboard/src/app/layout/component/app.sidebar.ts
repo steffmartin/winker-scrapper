@@ -11,7 +11,7 @@ import { CommonModule } from '@angular/common';
     standalone: true,
     imports: [AppMenu, RouterModule, CommonModule],
     template: `
-        <div class="layout-sidebar !bg-gradient-to-b !from-indigo-50/50 !to-blue-50/50 !border-r !border-indigo-100/50 dark:!from-slate-900/50 dark:!to-indigo-900/50 dark:!border-slate-800">
+        <div class="layout-sidebar !border !border-surface-200 dark:!border-surface-800">
             @defer (on viewport) {
                 <app-menu></app-menu>
             } @placeholder {

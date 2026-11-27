@@ -213,6 +213,19 @@ export class Dashboard implements OnInit {
         }
     }
 
+    get saldoComDivergencia(): boolean {
+        const saldos = this.kpis?.saldos;
+        return saldos?.saldo_declarado !== undefined && saldos?.saldo_declarado !== null && saldos?.saldo_total !== saldos?.saldo_declarado;
+    }
+
+    get gestaoSemMembros(): boolean {
+        return !(this.kpis?.gestao?.membros?.length);
+    }
+
+    get inadimplenciaQuitada(): boolean {
+        return this.kpis?.inadimplencia?.valor === 0;
+    }
+
     public isMonthOpen(rowData: any): boolean {
         if (rowData?.tipo_node !== 'mes' || (!rowData?.competencia && !rowData?.descricao)) return false;
 

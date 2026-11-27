@@ -13,10 +13,11 @@ v21 + PrimeNG v21 + Tailwind CSS v4).
 - **Indicadores de Gestão (KPIs):** Visualização rápida da Gestão atual, Resumo do Mês (receitas vs despesas),
   Inadimplência, Saldo de Contas e Estatísticas do Sistema.
 - **Tema Dinâmico (Light/Dark Mode):** O layout é totalmente responsivo e se adapta suavemente a temas claros e escuros
-  usando classes dinâmicas e gradientes do Tailwind CSS.
+  usando os tokens semânticos do PrimeNG (`surface`, `primary`) via classes dinâmicas do Tailwind CSS. O tema é
+  aplicado no bootstrap a partir das preferências salvas (cor primária, superfície e preset Aura/Lara/Nora).
 - **Monitoramento de Inconsistências:** O painel superior (Topbar) exibe um badge de notificação interativo sempre que
   existirem transações ou meses com divergência matemática pendentes de revisão.
-- **Otimização de Performance:** Estratégias de lazy loading nativo do Angular 17+ (`@defer`) garantem que gráficos
+- **Otimização de Performance:** Estratégias de lazy loading nativo do Angular (`@defer`) garantem que gráficos
   pesados (Chart.js), popovers e menus ocultos sejam carregados sob demanda ou em modo *idle*, mantendo o tamanho do
   pacote inicial (*initial bundle*) extremamente leve.
 - **Design Premium:** Uso de Skeletons elegantes para carregamento, tipografia moderna e tolerância a dados faltantes (
@@ -181,6 +182,9 @@ localizados na pasta `dashboard/`:
 3. **Roteamento da Aplicação:**
     * [`dashboard/src/app.routes.ts`](dashboard/src/app.routes.ts)
         * Define as rotas raiz mapeando as telas (`/`, `/configuracoes`, etc.) dentro do layout Sakai.
+    * [`dashboard/src/app/layout/theme.ts`](dashboard/src/app/layout/theme.ts)
+        * Fonte única do tema: presets (Aura/Lara/Nora), paletas de superfície e primária, e a função
+          `applyLayoutTheme` usada pelo bootstrap e pelo configurador de aparência.
 4. **Configurações Globais do Angular:**
     * [`dashboard/src/app.config.ts`](dashboard/src/app.config.ts)
         * Ativa o Hash Location (`withHashLocation`), eliminando erros 404 de navegação no navegador do app nativo.

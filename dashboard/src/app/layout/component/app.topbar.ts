@@ -20,7 +20,7 @@ import { TooltipModule } from 'primeng/tooltip';
             font-size: 0.5rem !important;
         }
     `],
-    template: ` <div class="layout-topbar !bg-gradient-to-r !from-indigo-50/50 !to-blue-50/50 !border-b !border-indigo-100/50 dark:!from-slate-900/50 dark:!to-indigo-900/50 dark:!border-slate-800">
+    template: ` <div class="layout-topbar !border-b !border-surface-200 dark:!border-surface-700">
         <div class="layout-topbar-logo-container">
             <button class="layout-menu-button layout-topbar-action" (click)="layoutService.onMenuToggle()">
                 <i class="pi pi-bars"></i>
@@ -72,7 +72,7 @@ import { TooltipModule } from 'primeng/tooltip';
                     </button>
                     <button type="button" class="layout-topbar-action" (click)="toggleUserMenu($event)">
                         <i class="pi pi-user"></i>
-                        <span>Profile</span>
+                        <span>Perfil</span>
                     </button>
                     @defer (on idle) {
                         <p-menu #userMenu [model]="userMenuItems" [popup]="true"></p-menu>
