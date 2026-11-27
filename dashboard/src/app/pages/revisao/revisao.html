@@ -14,13 +14,8 @@
         <i class="pi pi-spin pi-spinner text-2xl text-primary"></i>
     </div>
 
-    <div *ngIf="!loadingCounts && !hasPendencias()" class="flex flex-col items-center justify-center p-8 text-center bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 my-4">
-        <i class="pi pi-check-circle text-6xl text-green-500 mb-4"></i>
-        <h5 class="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">Tudo Certo!</h5>
-        <p class="text-slate-600 dark:text-slate-400">
-            {{ exibirRevisados ? 'Nenhum registro inconsistente previamente revisado encontrado.' : 'Não há registros inconsistentes aguardando revisão.' }}
-        </p>
-    </div>
+    <app-estado-vazio *ngIf="!loadingCounts && !hasPendencias()" tema="slate" titulo="Tudo Certo!"
+        [descricao]="exibirRevisados ? 'Nenhum registro inconsistente previamente revisado encontrado.' : 'Não há registros inconsistentes aguardando revisão.'"></app-estado-vazio>
 
     <p-tabs [scrollable]="true" [value]="activeTab" [lazy]="true" (valueChange)="onTabChange($event)" *ngIf="!loadingCounts && hasPendencias()">
         <p-tablist appRodaAbas>

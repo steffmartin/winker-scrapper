@@ -1,3 +1,4 @@
+import { EstadoVazioComponent } from '../../shared/estado-vazio.component';
 import { DicaOrdenacaoComponent } from '../../shared/dica-ordenacao.component';
 import { RodaAbasDirective } from '../../shared/roda-abas.directive';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
@@ -21,7 +22,7 @@ import { LayoutService } from '@/app/layout/service/layout.service';
 @Component({
     selector: 'app-revisao',
     standalone: true,
-    imports: [
+    imports: [EstadoVazioComponent,
         CommonModule, DicaOrdenacaoComponent, CardModule, TabsModule, RodaAbasDirective, TableModule, ButtonModule,
         BadgeModule, ChipModule, AvatarModule, ToastModule, ConfirmDialogModule,
         ToggleSwitchModule, FormsModule

@@ -1,39 +1,67 @@
-# Segurança e Credenciais
+# Credenciais e configurações locais
 .env
+.env.*
+*.env
+*.env.*
+*.config
+/compartilhado/config/*
+!/compartilhado/config/example.config
+*.credentials
+*.credentials.*
+*.pem
+*.key
+*.p12
+*.pfx
+.npmrc
 
-# Bancos de dados locais estruturados
-database/*.db
-database/*.db.bak*
-# Arquivos auxiliares SQLite podem conter os mesmos dados privados do banco.
-database/*.db*
+# Bancos SQLite, cópias e arquivos auxiliares
+/compartilhado/database/*
+!/compartilhado/database/diagrama_er.md
+*.db
+*.db-*
+*.db.*
+*.db3
+*.db3-*
+*.db3.*
+*.sqlite
+*.sqlite-*
+*.sqlite.*
+*.sqlite3
+*.sqlite3-*
+*.sqlite3.*
 
-# Caches e arquivos compilados do Python (em qualquer subdiretório)
-**/__pycache__/
-**/*.pyc
-
-# Pastas de dados e downloads
-anexos/
-
-# Cache e estado do Playwright
-**/.playwright-mcp/
-
-# Compilados do Frontend (builds de produção do Angular)
-compilados/
-
-# IDEs e Sandboxes
-/.idea/
-scratch/
-
-# Configurações
-config/*.config
-!config/example.config
-
-# Atalhos
-*.lnk
-
-# Artefatos privados da skill: fontes, OCR, caches, SQLs e relatórios por competência.
-# SKILL.md, PATTERNS.md, scripts reutilizáveis e testes sintéticos continuam versionáveis.
+# Dados extraídos e artefatos privados
+/anexos/
 /.agents/skills/pdf-prestacao-contas/artifacts/
 
-# Relatórios e arquivos temporários locais
+# Dependências, builds e cobertura
+**/node_modules/
+/dashboard/compilados/
+**/dist/
+**/build/
+**/coverage/
+.coverage
+.coverage.*
+coverage.json
+htmlcov/
+**/.angular/cache/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Temporários, logs, cache e atalhos locais
 /tmp/
+**/tmp/
+/scratch/
+*.tmp
+*.temp
+*.log
+**/.playwright-mcp/
+*.lnk
+
+# Editores e sistema
+/.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,1 @@
+"""Testes isolados da área."""

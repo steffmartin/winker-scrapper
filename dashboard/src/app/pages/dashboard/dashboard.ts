@@ -1,3 +1,5 @@
+import { processarArvore, filtrarArvore } from './arvore-transacoes';
+import { criarKpisDemonstracao, criarTransacoesDemonstracao } from './dados-demonstracao';
 import { Component, OnInit, ChangeDetectorRef, LOCALE_ID, inject, ViewChild } from '@angular/core';
 import { CommonModule, CurrencyPipe, DatePipe, registerLocaleData } from '@angular/common';
 import { RouterModule } from '@angular/router';
@@ -301,41 +303,7 @@ export class Dashboard implements OnInit {
     }
 
     loadMockKpis() {
-        this.kpis = {
-            inadimplencia: {
-                valor: 2500.50,
-                unidades: 3,
-                data_corte: '2023-10-01'
-            },
-            gestao: {
-                membros: [
-                    { nome: 'Carlos Silva', cargo: 'Síndico' },
-                    { nome: 'Ana Souza', cargo: 'Conselheiro' },
-                    { nome: 'Pedro Álvares', cargo: 'Advogado' },
-                    { nome: 'Maria Lima', cargo: 'Conselheiro' },
-                    { nome: 'João Ferreira', cargo: 'Conselheiro' },
-                    { nome: 'Paulo César', cargo: 'Subsíndico' }
-                ],
-                administradora: {
-                    nome: 'Admin Teste LTDA',
-                    telefone: '(11) 9999-9999'
-                }
-            },
-            saldos: {
-                saldo_total: 0,
-                saldo_declarado: 0,
-                contas: [
-                    { nome: 'Conta Corrente Padrão', saldo: 0 },
-                    { nome: 'Fundo de Reserva', saldo: 0 }
-                ]
-            },
-            resumo_mes: {
-                competencia: '10/2023',
-                receita_total: 30000.00,
-                despesa_total: 28000.00,
-                resultado: 2000.00
-            }
-        };
+        this.kpis = criarKpisDemonstracao();
         this.processMembers();
         this.loadingKpis = false;
         this.cdr.detectChanges();
@@ -448,18 +416,7 @@ export class Dashboard implements OnInit {
     }
 
     processNodes(nodes: TreeNode[], parentGrupo: string = ''): TreeNode[] {
-        return nodes.map(node => {
-            let grupo = parentGrupo;
-            if (node.data.tipo_node === 'tipo') {
-                grupo = node.data.descricao; // 'Receitas' ou 'Despesas'
-            }
-            node.data.grupo = grupo;
-
-            if (node.children) {
-                node.children = this.processNodes(node.children, grupo);
-            }
-            return node;
-        });
+        return processarArvore(nodes, parentGrupo);
     }
 
     expandedRows = {};
@@ -512,27 +469,7 @@ export class Dashboard implements OnInit {
             this.updateChart(this.nodes);
             return;
         }
-        const apartamentoNumerico = /^\d+$/.test(termo);
-        const normalizarNumero = (valor: unknown) => String(valor ?? '').trim().replace(/^0+(?=\d)/, '');
-        const normalizarTexto = (valor: unknown) => String(valor ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
-        const busca = normalizarTexto(termo);
-        const filtrar = (node: TreeNode, grupoCorrespondente = false): TreeNode | null => {
-            const dados = node.data;
-            if (dados.tipo_node === 'transacao') {
-                const corresponde = apartamentoNumerico
-                    ? normalizarNumero(dados.apartamento) === normalizarNumero(termo)
-                    : grupoCorrespondente || [dados.descricao, dados.data, dados.apartamento, dados.valor].some(v => normalizarTexto(v).includes(busca));
-                return corresponde ? { ...node, data: { ...dados } } : null;
-            }
-            const grupo = grupoCorrespondente || (!apartamentoNumerico && normalizarTexto(dados.descricao).includes(busca));
-            const children = (node.children ?? []).map(filho => filtrar(filho, grupo)).filter((n): n is TreeNode => n !== null);
-            if (!children.length) return null;
-            const valor = (n: TreeNode) => Number((n.data.tipo_node === 'transacao' ? n.data.valor : n.data.valor_total) ?? 0);
-            const total = children.reduce((soma, n) => soma + valor(n), 0);
-            children.forEach(n => { n.data.porcentagem = total ? 100 * valor(n) / total : 0; });
-            return { ...node, expanded: true, data: { ...dados, valor_total: total }, children };
-        };
-        this.nodesFiltrados = this.nodes.map(node => filtrar(node)).filter((n): n is TreeNode => n !== null);
+        this.nodesFiltrados = filtrarArvore(this.nodes, termo);
         this.updateChart(this.nodesFiltrados);
     }
 
@@ -605,125 +542,7 @@ export class Dashboard implements OnInit {
 
     loadMockTransacoes() {
         setTimeout(() => {
-            this.nodes = [
-                {
-                    data: { descricao: 'Junho/2026', valor_total: 3500, tipo_node: 'mes' },
-                    expanded: true,
-                    children: [
-                        {
-                            data: { descricao: 'Receitas', valor_total: 2000, porcentagem: 57.14, tipo_node: 'tipo' },
-                            expanded: true,
-                            children: [
-                                {
-                                    data: { descricao: 'Taxa Condominial', valor_total: 2000, porcentagem: 100.0, tipo_node: 'categoria' },
-                                    expanded: true,
-                                    children: [
-                                        {
-                                            data: { descricao: 'Cotas Ordinárias', valor_total: 2000, porcentagem: 100.0, tipo_node: 'subcategoria' },
-                                            expanded: true,
-                                            children: [
-                                                {
-                                                    data: {
-                                                        descricao: 'Boleto',
-                                                        fornecedor: '-',
-                                                        apartamento: '101',
-                                                        competencia: '06/2026',
-                                                        valor: 1200,
-                                                        data: '2026-06-05',
-                                                        revisado: true,
-                                                        tipo_node: 'transacao',
-                                                        anexos: 1
-                                                    }
-                                                },
-                                                {
-                                                    data: {
-                                                        descricao: 'Boleto',
-                                                        fornecedor: '-',
-                                                        apartamento: '102',
-                                                        competencia: '06/2026',
-                                                        valor: 800,
-                                                        data: '2026-06-07',
-                                                        revisado: true,
-                                                        tipo_node: 'transacao',
-                                                        anexos: 0
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            data: { descricao: 'Despesas', valor_total: 1500, porcentagem: 42.86, tipo_node: 'tipo' },
-                            expanded: true,
-                            children: [
-                                {
-                                    data: { descricao: 'Despesas Ordinárias', valor_total: 1500, porcentagem: 100.0, tipo_node: 'categoria' },
-                                    expanded: true,
-                                    children: [
-                                        {
-                                            data: { descricao: 'Limpeza', valor_total: 1500, porcentagem: 100.0, tipo_node: 'subcategoria' },
-                                    expanded: true,
-                                            children: [
-                                                {
-                                                    data: {
-                                                        descricao: 'Compra de produtos',
-                                                        fornecedor: 'Mercado X',
-                                                        apartamento: 'Condomínio',
-                                                        competencia: '06/2026',
-                                                        valor: 1500,
-                                                        data: '2026-06-15',
-                                                        revisado: false,
-                                                        tipo_node: 'transacao',
-                                                        anexos: 2
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                },
-                {
-                    data: { descricao: 'Maio/2026', valor_total: 1000, tipo_node: 'mes' },
-                    expanded: false,
-                    children: [
-                        {
-                            data: { descricao: 'Despesas', valor_total: 1000, porcentagem: 100.0, tipo_node: 'tipo' },
-                            expanded: true,
-                            children: [
-                                {
-                                    data: { descricao: 'Despesas Ordinárias', valor_total: 1000, porcentagem: 100.0, tipo_node: 'categoria' },
-                                    expanded: false,
-                                    children: [
-                                        {
-                                            data: { descricao: 'Manutenção', valor_total: 1000, porcentagem: 100.0, tipo_node: 'subcategoria' },
-                                            children: [
-                                                {
-                                                    data: {
-                                                        descricao: 'Conserto Elevador',
-                                                        fornecedor: 'Elevadores SA',
-                                                        apartamento: '-',
-                                                        competencia: '05/2026',
-                                                        valor: 1000,
-                                                        data: '2026-05-20',
-                                                        revisado: true,
-                                                        tipo_node: 'transacao',
-                                                        anexos: 1
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ];
+            this.nodes = criarTransacoesDemonstracao();
             this.nodes = this.processNodes(this.nodes);
             this.updateChart(this.nodes);
             this.loadingTreeTable = false;

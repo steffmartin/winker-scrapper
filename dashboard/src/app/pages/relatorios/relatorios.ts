@@ -1,3 +1,4 @@
+import { EstadoVazioComponent } from '../../shared/estado-vazio.component';
 import { ChangeDetectorRef, Component, ElementRef, HostListener, OnDestroy, Type, ViewChild } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -17,7 +18,7 @@ import type { ExtratoContaFiltros, ExtratoContaResultado } from './extrato-conta
 @Component({
     selector: 'app-relatorios',
     standalone: true,
-    imports: [FormsModule, SelectModule, TooltipModule, SkeletonModule, ToastModule, NgComponentOutlet, ButtonModule, InputGroupModule, InputGroupAddonModule, InputTextModule],
+    imports: [EstadoVazioComponent, FormsModule, SelectModule, TooltipModule, SkeletonModule, ToastModule, NgComponentOutlet, ButtonModule, InputGroupModule, InputGroupAddonModule, InputTextModule],
     providers: [MessageService],
     templateUrl: './relatorios.html'
 })

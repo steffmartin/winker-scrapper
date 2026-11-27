@@ -1,6 +1,6 @@
 """Lista as taxas inadimplentes de um apartamento pela mesma regra do app.
 
-Replica `Api.get_inadimplencia` (scripts/run_dashboard.py) em modo somente
+Replica `Api.get_inadimplencia` (bff/api.py) em modo somente
 leitura: taxas C/E do condomínio + I/P do apartamento, descontos D/R agregados
 por (apartamento, taxa_id), incluindo o cancelamento de D por R; pagamento único por valor exato ou combinação via
 `scripts/conciliacao.encontrar_combinacao`.
@@ -11,7 +11,7 @@ Uso:
     python .agents/skills/conciliacao-inadimplencia/inadimplencia_apartamento.py --apto 204 --transacoes
 
 Opções:
-    --db PATH        banco SQLite (padrão: database/winker_data.db na raiz do repo)
+    --db PATH        banco SQLite (padrão: compartilhado/database/winker_data.db)
     --condominio ID  ID do condomínio (padrão: único cadastrado)
     --apto APT       apartamento(s), repetível; use --todos para todos
     --corte AAAA-MM-DD  data de corte (padrão: hoje)
@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from conciliacao import LimiteConciliacao, encontrar_combinacao  # noqa: E402
 
-DB_PADRAO = ROOT / 'database' / 'winker_data.db'
+DB_PADRAO = ROOT / 'compartilhado' / 'database' / 'winker_data.db'
 
 
 def conectar(db_path):

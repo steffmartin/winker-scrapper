@@ -1,0 +1,258 @@
+# Diagrama de Relacionamento do Banco de Dados
+
+> [!NOTE]
+> Banco de dados SQLite do projeto **Winker Scrapper**. O modelo relacional é gerenciado pelo ORM **Peewee** através da
+> declaração de classes no arquivo `compartilhado/models.py`. O `ON DELETE CASCADE` garante integridade nativa nas chaves
+> estrangeiras.
+
+## Diagrama ER (Entidade-Relacionamento)
+
+Os IDs de `taxas` e `renegociacao` usam `INTEGER PRIMARY KEY AUTOINCREMENT` no SQLite.
+
+```mermaid
+erDiagram
+    renegociacao {
+        INTEGER id PK
+        TEXT condominio_id FK
+        TEXT apartamento
+        TEXT competencia_inicial
+        TEXT competencia_final
+        TEXT numero
+        TEXT data_renegociacao
+        TEXT vencimento_primeira_parcela
+        INTEGER quantidade_parcelas
+        REAL despesas_adicionais
+        REAL descontos_adicionais
+    }
+
+    condominio {
+        TEXT id PK
+        TEXT nome
+        TEXT apartamentos
+        TEXT inadimplencia_data_corte
+        INTEGER inadimplencia_unidades
+        REAL inadimplencia_valor
+        REAL taxa_renegociacao
+        TEXT administradora
+        TEXT telefone_administradora
+        TEXT ultima_atualizacao
+        INTEGER prazo_fechamento
+        REAL saldo_declarado
+        TEXT tipo_juros_multa
+        REAL margem_diferenca_encargos
+    }
+
+    contas {
+        INTEGER id PK
+        TEXT condominio_id FK
+        TEXT conta
+        REAL saldo_inicial
+    }
+
+    taxas {
+        INTEGER id PK
+        TEXT condominio_id FK
+        INTEGER taxa_id FK
+        INTEGER renegociacao_id FK
+        TEXT competencia
+        TEXT exibicao
+        TEXT descricao
+        TEXT vencimento
+        REAL valor_original
+        REAL desconto_vista
+        REAL multa_percentual
+        REAL juros_mes_percentual
+        TEXT apartamento
+        TEXT tipo
+    }
+
+    regras_preenchimento {
+        INTEGER id PK
+        TEXT condominio_id FK
+        TEXT descricao_contem
+        TEXT campo
+        TEXT valor
+    }
+
+    meses {
+        INTEGER id PK
+        TEXT condominio_id FK
+        TEXT exibicao
+        TEXT competencia
+        REAL receita_total
+        REAL despesa_total
+        INTEGER anexos
+        INTEGER consistente
+        TEXT motivo_inconsistencia
+        INTEGER revisado_usuario
+    }
+
+    categorias {
+        INTEGER id PK
+        INTEGER mes_id FK
+        TEXT tipo
+        TEXT nome
+        REAL valor
+        INTEGER consistente
+        TEXT motivo_inconsistencia
+        INTEGER revisado_usuario
+    }
+
+    subcategorias {
+        INTEGER id PK
+        INTEGER categoria_id FK
+        TEXT tipo
+        TEXT nome
+        REAL valor
+        INTEGER consistente
+        TEXT motivo_inconsistencia
+        INTEGER revisado_usuario
+    }
+
+    transacoes {
+        INTEGER id PK
+        INTEGER subcategoria_id FK
+        TEXT tipo
+        TEXT data
+        TEXT descricao
+        REAL valor
+        TEXT apartamento
+        TEXT competencia
+        TEXT fornecedor
+        INTEGER consistente
+        INTEGER anexos
+        TEXT motivo_inconsistencia
+        INTEGER revisado_usuario
+        TEXT conta
+    }
+
+    anexos {
+        INTEGER id PK
+        INTEGER transacao_id FK
+        TEXT caminho_local
+        TEXT nome_original
+        TEXT extensao
+        INTEGER consistente
+        TEXT motivo_inconsistencia
+        INTEGER revisado_usuario
+    }
+
+    prestacoes_contas {
+        INTEGER id PK
+        INTEGER mes_id FK
+        TEXT caminho_local
+        TEXT nome_original
+        TEXT extensao
+        INTEGER consistente
+        TEXT motivo_inconsistencia
+        INTEGER revisado_usuario
+    }
+
+    membros_gestao {
+        INTEGER id PK
+        TEXT condominio_id FK
+        TEXT nome
+        TEXT cargo
+    }
+
+    preferencias_usuario {
+        INTEGER id PK
+        INTEGER modo_escuro
+        TEXT cor_primaria
+        TEXT cor_superficie
+        TEXT tema_preset
+        TEXT modo_menu
+        TEXT condominio_id
+    }
+
+    auditoria {
+        INTEGER id PK
+        TEXT condominio_id
+        TEXT usuario_uuid
+        INTEGER usuario_id
+        TEXT usuario_name
+        TEXT usuario_cpf
+        TEXT usuario_rg
+        TEXT usuario_fone
+        TEXT usuario_apto
+        TEXT data_hora_captura
+        TEXT ip
+        TEXT mac
+        TEXT periodo_inicio
+        TEXT periodo_fim
+        INTEGER downloads_realizados
+        INTEGER transacoes_lidas
+        REAL tempo_duracao
+        INTEGER capturou_condominio
+        INTEGER capturou_inadimplencia
+        INTEGER capturou_membros
+        TEXT status
+        TEXT erro
+    }
+
+    condominio ||--o{ meses: "condominio_id"
+    condominio ||--o{ membros_gestao: "condominio_id"
+    condominio ||--o{ contas: "condominio_id"
+    condominio ||--o{ regras_preenchimento: "condominio_id"
+    condominio ||--o{ taxas: "condominio_id"
+    condominio ||--o{ renegociacao: "condominio_id"
+    renegociacao ||--o{ taxas: "renegociacao_id"
+    taxas ||--o{ taxas: "taxa_id"
+    meses ||--o{ categorias: "mes_id"
+    meses ||--o{ prestacoes_contas: "mes_id"
+    categorias ||--o{ subcategorias: "categoria_id"
+    subcategorias ||--o{ transacoes: "subcategoria_id"
+    transacoes ||--o{ anexos: "transacao_id"
+```
+
+## Fluxo Hierárquico dos Dados
+
+```
+auditoria (Global)
+preferencias_usuario (Global)
+condominio  ← tabela raiz
+ ├── meses
+ │    ├── categorias
+ │    │    └── subcategorias
+ │    │         └── transacoes
+ │    │              └── anexos
+ │    └── prestacoes_contas
+ ├── membros_gestao
+ ├── contas
+ ├── regras_preenchimento
+ ├── renegociacao
+ └── taxas
+```
+
+## Resumo das Tabelas
+
+| Tabela                 | PK             | FK para            | Tipo       | Descrição                                    |
+|------------------------|----------------|--------------------|------------|----------------------------------------------|
+| `auditoria`            | `id` (INTEGER) | —                  | **Global** | Log de auditorias e acessos                  |
+| `preferencias_usuario` | `id` (INTEGER) | —                  | **Global** | Configurações visuais do dashboard           |
+| `condominio`           | `id` (TEXT)    | —                  | **Raiz**   | Dados cadastrais do condomínio               |
+| `contas`               | `id` (INTEGER) | `condominio.id`    | Dependente | Saldos iniciais por conta                    |
+| `regras_preenchimento` | `id` (INTEGER) | `condominio.id`    | Dependente | Regras de preenchimento por descrição        |
+| `renegociacao`         | `id` (INTEGER) | `condominio.id`    | Dependente | Dados de renegociações                       |
+| `taxas`                | `id` (INTEGER) | `condominio.id`    | Dependente | Configuração manual de taxas comuns, individuais e descontos|
+| `meses`                | `id` (INTEGER) | `condominio.id`    | Dependente | Período mensal com totais de receita/despesa |
+| `categorias`           | `id` (INTEGER) | `meses.id`         | Dependente | Categorias financeiras por mês               |
+| `subcategorias`        | `id` (INTEGER) | `categorias.id`    | Dependente | Subcategorias dentro de uma categoria        |
+| `transacoes`           | `id` (INTEGER) | `subcategorias.id` | Dependente | Transações financeiras individuais           |
+| `anexos`               | `id` (INTEGER) | `transacoes.id`    | Dependente | Arquivos anexados às transações              |
+| `prestacoes_contas`    | `id` (INTEGER) | `meses.id`         | Dependente | Documentos de prestação de contas por mês    |
+| `membros_gestao`       | `id` (INTEGER) | `condominio.id`    | Dependente | Membros da gestão condominial                |
+
+## Observações
+
+> [!IMPORTANT]
+> - A tabela `condominio` é a **tabela raiz** do modelo de dados. Toda execução do scrapper deve preencher o
+    condomínio antes de gravar dados nas tabelas dependentes.
+> - `auditoria.condominio_id` é **opcional (NULL)**: o registro de auditoria é criado no início da execução, antes da
+    extração do condomínio. O campo é atualizado assim que o ID é obtido.
+
+> [!TIP]
+> - Meses, categorias, subcategorias, transações, anexos e prestações de contas possuem campos `consistente`,
+    `motivo_inconsistencia` e `revisado_usuario`.
+> - A tabela `auditoria` é um **log de sessão** de scraping, registrando o usuário, período e dados capturados.
+> - A tabela `condominio` usa `id` como TEXT (código de segurança extraído do portal Winker).

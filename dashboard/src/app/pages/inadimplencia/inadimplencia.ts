@@ -1,3 +1,4 @@
+import { EstadoVazioComponent } from '../../shared/estado-vazio.component';
 import { DicaOrdenacaoComponent } from '../../shared/dica-ordenacao.component';
 import { RodaAbasDirective } from '../../shared/roda-abas.directive';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
@@ -26,7 +27,7 @@ declare global {
 @Component({
     selector: 'app-inadimplencia',
     standalone: true,
-    imports: [
+    imports: [EstadoVazioComponent,
         CommonModule, DicaOrdenacaoComponent, CardModule, TabsModule, RodaAbasDirective, TableModule, ButtonModule,
         InputTextModule, InputNumberModule, DatePickerModule, AvatarModule, 
         FormsModule, ToastModule, BadgeModule, TooltipModule, SkeletonModule

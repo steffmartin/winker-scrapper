@@ -33,13 +33,9 @@
         {{ erroCarregamento }}
     </div>
 
-    <div *ngIf="!loading && !erroCarregamento && (!inadimplencias || inadimplencias.length === 0)" class="flex flex-col items-center justify-center p-8 text-center bg-surface-50 dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 my-4">
-        <i class="pi pi-check-circle text-6xl text-green-500 mb-4"></i>
-        <h5 class="text-xl font-bold text-surface-800 dark:text-surface-100 mb-2">Sem Inadimplência</h5>
-        <p class="text-surface-600 dark:text-surface-400">
-            Nenhuma taxa vencida e não paga foi encontrada para a data selecionada.
-        </p>
-    </div>
+    <app-estado-vazio *ngIf="!loading && !erroCarregamento && (!inadimplencias || inadimplencias.length === 0)"
+        titulo="Sem Inadimplência"
+        descricao="Nenhuma taxa vencida e não paga foi encontrada para a data selecionada."></app-estado-vazio>
 
     <p-tabs [scrollable]="true" *ngIf="!loading && inadimplencias && inadimplencias.length > 0" [value]="activeTab">
         <p-tablist appRodaAbas>

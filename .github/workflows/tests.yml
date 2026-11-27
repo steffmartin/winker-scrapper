@@ -37,15 +37,15 @@ jobs:
 
       - name: Executar Testes de Unidade (Python)
         run: |
-          # Executa todos os testes na pasta 'scripts' com medição de cobertura (statements + branches)
-          python -m coverage run --branch --source=scripts --omit='*/test_*.py' -m unittest discover -s scripts -p "test_*.py"
-          python -m coverage json -o coverage.json --omit='*/test_*.py'
+          # Descobre testes nas respectivas áreas com cobertura de statements e branches
+          python -m coverage run --branch --source=compartilhado,bff,extrator --omit='*/test_*.py,*/tests/*' -m unittest discover -s . -p "test_*.py"
+          python -m coverage json -o coverage.json --omit='*/test_*.py,*/tests/*'
           # Falha se statements ou branches ficarem abaixo de 90%
           python -c "import json,sys; t=json.load(open('coverage.json'))['totals']; print('Statements:', round(t['percent_statements_covered'],2), '% | Branches:', round(t['percent_branches_covered'],2), '%'); ok = t['percent_statements_covered'] >= 90 and t['percent_branches_covered'] >= 90; sys.exit(0 if ok else 'Cobertura abaixo de 90% em statements ou branches')"
 
           # Se novas pastas com scripts e testes Python forem adicionadas,
           # novos comandos de descoberta podem ser inseridos abaixo, por exemplo:
-          # python -m coverage run --source=scripts --omit='*/test_*.py' -m unittest discover -s nova_pasta/ -p "test_*.py"
+          # python -m coverage run --source=compartilhado,bff,extrator --omit='*/test_*.py,*/tests/*' -m unittest discover -s nova_pasta/ -p "test_*.py"
 
   frontend-tests:
     name: Testes Unitários - Frontend (Angular)

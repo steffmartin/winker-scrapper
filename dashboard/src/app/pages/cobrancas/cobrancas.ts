@@ -1,3 +1,4 @@
+import { calcularDiasAtraso, calcularTotalTaxas } from './renegociacao-calculos';
 import { DicaOrdenacaoComponent } from '../../shared/dica-ordenacao.component';
 import { RodaAbasDirective } from '../../shared/roda-abas.directive';
 import { CalendarioEstavelDirective } from '../../shared/calendario-estavel.directive';
@@ -561,20 +562,7 @@ export class CobrancasComponent implements OnInit {
     }
     
     getDiasAtraso(vencimentoStr: string): number {
-        if (!vencimentoStr || !this.dataRenegociacaoDate) return 0;
-        const parts = vencimentoStr.split('/');
-        if (parts.length !== 3) return 0;
-        
-        // Ignora a hora para garantir cálculo preciso de dias
-        const vencDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-        vencDate.setHours(0, 0, 0, 0);
-        
-        const renDate = new Date(this.dataRenegociacaoDate);
-        renDate.setHours(0, 0, 0, 0);
-        
-        const diffTime = renDate.getTime() - vencDate.getTime();
-        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays > 0 ? diffDays : 0;
+        return calcularDiasAtraso(vencimentoStr, this.dataRenegociacaoDate);
     }
 
     get descontosComTaxasSelecionadas(): boolean {
@@ -582,41 +570,12 @@ export class CobrancasComponent implements OnInit {
         return this.taxasOriginaisSelecionadas.every(t => t.tipo !== 'D' || ids.has(t.taxa_id));
     }
 
-    private calcularTaxa(t: any) {
-        const dias = this.getDiasAtraso(t.vencimento);
-        const valor = t.valor_original || 0;
-        const jurosPerc = t.juros_mes_percentual || 0;
-        const multaPerc = dias > 0 ? (t.multa_percentual || 0) : 0;
-        let juros = valor * (jurosPerc / 30 / 100) * dias;
-        let multa = valor * (multaPerc / 100);
-        if (this.tipo_juros_multa === 'M') multa = (valor + juros) * (multaPerc / 100);
-        if (this.tipo_juros_multa === 'J') juros = (valor + multa) * (jurosPerc / 30 / 100) * dias;
-        return { valor, multa, juros, geral: valor + multa + juros };
-    }
-
     get selectedTaxasSum(): number {
         return this.selectedTaxasDetalhesSum.geral;
     }
 
     get selectedTaxasDetalhesSum() {
-        const selecionadas = this.taxasOriginaisSelecionadas || [];
-        const total = { valor: 0, desconto: 0, multa: 0, juros: 0, geral: 0 };
-        for (const taxa of selecionadas.filter(t => t.tipo !== 'D')) {
-            const original = this.calcularTaxa(taxa);
-            const liquida = { ...taxa };
-            for (const desconto of selecionadas.filter(t => t.tipo === 'D' && t.taxa_id === taxa.id)) {
-                for (const campo of ['valor_original', 'multa_percentual', 'juros_mes_percentual']) {
-                    liquida[campo] = Math.max(0, (liquida[campo] || 0) - (desconto[campo] || 0));
-                }
-            }
-            const ajustada = this.calcularTaxa(liquida);
-            total.valor += original.valor;
-            total.desconto += original.valor - ajustada.valor;
-            total.multa += ajustada.multa;
-            total.juros += ajustada.juros;
-            total.geral += ajustada.geral;
-        }
-        return total;
+        return calcularTotalTaxas(this.taxasOriginaisSelecionadas, this.dataRenegociacaoDate, this.tipo_juros_multa);
     }
 
     gerarParcelasRenegociacao() {

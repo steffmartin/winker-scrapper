@@ -29,7 +29,7 @@ v21 + PrimeNG v21 + Tailwind CSS v4).
 Para rodar e compilar este projeto em sua máquina local, você precisará de:
 
 1. **Python 3.10+**: O projeto instalará outras dependências do Python, se necessário.
-2. **Node.js (v18+)**: Necessário apenas para realizar a compilação inicial de produção do frontend em Angular.
+2. **Node.js**: Angular 21 exige Node 20.19+, 22.12+ ou 24+; necessário para instalar, testar e compilar o frontend.
 
 ---
 
@@ -37,8 +37,7 @@ Para rodar e compilar este projeto em sua máquina local, você precisará de:
 
 ### Passo 1: Configurar Credenciais
 
-Crie o arquivo de configuração de produção ou edite o arquivo padrão de exemplo localizado em
-`config/example.config`, contendo suas credenciais de login no portal Winker:
+Copie `compartilhado/config/example.config` para `compartilhado/config/meu.config` e informe suas credenciais de login no portal Winker. O arquivo `meu.config` é local e não deve ser versionado:
 
 ```json
 {
@@ -70,7 +69,7 @@ Abaixo está o detalhamento de cada parâmetro do arquivo de configuração:
 
 ### Passo 2: Primeira Execução e Compilação Automática
 
-Se você acabou de clonar este repositório do zero, a pasta de arquivos estáticos `compilados/` não estará presente.
+Se você acabou de clonar este repositório do zero, a pasta de arquivos estáticos `dashboard/compilados/` não estará presente.
 
 * Basta rodar o comando de visualização do dashboard na raiz do projeto.
 * O próprio backend em Python detectará a ausência do build, executará o `npm install` (caso a pasta `node_modules` não
@@ -87,7 +86,7 @@ configuração):
 1. **Extração de Dados**
    Roda a automação em Python para extrair novos períodos de transações.
    ```bash
-   python scripts/extract_winker.py --config-file config/example.config
+   python extrator/main.py --config-file compartilhado/config/meu.config
    ```
 
    Se a página de informações do condomínio falhar, o extrator usa o portal ativo da sessão e o JWT obtido na página de boletos para consultar `/v1/portal`. O slug da URL é enviado a `/novo/findCondominio`; o código de segurança só é aceito quando o `id_condominio` retornado coincide com o `id_portal` da sessão. A gestão e a administradora são consultadas em `/v1/portal/{id}/about`. Se a identificação automática falhar, é solicitada a seleção manual de um condomínio cadastrado; sem seleção, a extração é interrompida e a auditoria registra a falha.
@@ -95,7 +94,7 @@ configuração):
 2. **Dashboard Financeiro**
    Abre a janela desktop nativa do Dashboard financeiro conectado ao banco de dados SQLite real.
    ```bash
-   python scripts/run_dashboard.py
+   python bff/main.py
    ```
 
 
@@ -110,59 +109,47 @@ descrições e avaliação de consistência das entidades).
 Para executar os testes de backend:
 
 ```bash
-python -m unittest discover -s scripts -p "test_*.py"
+python -m unittest discover -s . -p "test_*.py"
 ```
+
+Para medir os gates de cobertura do Python (statements e branches):
+
+```bash
+python -m coverage run --branch --source=compartilhado,bff,extrator --omit="*/test_*.py,*/tests/*" -m unittest discover -s . -p "test_*.py"
+python -m coverage json -o coverage.json --omit="*/test_*.py,*/tests/*"
+```
+
+A CI exige pelo menos 90% em statements e branches no Python e em statements, branches, functions e lines no frontend.
 
 Para executar os testes de frontend:
 
 ```bash
 cd dashboard
-npm test -- --watch=false --browsers=ChromeHeadless
+npm test -- --watch=false --browsers=ChromeHeadless --code-coverage
 ```
 
-Os testes rodam de forma 100% isolada e rápida, sem precisar interagir com a interface web ou com o banco de dados. O
+Os testes automatizados não acessam o portal Winker nem a base de dados real; os testes que precisam de SQLite usam bases temporárias ou em memória. O
 projeto possui um pipeline de integração contínua (CI) via GitHub Actions que executa automaticamente as suítes de
 testes unitários do Python e do Angular a cada push ou pull request.
-
-### Medição da inadimplência
-
-O comando abaixo compara a versão anterior à correção da issue 103 com o código atual, para a mesma data de corte. Ele
-abre o banco em modo somente leitura, não inicializa a API nem acessa anexos, e informa tempos, volumes e hashes das
-respostas. Substitua o identificador do condomínio pelo desejado:
-
-```bash
-python scripts/benchmark_inadimplencia.py --db database/winker_data.db --condominio ID_DO_CONDOMINIO --data 2026-11-03 --anterior 0d0b81c
-```
-
-A medição anterior é interrompida se atingir os limites de tempo ou combinações. Para verificar o histórico completo,
-o script também executa uma referência com poda apenas para grupos de valores não negativos, preservando a ordem e a
-regra de conciliação. Para medir a renderização do frontend já compilado, acrescente `--render-dir compilados/browser`
-e `--chrome CAMINHO_DO_CHROME`; o navegador recebe a resposta em memória e acessa somente o servidor local do teste.
-
----
 
 ## 📁 Estrutura de Pastas do Projeto
 
 O projeto está organizado da seguinte maneira:
 
-* **[`scripts/`](file:///D:/projects/winker/scripts)**: Contém o código-fonte das automações Python.
-    * `extract_winker.py`: O robô Playwright de extração.
-    * `run_dashboard.py`: O backend Python exposto à interface gráfica via `pywebview`.
-    * `models.py`: Declaração do modelo do banco de dados (Tabelas) mapeadas através do ORM Peewee.
-    * `setup_deps.py`: Utilitário central de verificação e instalação dinâmica de dependências.
-    * `utils.py`: Funções utilitárias compartilhadas, como a configuração e centralização de logs do sistema.
-    * `test_*.py`: Suíte de testes unitários de cada arquivo Python.
-* **[`config/`](file:///D:/projects/winker/config)**: Contém os arquivos JSON (`*.config`) de parametrização e
+* **[`bff/`](bff/)**: Módulos do backend por tela e seus testes em `bff/tests/`.
+* **[`extrator/`](extrator/)**: Módulos de extração e seus testes em `extrator/tests/`.
+* **[`compartilhado/`](compartilhado/)**: Modelos, utilitários e dependências compartilhados; testes em `compartilhado/tests/`.
+* **[`compartilhado/config/`](compartilhado/config/)**: Contém os arquivos JSON (`*.config`) de parametrização e
   credenciais para execução do scraper e inicialização do dashboard.
-* **[`database/`](file:///D:/projects/winker/database)**: Contém o arquivo do banco de dados SQLite local (
+* **[`compartilhado/database/`](compartilhado/database/)**: Contém o arquivo do banco de dados SQLite local (
   `winker_data.db`) utilizado pelo extrator e lido pelo dashboard. Consulte o
-  [`database/diagrama_er.md`](database/diagrama_er.md) para visualizar o diagrama de entidade-relacionamento completo
+  [`compartilhado/database/diagrama_er.md`](compartilhado/database/diagrama_er.md) para visualizar o diagrama de entidade-relacionamento completo
   das tabelas.
-* **[`compilados/`](file:///D:/projects/winker/compilados)**: Contém os arquivos estáticos prontos para produção do
+* **[`dashboard/compilados/`](dashboard/compilados/)**: Contém os arquivos estáticos prontos para produção do
   frontend gerados pelo compilador do Angular.
-* **[`dashboard/`](file:///D:/projects/winker/dashboard)**: O repositório de desenvolvimento contendo o código-fonte em
+* **[`dashboard/`](dashboard)**: O repositório de desenvolvimento contendo o código-fonte em
   Angular do painel Sakai-NG.
-* **[`anexos/`](file:///D:/projects/winker/anexos)**: Diretório onde o robô de extração armazena fisicamente os anexos (
+* **[`anexos/`](anexos)**: Diretório onde o robô de extração armazena fisicamente os anexos (
   recibos e comprovantes em PDF/Imagens) das transações e as prestações de contas mensais de cada período.
 
 ---
@@ -174,33 +161,32 @@ localizados na pasta `dashboard/`:
 
 1. **Estrutura Visual (HTML):**
     * [
-      `dashboard/src/app/pages/dashboard/dashboard.html`](file:///D:/projects/winker/dashboard/src/app/pages/dashboard/dashboard.html)
+      `dashboard/src/app/pages/dashboard/dashboard.html`](dashboard/src/app/pages/dashboard/dashboard.html)
         * Define o layout principal do painel com cards de KPIs, tabelas de meses/transações, tags dinâmicas e filtros
           usando componentes do PrimeNG e Tailwind.
     * [
-      `dashboard/src/app/pages/configuracoes/configuracoes.html`](file:///D:/projects/winker/dashboard/src/app/pages/configuracoes/configuracoes.html)
+      `dashboard/src/app/pages/configuracoes/configuracoes.html`](dashboard/src/app/pages/configuracoes/configuracoes.html)
         * Painel visual para edição de configurações do aplicativo e preferências de tema.
-    * [
-      `dashboard/src/app/pages/notfound/notfound.html`](file:///D:/projects/winker/dashboard/src/app/pages/notfound/notfound.html)
-        * Tela de fallback amigável caso uma rota inexistente seja acessada.
+    * [`dashboard/src/app/pages/notfound/notfound.ts`](dashboard/src/app/pages/notfound/notfound.ts)
+        * Tela de fallback para rotas inexistentes.
 
 2. **Lógica e Integração (TypeScript):**
     * [
-      `dashboard/src/app/pages/dashboard/dashboard.ts`](file:///D:/projects/winker/dashboard/src/app/pages/dashboard/dashboard.ts)
-        * Gerencia a filtragem em tempo real e invoca as chamadas de extração de dados expostas pela API do `pywebview`.
+      `dashboard/src/app/pages/dashboard/dashboard.ts`](dashboard/src/app/pages/dashboard/dashboard.ts)
+        * Gerencia a filtragem em tempo real e consulta dados pelo BFF por meio do `pywebview`. A execução do extrator é independente.
     * [
-      `dashboard/src/app/pages/configuracoes/configuracoes.ts`](file:///D:/projects/winker/dashboard/src/app/pages/configuracoes/configuracoes.ts)
+      `dashboard/src/app/pages/configuracoes/configuracoes.ts`](dashboard/src/app/pages/configuracoes/configuracoes.ts)
         * Gerencia o estado das configurações do tema, cache e preferências do usuário.
 
 3. **Roteamento da Aplicação:**
-    * [`dashboard/src/app.routes.ts`](file:///D:/projects/winker/dashboard/src/app.routes.ts)
+    * [`dashboard/src/app.routes.ts`](dashboard/src/app.routes.ts)
         * Define as rotas raiz mapeando as telas (`/`, `/configuracoes`, etc.) dentro do layout Sakai.
 4. **Configurações Globais do Angular:**
-    * [`dashboard/src/app.config.ts`](file:///D:/projects/winker/dashboard/src/app.config.ts)
+    * [`dashboard/src/app.config.ts`](dashboard/src/app.config.ts)
         * Ativa o Hash Location (`withHashLocation`), eliminando erros 404 de navegação no navegador do app nativo.
-    * [`dashboard/src/index.html`](file:///D:/projects/winker/dashboard/src/index.html)
+    * [`dashboard/src/index.html`](dashboard/src/index.html)
         * Modifica `<base href="/">` para `./` viabilizando o carregamento relativo dos recursos locais.
-    * [`dashboard/angular.json`](file:///D:/projects/winker/dashboard/angular.json)
-        * Define o caminho de saída da compilação de produção (`outputPath: "../compilados"`), direcionando o build para
-          a raiz.
+    * [`dashboard/angular.json`](dashboard/angular.json)
+        * Define o caminho de saída da compilação de produção (`outputPath: "compilados"`), direcionando o build para
+          o diretório do frontend.
 

@@ -10,11 +10,9 @@
         </div>
     </div>
     @if (!relatorioSelecionado) {
-    <div class="flex flex-col items-center justify-center p-8 text-center bg-surface-50 dark:bg-surface-900 rounded-xl border border-surface-200 dark:border-surface-800 my-4">
-        <i class="pi pi-chart-bar text-6xl text-surface-400 mb-4"></i>
-        <h5 class="text-xl font-bold text-surface-800 dark:text-surface-100 mb-2">Nenhum relatório selecionado</h5>
-        <p class="text-surface-600 dark:text-surface-400">Selecione um relatório para visualizá-lo.</p>
-    </div>
+    <app-estado-vazio titulo="Nenhum relatório selecionado"
+        descricao="Selecione um relatório para visualizá-lo."
+        icone="pi pi-chart-bar" corIcone="text-surface-400"></app-estado-vazio>
     }
     @if (componenteRelatorio) {
         <ng-container *ngComponentOutlet="componenteRelatorio; inputs: { modo: 'formulario', aoGerar: relatorioSelecionado === 'inadimplencia' ? aoGerarInadimplencia : relatorioSelecionado === 'extrato-conta' ? aoGerarConta : aoGerarExtrato }"></ng-container>

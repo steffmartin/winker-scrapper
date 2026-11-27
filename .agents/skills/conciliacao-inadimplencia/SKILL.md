@@ -9,16 +9,16 @@ description: >-
 
 # Conciliação de inadimplência
 
-Reproduza o resultado do dashboard com `scripts/conciliacao_unificada.py` e
-`scripts/apresentacao_conciliacao.py`, integrados por `Api.get_inadimplencia`
-em `scripts/run_dashboard.py`. A mesma conciliação alimenta inadimplência,
+Reproduza o resultado do dashboard com `bff/conciliacao_unificada.py` e
+`bff/apresentacao_conciliacao.py`, integrados por `Api.get_inadimplencia`
+em `bff/api.py`. A mesma conciliação alimenta inadimplência,
 relatório e extrato. Não use a antiga toggle nem `scripts/conciliacao.py`, que
 foram removidos. O antigo `inadimplencia_apartamento.py` desta pasta depende
 do módulo removido e não deve ser usado como fonte de resultado.
 
 ## Segurança e acesso ao banco
 
-O banco oficial é `database/winker_data.db`. Consulte em modo somente leitura,
+O banco oficial é `compartilhado/database/winker_data.db`. Consulte em modo somente leitura,
 com URI `Path(...).resolve().as_uri() + '?mode=ro'`, `uri=True` e
 `PRAGMA query_only = ON`. Não leia arquivos de configuração pessoais ou
 credenciais. A escrita exige autorização explícita para a alteração específica;
@@ -28,8 +28,9 @@ use banco temporário isolado ou em memória.
 Não inicialize `Api()` normalmente sobre o banco oficial para consulta: a
 inicialização pode criar tabelas ou preferências. Para usar a API, inicialize
 `models.db` com a URI de leitura, aplique `query_only`, crie `Api.__new__(Api)`
-e configure somente `init_error=None` e `condo_id`. Evite instalação automática
-ao importar: se necessário, use patch em `setup_deps.install_dependencies`.
+e configure `init_error=None`, `condo_id` e `_tela_inadimplencia=Inadimplencia(api)`
+(usando `Inadimplencia` de `bff.inadimplencia`). Evite instalação automática
+ao importar: se necessário, use patch em `compartilhado.setup_deps.install_dependencies`.
 Verifique o hash do banco antes e depois de consultas pela API.
 
 ## Procedimento

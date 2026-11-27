@@ -220,7 +220,7 @@ Preparar em `artifacts/sources/YYYY-MM/`:
 
 ```powershell
 python .agents/skills/pdf-prestacao-contas/scripts/generate_sql.py --source ".agents/skills/pdf-prestacao-contas/artifacts/sources/YYYY-MM" --output ".agents/skills/pdf-prestacao-contas/artifacts/sql_scripts/YYYY-MM.sql"
-python .agents/skills/pdf-prestacao-contas/scripts/validate_sql.py --database "database/winker_data.db" --source ".agents/skills/pdf-prestacao-contas/artifacts/sources/YYYY-MM" --sql ".agents/skills/pdf-prestacao-contas/artifacts/sql_scripts/YYYY-MM.sql" --output ".agents/skills/pdf-prestacao-contas/artifacts/sources/YYYY-MM/validation.json"
+python .agents/skills/pdf-prestacao-contas/scripts/validate_sql.py --database "compartilhado/database/winker_data.db" --source ".agents/skills/pdf-prestacao-contas/artifacts/sources/YYYY-MM" --sql ".agents/skills/pdf-prestacao-contas/artifacts/sql_scripts/YYYY-MM.sql" --output ".agents/skills/pdf-prestacao-contas/artifacts/sources/YYYY-MM/validation.json"
 ```
 
 O gerador não executa SQL. O validador abre produção `mode=ro`, faz backup para
